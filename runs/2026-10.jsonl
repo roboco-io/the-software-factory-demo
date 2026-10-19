@@ -128,3 +128,4 @@
 {"ts":"2026-10-18T20:52:11.503Z","issue":66,"pr":null,"role":"smoke","engine":null,"model":null,"ok":false,"turns":0,"costUsd":null,"durationMs":0,"failureReason":"smoke_failed","round":0}
 {"ts":"2026-10-18T23:12:34.585Z","issue":70,"pr":null,"role":"triage","engine":"pi","model":"deepseek/deepseek-flash","ok":true,"turns":3,"costUsd":0.0033316559999999997,"durationMs":6699,"failureReason":null,"round":0}
 {"ts":"2026-10-19T03:56:45.460Z","issue":71,"pr":null,"role":"improve","engine":"claude","model":"claude-sonnet-5-5","ok":true,"turns":6,"costUsd":0.08497950000000001,"durationMs":47480,"failureReason":null,"round":0}
+{"ts":"2026-10-19T04:50:28.325Z","issue":66,"pr":null,"role":"smoke","engine":null,"model":null,"ok":false,"turns":0,"costUsd":null,"durationMs":0,"failureReason":"smoke_failed","round":0}
