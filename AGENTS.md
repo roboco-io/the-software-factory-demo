@@ -41,6 +41,7 @@
 
 ## 규칙
 
+- 프로덕션 스모크(`tests/smoke/`, `apps/web/e2e-smoke/`)가 의존하는 계약을 깨지 않는다: `GET /api/health`의 `status: "ok"`, `GET /api/articles`의 `articlesCount`·`articles`, `GET /api/tags`의 `tags`, 홈 화면의 conduit 제목·Global Feed·피드백 버튼·목록 로딩 후 오류 없음. 이 응답 모양이나 화면 요소를 바꾸는 변경은 스모크를 고치지 말고 호환을 유지한다.
 - 테스트를 먼저 쓴다. 버그 수정은 수정 전 코드에서 실패하는 테스트를 먼저 커밋한다.
 - 버그 이슈(`type:bug`) PR은 필수 체크 `evidence`가 PR이 추가·수정한 테스트를 수정 전 코드에서 실행해 실패하고 수정 후 코드에서 통과하는지 확인한다. 재현 테스트는 Vitest(`apps/api/test/*.test.ts`, `apps/web/src/**/*.test.tsx`)로 쓴다. Playwright E2E만으로는 통과하지 못한다.
 - API 오류 형식은 `{"errors": {"field": ["message"]}}`이며 `apps/api/src/lib/errors.ts`의 헬퍼만 사용한다.

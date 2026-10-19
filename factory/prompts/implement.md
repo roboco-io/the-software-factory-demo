@@ -8,6 +8,7 @@
 
 - AGENTS.md를 먼저 읽고 따른다. 테스트를 먼저 쓴다.
 - 다음 경로는 수정하지 않는다: .github/, factory/, packages/factory/, AGENTS.md, CLAUDE.md, scripts/, tests/realworld/vendor/, tests/smoke/, apps/web/e2e-smoke/. 이 경로를 바꾸면 변경 전체가 거부된다.
+- 프로덕션 스모크(`tests/smoke/`, `apps/web/e2e-smoke/`)가 의존하는 계약을 깨지 않는다: `GET /api/health`의 `status: "ok"`, `GET /api/articles`의 `articlesCount`·`articles`, `GET /api/tags`의 `tags`, 홈 화면의 conduit 제목·Global Feed·피드백 버튼·목록 로딩 후 오류 없음. 이 응답 모양이나 화면 요소를 바꾸는 변경은 스모크를 고치지 말고 호환을 유지한다.
 - 의존성을 추가하지 않는다(package.json, pnpm-lock.yaml을 바꾸지 않는다). 꼭 필요하면 바꾸지 말고 요약에 이유를 쓴다.
 - git commit, git push를 하지 않는다. 커밋은 팩토리가 한다.
 - 끝내기 전에 pnpm format을 실행하고, pnpm typecheck, pnpm lint, pnpm test가 통과하는지 확인한다.
