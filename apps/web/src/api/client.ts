@@ -18,6 +18,7 @@ export type Client = {
   get<T>(path: string): Promise<T>;
   post<T>(path: string, body?: unknown): Promise<T>;
   put<T>(path: string, body: unknown): Promise<T>;
+  upload<T>(path: string, file: Blob): Promise<T>;
   del(path: string): Promise<void>;
 };
 
@@ -26,17 +27,18 @@ export function createClient(
   getToken: () => string | null,
   fetchImpl: typeof fetch = (...args) => fetch(...args),
 ): Client {
-  async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async function request<T>(method: string, path: string, body?: unknown, file?: Blob): Promise<T> {
     const headers: Record<string, string> = {};
     const token = getToken();
     if (token) headers.authorization = `Token ${token}`;
-    if (body !== undefined) headers["content-type"] = "application/json";
+    if (file) headers["content-type"] = file.type;
+    else if (body !== undefined) headers["content-type"] = "application/json";
     let res: Response;
     try {
       res = await fetchImpl(`${base}${path}`, {
         method,
         headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: file ?? (body === undefined ? undefined : JSON.stringify(body)),
       });
     } catch {
       throw new ApiFailure(0, { network: ["is unreachable"] });
@@ -59,6 +61,7 @@ export function createClient(
     get: (p) => request("GET", p),
     post: (p, b) => request("POST", p, b),
     put: (p, b) => request("PUT", p, b),
+    upload: (p, f) => request("POST", p, undefined, f),
     del: (p) => request("DELETE", p),
   };
 }

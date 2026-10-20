@@ -24,9 +24,27 @@ function SettingsForm({ user }: { user: User }) {
     password: "",
   });
   const [errors, setErrors] = useState<Errors | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function pickImage(file: File | undefined) {
+    if (!file) return;
+    setErrors(null);
+    setUploading(true);
+    try {
+      const r = await client.upload<{ image: string; user: User }>("/user/image", file);
+      setForm((f) => ({ ...f, image: r.image }));
+      signIn(r.user);
+    } catch (err) {
+      setErrors(err instanceof ApiFailure ? err.errors : { app: ["failed"] });
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    // 업로드 중 저장하면 이전 이미지 URL이 업로드 결과를 덮어쓴다.
+    if (uploading) return;
     setErrors(null);
     const { password, ...rest } = form;
     const payload = password ? { ...rest, password } : rest;
@@ -48,6 +66,15 @@ function SettingsForm({ user }: { user: User }) {
             <ErrorList errors={errors} />
             <form onSubmit={submit}>
               <fieldset>
+                <fieldset className="form-group">
+                  <input
+                    className="form-control"
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    aria-label="Upload profile picture"
+                    onChange={(e) => void pickImage(e.target.files?.[0])}
+                  />
+                </fieldset>
                 <fieldset className="form-group">
                   <input
                     className="form-control"
@@ -91,7 +118,11 @@ function SettingsForm({ user }: { user: User }) {
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                   />
                 </fieldset>
-                <button className="btn btn-lg btn-primary pull-xs-right" type="submit">
+                <button
+                  className="btn btn-lg btn-primary pull-xs-right"
+                  type="submit"
+                  disabled={uploading}
+                >
                   Update Settings
                 </button>
               </fieldset>
