@@ -15,14 +15,22 @@
 
 ### 추가
 
-- 프로덕션 장애와 요청 정체를 자동으로 분석하는 포스트모템을 추가했습니다. 장애가 감지되거나 복구되면 팩토리가 타임라인을 모아 원인을 분석하고, 비난 없는 형식의 기록을 장애 이슈에 남깁니다. 실패 원문이 있고 인용이 원인 PR의 변경과 겹치는 등 확신 조건을 모두 충족하면 원인 PR을 되돌리는 PR을 열어 T0·T1은 자동 병합하고 T2·T3는 사람 승인을 기다립니다. 복구가 확인되면 원인 PR의 요청 이슈를 다시 열고, 사실로 확인된 원인이 있으면 개선 PR을 위임합니다. 정책과 예산은 `factory/postmortem-policy.yml`에서 바꾸며(장애당 분석 2회, 회당 2 USD, 하루 10 USD), 운영 방법은 [운영 문서](docs/operations.md)에 있습니다.
 - 프로필 이미지 업로드를 추가했습니다. 로그인한 사용자가 PNG·JPEG·GIF·WebP(최대 1MB)를 올리면 아바타가 갱신됩니다. 이미지는 새 `images` 테이블(D1 마이그레이션)에 저장되고, 본문 크기는 스트림을 읽는 동안 제한해 Content-Length가 없는 초과 요청도 거부합니다(PR #69, 이슈 #67).
 - 데모 앱과 팩토리 대시보드에 Google Analytics 4를 추가했습니다. `roboco.io`에서 방문자가 동의 배너에서 동의한 뒤에만 GA를 불러오고, "통계 설정"에서 동의를 철회하면 수집을 끄고 데모 전용 GA 쿠키를 지웁니다. 로컬 실행과 PR 프리뷰에서는 배너와 GA를 불러오지 않습니다. [PR #68](https://github.com/roboco-io/the-software-factory-demo/pull/68)
 
 ### 변경
 
-- 사람이 연 PR의 승인 절차를 정했습니다. 1인 조직이라 작성자가 자기 PR을 병합해야 하는데, GitHub은 자기 PR 승인을 막습니다. 그래서 CODEOWNER가 로컬 세션에서 승인을 요청하면 독립 리뷰 에이전트가 PR diff를 한 번 리뷰하고, 통과하면 리뷰 결과를 PR 코멘트로 남긴 뒤 병합합니다. 절차는 [AGENTS.md](AGENTS.md)에 있습니다. [PR #80](https://github.com/roboco-io/the-software-factory-demo/pull/80)
 - 웹 홈 화면에 표시되는 사이트 이름을 `conduit`에서 `conveyor`로 변경했습니다. 이름 변경 후 프로덕션 스모크·배포 확인·PR 프리뷰 확인이 옛 이름을 찾아 실패하던 문제도 새 이름 기준으로 고쳤습니다. [PR #65](https://github.com/roboco-io/the-software-factory-demo/pull/65), [PR #64](https://github.com/roboco-io/the-software-factory-demo/pull/64)
+
+## 2026-10-21
+
+### 추가
+
+- 프로덕션 장애와 요청 정체를 자동으로 분석하는 포스트모템을 추가했습니다. 장애가 감지되거나 복구되면 팩토리가 타임라인을 모아 원인을 분석하고, 비난 없는 형식의 기록을 장애 이슈에 남깁니다. 실패 원문이 있고 인용이 원인 PR의 변경과 겹치는 등 확신 조건을 모두 충족하면 원인 PR을 되돌리는 PR을 열어 T0·T1은 자동 병합하고 T2·T3는 사람 승인을 기다립니다. 복구가 확인되면 원인 PR의 요청 이슈를 다시 열고, 사실로 확인된 원인이 있으면 개선 PR을 위임합니다. 정책과 예산은 `factory/postmortem-policy.yml`에서 바꾸며(장애당 분석 2회, 회당 2 USD, 하루 10 USD), 운영 방법은 [운영 문서](docs/operations.md)에 있습니다. [PR #78](https://github.com/roboco-io/the-software-factory-demo/pull/78)
+
+### 변경
+
+- 사람이 연 PR의 승인 절차를 정했습니다. 1인 조직이라 작성자가 자기 PR을 병합해야 하는데, GitHub은 자기 PR 승인을 막습니다. 그래서 CODEOWNER가 로컬 세션에서 승인을 요청하면 독립 리뷰 에이전트가 PR diff를 한 번 리뷰하고, 통과하면 리뷰 결과를 PR 코멘트로 남긴 뒤 병합합니다. 절차는 [AGENTS.md](AGENTS.md)에 있습니다. [PR #80](https://github.com/roboco-io/the-software-factory-demo/pull/80)
 
 ## 2026-10-14
 
