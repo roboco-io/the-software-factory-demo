@@ -12,7 +12,7 @@ import {
 import { resolveIncident, incidentKey, type Incident } from "../postmortem/incident";
 import { POSTMORTEM_MARKER, renderPostmortem } from "../postmortem/report";
 import { collectTimeline, type Timeline } from "../postmortem/timeline";
-import { REVERT_TRAILER } from "../report/commit";
+import { REVERT_TRAILER, parseRevertIssues } from "../report/commit";
 import { parsePrMeta, type PrMeta } from "../report/pr";
 import { codeBlock, inline, readMarker, writeMarker } from "../report/text";
 import type { IncidentInfo, RunRecord } from "../runs/store";
@@ -223,7 +223,7 @@ export const postmortemStage: PhasedStage<PostmortemArgs, PostmortemPlan, Postmo
       analysis && plan.phase === "initial"
         ? plan.args.dryRun
           ? dryRunText(plan, analysis, deps)
-          : await tryRevert(deps, plan, analysis)
+          : await tryRevertSafely(deps, plan, analysis)
         : null;
     // 복구 뒤 사후 분석: 요청 이슈 재오픈과 개선 PR 위임(재생은 아무것도 바꾸지 않는다).
     const follow =
@@ -334,6 +334,23 @@ function dryRunText(
   return { action: `재생이라 되돌리지 않았다. 판정: ${verdict}`, reverted: false };
 }
 
+// push·PR 생성 실패가 기록 전체를 막지 않게 한다. 실패하면 사유만 조치에 남기고 진단은 그대로 쓴다.
+async function tryRevertSafely(
+  deps: StageDeps,
+  plan: PostmortemPlan,
+  analysis: PostmortemAnalysis,
+): Promise<{ action: string; reverted: boolean }> {
+  try {
+    return await tryRevert(deps, plan, analysis);
+  } catch (err) {
+    deps.log(`postmortem: revert for #${plan.args.issue} failed: ${String(err)}`);
+    return {
+      action: `되돌리기 PR을 만들지 못했다(${inline(String(err)).slice(0, 200)}). 사람이 확인한다`,
+      reverted: false,
+    };
+  }
+}
+
 // 되돌리기 판정(spec 4.4)과 PR 생성. 충돌(조건 5)은 git 결과로 판정한다.
 async function tryRevert(
   deps: StageDeps,
@@ -429,10 +446,17 @@ async function reopenRequest(
   const causePr = mine.at(-1)?.incident?.causePr ?? null;
   if (causePr === null) return null;
   const merged = await deps.gh.listMergedPulls(new Date(plan.incident.detectedAt));
-  const revertMerged = merged.some((p) => {
+  // 봇 PR의 meta만으로는 부족하다. 병합 커밋 메시지에 gate가 쓴 Factory-Revert trailer가 있어야 한다.
+  let revertMerged = false;
+  for (const p of merged) {
     const meta = p.author === deps.settings.botLogin ? parsePrMeta(p.body) : null;
-    return meta?.role === "revert" && meta.issue === issue;
-  });
+    if (meta?.role !== "revert" || meta.issue !== issue || !p.mergeSha) continue;
+    const message = await deps.gh.getCommitMessage(p.mergeSha).catch(() => "");
+    if (parseRevertIssues(message).includes(issue)) {
+      revertMerged = true;
+      break;
+    }
+  }
   if (!revertMerged) return null;
   const request = plan.timeline.candidates.find((c) => c.number === causePr)?.requestIssue ?? null;
   if (request === null) return null;

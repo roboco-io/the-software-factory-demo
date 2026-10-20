@@ -319,6 +319,20 @@ describe("postmortem revert PR", () => {
   };
   const openPulls = (h: TestHarness) => h.gh.listOpenPulls();
 
+  it("still writes the record when the revert push fails", async () => {
+    const { h } = setup();
+    await smokeIssue(h);
+    addCause(h);
+    h.deps.settings.token = "t";
+    h.git.push = async () => {
+      throw new Error("push rejected");
+    };
+    await run(h, args());
+    expect(await openPulls(h)).toHaveLength(0);
+    const bodies = (await h.gh.listComments(1)).map((c) => c.body);
+    expect(bodies.some((b) => b.includes("되돌리기 PR을 만들지 못했다"))).toBe(true);
+  });
+
   it("opens one revert PR on factory/revert-issue-N with the revert meta and trailer (#66 replay)", async () => {
     const { h } = setup();
     await smokeIssue(h);
@@ -518,6 +532,7 @@ describe("postmortem followup", () => {
     await run(h, args());
     // 되돌리기 PR이 병합됐다.
     prAt(h, 90, { body: meta(1, "revert"), mergedAt: "2026-10-12T10:30:00.000Z" });
+    h.gh.commitMessages.set("merge-90", "revert\n\nFactory-Revert: #1");
     await recovery(h);
     h.gh.dispatches.length = 0;
     await run(h, args({ event: "recovered" }));
@@ -528,6 +543,22 @@ describe("postmortem followup", () => {
     expect(comments[0]!.body).toContain("제목 복원");
     expect(comments[0]!.body).toContain("#65");
     expect(h.gh.dispatches.map((d) => d.file)).not.toContain("factory-implement.yml");
+  });
+
+  it("does not reopen when the merged PR has a revert meta but no Factory-Revert trailer", async () => {
+    const { h } = await recovered(ANALYSIS, FACT);
+    const req = h.gh.addIssue({ title: "x", labels: ["factory:deployed"] });
+    await h.gh.closeIssue(req.number);
+    prAt(h, 65, {
+      body: meta(req.number),
+      files: [{ filename: "apps/web/src/pages/Home.tsx", deletions: ["conduit"], additions: [] }],
+    });
+    await run(h, args());
+    prAt(h, 90, { body: meta(1, "revert"), mergedAt: "2026-10-12T10:30:00.000Z" });
+    h.gh.commitMessages.set("merge-90", "feat: something else\n\nFactory-Issue: #5");
+    await recovery(h);
+    await run(h, args({ event: "recovered" }));
+    expect((await h.gh.getIssue(req.number)).state).toBe("closed");
   });
 
   it("does not reopen when the revert PR is not merged or the policy disables it", async () => {
