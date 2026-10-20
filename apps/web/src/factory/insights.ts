@@ -51,7 +51,7 @@ const PIPELINE_ROLES = new Set([
   "gate",
   "deploy",
 ]);
-const AGENT_ROLES = new Set(["triage", "implement", "review", "fix", "improve"]);
+const AGENT_ROLES = new Set(["triage", "implement", "review", "fix", "improve", "postmortem"]);
 const POLICY_HOLDS = new Set(["risk_t2", "risk_t3", "permission_denied"]);
 const DAY_MS = 86_400_000;
 const positiveId = (id: number) => Number.isFinite(id) && id > 0;
@@ -223,4 +223,56 @@ export function improvementStories(
       };
     })
     .sort((a, b) => Date.parse(b.mergedAt) - Date.parse(a.mergedAt) || b.pr - a.pr);
+}
+
+export interface IncidentRow {
+  key: string;
+  issue: number;
+  kind: string;
+  detectedAt: string;
+  recoveredAt: string | null;
+  mttrMinutes: number | null;
+  causePr: number | null;
+  reverted: boolean;
+  classification: string | null;
+}
+
+// 같은 key의 initial·followup 레코드를 한 행으로 합친다. 뒤 단계 값이 앞 단계 값보다 우선한다.
+export function incidents(runs: Run[]): IncidentRow[] {
+  const byKey = new Map<string, IncidentRow>();
+  const ordered = runs
+    .filter((run) => run.incident && typeof run.incident.key === "string" && validTime(run))
+    .sort(
+      (a, b) =>
+        Number(a.incident!.phase === "followup") - Number(b.incident!.phase === "followup") ||
+        Date.parse(a.ts) - Date.parse(b.ts),
+    );
+  for (const run of ordered) {
+    const i = run.incident!;
+    const prev = byKey.get(i.key);
+    byKey.set(i.key, {
+      key: i.key,
+      issue: run.issue,
+      kind: i.kind,
+      detectedAt: prev?.detectedAt ?? i.detectedAt,
+      recoveredAt: i.recoveredAt ?? prev?.recoveredAt ?? null,
+      mttrMinutes: null,
+      causePr: i.causePr ?? prev?.causePr ?? null,
+      reverted: i.reverted || (prev?.reverted ?? false),
+      classification: i.classification ?? prev?.classification ?? null,
+    });
+  }
+  return [...byKey.values()]
+    .map((row) => {
+      const start = Date.parse(row.detectedAt);
+      const end = row.recoveredAt ? Date.parse(row.recoveredAt) : NaN;
+      const mttrMinutes =
+        Number.isFinite(start) && Number.isFinite(end) && end >= start
+          ? Math.round((end - start) / 60_000)
+          : null;
+      return { ...row, mttrMinutes };
+    })
+    .sort(
+      (a, b) => Date.parse(b.detectedAt) - Date.parse(a.detectedAt) || a.key.localeCompare(b.key),
+    );
 }

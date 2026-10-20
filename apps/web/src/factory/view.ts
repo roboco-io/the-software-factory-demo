@@ -3,6 +3,7 @@ import { recentMonths } from "./data";
 import {
   improvementStories,
   issueStories,
+  incidents,
   roleStats,
   type Improvement,
   type IssueStory,
@@ -22,6 +23,7 @@ const ROLES: Record<string, string> = {
   intake: "의견 수집",
   smoke: "서비스 점검",
   improve: "자가 개선",
+  postmortem: "포스트모템",
 };
 const CATEGORIES: Record<string, string> = {
   "error-format": "오류 응답 형식",
@@ -393,6 +395,47 @@ function improvementsPanel(runs: Run[], improvements: Improvement[], now: Date):
   return s;
 }
 
+function incidentsPanel(runs: Run[]): HTMLElement {
+  const s = panel(
+    "장애 기록",
+    "incidents-heading",
+    "프로덕션 점검이나 배포 실패로 감지된 장애와 복구 결과입니다.",
+  );
+  const rows = incidents(runs);
+  if (!rows.length) {
+    s.append(el("p", "기록된 장애 없음", "empty"));
+    return s;
+  }
+  const { wrapper, body } = table(
+    ["요청", "분류", "감지", "복구", "복구 시간", "원인 PR", "되돌림"],
+    "장애 기록",
+  );
+  for (const r of rows) {
+    const row = el("tr");
+    const issue = el("td");
+    issue.append(link(`#${r.issue}`, `${REPO}/issues/${r.issue}`));
+    const cause = el("td");
+    if (r.causePr) cause.append(link(`#${r.causePr}`, `${REPO}/pull/${r.causePr}`));
+    else cause.textContent = "미확인";
+    const detected = el("td");
+    detected.append(time(r.detectedAt));
+    const recovered = el("td");
+    if (r.recoveredAt) recovered.append(time(r.recoveredAt));
+    else recovered.textContent = "복구 전";
+    row.append(
+      issue,
+      el("td", r.classification ?? "분류 전"),
+      detected,
+      recovered,
+      el("td", r.mttrMinutes === null ? "-" : `${r.mttrMinutes}분`),
+      cause,
+      el("td", r.reverted ? "되돌림" : "되돌리지 않음"),
+    );
+    body.append(row);
+  }
+  s.append(wrapper);
+  return s;
+}
 function statCards(runs: Run[], improvements: Improvement[]): HTMLElement {
   const stats = roleStats(runs);
   const recorded = stats.reduce((n, row) => n + row.costRuns, 0);
@@ -566,7 +609,7 @@ export function renderDashboard(
   root.append(meta, processGuide());
   const overview = el("div", undefined, "overview");
   overview.append(storiesPanel(runs), improvementsPanel(runs, improvements, now));
-  root.append(overview, takePart(), statCards(runs, improvements));
+  root.append(overview, incidentsPanel(runs), takePart(), statCards(runs, improvements));
   const details = el("details", undefined, "operator-details");
   details.append(
     el("summary", "운영 기록 자세히 보기"),

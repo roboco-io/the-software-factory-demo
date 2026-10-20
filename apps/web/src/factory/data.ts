@@ -11,6 +11,16 @@ export interface Run {
   costUsd: number | null;
   failureReason: string | null;
   findings?: { category: string }[];
+  incident?: {
+    key: string;
+    kind: string;
+    phase: "initial" | "followup";
+    detectedAt: string;
+    recoveredAt: string | null;
+    causePr: number | null;
+    reverted: boolean;
+    classification: string | null;
+  };
 }
 
 function isRun(v: unknown): v is Run {
