@@ -9,6 +9,8 @@ export const TriageSchema = z.object({
   riskTier: z.enum(TIERS),
   acceptanceCriteria: z.array(z.string().min(1)).min(1),
   summary: z.string(),
+  // 요청을 구현하면 기대값이 깨지는 보호(T3) 경로의 테스트·워크플로. 구현 에이전트는 바꿀 수 없다.
+  contractChanges: z.array(z.string().min(1)).max(20).optional().catch(undefined),
 });
 export type Triage = z.infer<typeof TriageSchema>;
 
@@ -100,6 +102,16 @@ export function renderTriageComment(t: Triage, run: { engine: string; model: str
     "",
     ...t.acceptanceCriteria.map((c) => `- [ ] ${inline(c)}`),
     "",
+    ...(t.contractChanges?.length
+      ? [
+          "**먼저 갱신할 보호 계약**",
+          "",
+          "이 요청을 구현하면 아래 보호 경로의 기대값이 깨진다. 구현 에이전트는 이 파일을 바꿀 수 없으므로, 사람이 갱신 PR을 먼저 병합하는 것이 좋다. 그러지 않으면 구현 PR은 사람 조치 대기로 넘어온다.",
+          "",
+          ...t.contractChanges.map((c) => `- ${inline(c)}`),
+          "",
+        ]
+      : []),
     `<sub>${run.engine}/${run.model}. 구현을 시작하려면 리포 쓰기 권한자가 \`@factory go\`를 코멘트로 남긴다.</sub>`,
     writeMarker(TRIAGE_DATA, t),
   ].join("\n");

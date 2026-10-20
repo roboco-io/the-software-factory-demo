@@ -114,10 +114,19 @@ export async function buildImplementPrompt(
     issueNumber: String(issue.number),
     issueTitle: issue.title,
     issueBody: issue.body || "(본문 없음)",
-    acceptanceCriteria:
+    acceptanceCriteria: [
       criteria.length > 0
         ? criteria.map((c) => `- ${c}`).join("\n")
         : "(트리아지 수용 기준 없음. 이슈 본문을 기준으로 한다.)",
+      // 트리아지가 예고한 보호 계약 변경. 에이전트가 고치지 않고 사람 조치로 보고하게 한다(PR #65).
+      ...(triage?.contractChanges?.length
+        ? [
+            "",
+            '보호 경로라 바꿀 수 없지만 이 변경으로 기대값이 깨질 것으로 예상되는 파일이다. 고치지 말고, 실제로 깨지면 출력에 "사람 조치 필요:"로 쓴다.',
+            ...triage.contractChanges.map((c) => `- ${c}`),
+          ]
+        : []),
+    ].join("\n"),
     bugRule: bugRuleFor(issue.labels),
   };
   return {
