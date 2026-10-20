@@ -93,7 +93,9 @@ describe("postmortem stage", () => {
     });
     await run(h, args({ event: "recovered" }));
     expect(claude.calls).toHaveLength(2);
-    const after = (await h.gh.listComments(1)).filter((c) => c.body.includes(POSTMORTEM_MARKER));
+    const after = (await h.gh.listComments(1)).filter((c) =>
+      c.body.includes(`<!-- ${POSTMORTEM_MARKER} {`),
+    );
     expect(after).toHaveLength(1);
     expect(after[0]!.id).toBe(before.id);
     expect(after[0]!.body).toContain('"phase":"followup"');

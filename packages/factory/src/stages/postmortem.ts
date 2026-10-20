@@ -13,7 +13,7 @@ import { resolveIncident, incidentKey, type Incident } from "../postmortem/incid
 import { POSTMORTEM_MARKER, renderPostmortem } from "../postmortem/report";
 import { collectTimeline, type Timeline } from "../postmortem/timeline";
 import { REVERT_TRAILER } from "../report/commit";
-import type { PrMeta } from "../report/pr";
+import { parsePrMeta, type PrMeta } from "../report/pr";
 import { codeBlock, inline, readMarker, writeMarker } from "../report/text";
 import type { IncidentInfo, RunRecord } from "../runs/store";
 import {
@@ -26,6 +26,8 @@ import {
   utcDay,
 } from "./common";
 import type { StageDeps } from "./deps";
+import { IMPROVE_MARKER, type Candidate } from "./collect";
+import { POSTMORTEM_CANDIDATE_MARKER } from "./improve";
 import type { PhasedStage } from "./phased";
 import type { IncidentKind, PostmortemEvent } from "./postmortem-trigger";
 import { clampResult } from "./protect";
@@ -223,8 +225,13 @@ export const postmortemStage: PhasedStage<PostmortemArgs, PostmortemPlan, Postmo
           ? dryRunText(plan, analysis, deps)
           : await tryRevert(deps, plan, analysis)
         : null;
+    // 복구 뒤 사후 분석: 요청 이슈 재오픈과 개선 PR 위임(재생은 아무것도 바꾸지 않는다).
+    const follow =
+      analysis && plan.phase === "followup" && !plan.args.dryRun
+        ? await followupActions(deps, plan, analysis)
+        : null;
     const action = analysis
-      ? (revert?.action ?? "진단을 기록했다. 사후 분석은 복구 뒤에 같은 기록을 갱신한다.")
+      ? (revert?.action ?? follow ?? "진단을 기록했다. 사후 분석은 복구 뒤에 같은 기록을 갱신한다.")
       : plan.skipAnalysis
         ? SKIP_TEXT[plan.skipAnalysis]
         : `분석 실패(${failureText(out.result.failureReason)})`;
@@ -392,4 +399,108 @@ async function tryRevert(
     action: `되돌리기 PR #${pr}을 열었다(원인 PR #${cause.number}). 병합은 위험 등급에 따라 gate가 처리한다`,
     reverted: true,
   };
+}
+
+const POSTMORTEM_LABEL = "factory:postmortem";
+const MAX_SAMPLES = 5;
+const MAX_SAMPLE_CHARS = 1000;
+
+// 개선 후보의 key. 정체는 요청의 마지막 실패 사유, 나머지는 장애 종류다.
+function candidateKey(plan: PostmortemPlan): string {
+  if (plan.incident.kind !== "stall") return plan.incident.kind;
+  const failed = plan.timeline.runs.filter(
+    (r) => r.issue === plan.args.issue && !r.ok && r.role !== "postmortem",
+  );
+  return failed.at(-1)?.failureReason ?? "stall";
+}
+
+// 되돌리기 PR이 병합됐으면 원인 PR의 요청 이슈를 다시 연다. 다시 구현하는 것은 사람이 `@factory go`로 정한다.
+async function reopenRequest(
+  deps: StageDeps,
+  plan: PostmortemPlan,
+  analysis: PostmortemAnalysis,
+): Promise<string | null> {
+  if (!deps.postmortem.revert.reopenRequest) return null;
+  const issue = plan.args.issue;
+  const key = incidentKey(plan.incident);
+  const mine = (await deps.runs.since(new Date(0))).filter(
+    (r) => r.role === "postmortem" && r.incident?.key === key && r.incident.reverted,
+  );
+  const causePr = mine.at(-1)?.incident?.causePr ?? null;
+  if (causePr === null) return null;
+  const merged = await deps.gh.listMergedPulls(new Date(plan.incident.detectedAt));
+  const revertMerged = merged.some((p) => {
+    const meta = p.author === deps.settings.botLogin ? parsePrMeta(p.body) : null;
+    return meta?.role === "revert" && meta.issue === issue;
+  });
+  if (!revertMerged) return null;
+  const request = plan.timeline.candidates.find((c) => c.number === causePr)?.requestIssue ?? null;
+  if (request === null) return null;
+  if ((await deps.gh.getIssue(request)).state === "open") return null;
+  await deps.gh.reopenIssue(request);
+  await deps.gh.comment(
+    request,
+    [
+      `장애 #${issue} 때문에 PR #${causePr}을 되돌렸다. 이 요청은 아직 반영되지 않은 상태라 이슈를 다시 열었다.`,
+      "",
+      `되돌린 이유: ${inline(analysis.summary)}`,
+      "",
+      "다시 처리할 때 함께 바꿀 것:",
+      ...(analysis.actions.length > 0
+        ? analysis.actions.map((a) => `- ${inline(a)}`)
+        : ["- (분석이 제안한 조치 없음)"]),
+      "",
+      "다시 구현하려면 리포 쓰기 권한자가 `@factory go`를 남긴다. 자동으로 구현을 시작하지 않는다.",
+    ].join("\n"),
+  );
+  return `요청 이슈 #${request}을 다시 열었다`;
+}
+
+async function hasOpenImprovement(deps: StageDeps, key: string): Promise<boolean> {
+  return (await deps.gh.listOpenPulls()).some(
+    (p) =>
+      p.author === deps.settings.botLogin &&
+      p.labels.includes("factory:improve") &&
+      readMarker(p.body, IMPROVE_MARKER, z.object({ key: z.string() }))?.key === key,
+  );
+}
+
+// 사후 분석의 [사실] 원인·방어선만 개선 입력으로 넘긴다. 같은 key의 개선 PR이 열려 있으면 위임하지 않는다.
+async function delegateImprovement(
+  deps: StageDeps,
+  plan: PostmortemPlan,
+  analysis: PostmortemAnalysis,
+): Promise<string> {
+  const facts = [...analysis.rootCause, ...analysis.defenses].filter((s) => s.kind === "fact");
+  if (facts.length === 0) return "근거 부족으로 개선 제안 보류";
+  const key = candidateKey(plan);
+  if (await hasOpenImprovement(deps, key)) {
+    return `같은 범주(${inline(key)})의 열린 개선 PR이 있어 새로 위임하지 않았다`;
+  }
+  const issue = plan.args.issue;
+  const candidate: Candidate = {
+    key,
+    count: 1,
+    distinct: 1,
+    issues: [issue],
+    prs: analysis.causePr === null ? [] : [analysis.causePr],
+    samples: facts.slice(0, MAX_SAMPLES).map((f) => inline(f.text).slice(0, MAX_SAMPLE_CHARS)),
+  };
+  await deps.gh.comment(
+    issue,
+    `포스트모템의 사실 근거로 개선 후보를 남긴다.\n\n${writeMarker(POSTMORTEM_CANDIDATE_MARKER, candidate)}`,
+  );
+  await deps.gh.addLabels(issue, [POSTMORTEM_LABEL]);
+  await deps.gh.dispatchWorkflow("factory-weekly.yml", { issue: String(issue) });
+  return "개선 PR 작성을 위임했다";
+}
+
+async function followupActions(
+  deps: StageDeps,
+  plan: PostmortemPlan,
+  analysis: PostmortemAnalysis,
+): Promise<string> {
+  const reopened = await reopenRequest(deps, plan, analysis);
+  const improvement = await delegateImprovement(deps, plan, analysis);
+  return [reopened, improvement].filter((x): x is string => x !== null).join(". ");
 }

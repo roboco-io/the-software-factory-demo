@@ -25,6 +25,11 @@ export const LABELS: LabelSpec[] = [
   { name: "factory:alert", color: "b60205", description: "팩토리 실패율 차단기 알림" },
   { name: "factory:improve", color: "0e8a16", description: "팩토리 자기개선 PR(T3, 사람 승인)" },
   { name: "factory:report", color: "c5def5", description: "팩토리 주간 리포트" },
+  {
+    name: "factory:postmortem",
+    color: "c5def5",
+    description: "포스트모템 개선 후보가 있는 장애 이슈",
+  },
   ...TIERS.map((t) => ({
     name: `risk:${t}`,
     color: "fbca04",
