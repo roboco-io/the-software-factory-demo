@@ -23,6 +23,8 @@ export interface RunRecord {
   failureReason: string | null;
   round: number;
   findings?: RunFinding[];
+  // 스모크 실패처럼 사유 코드만으로 원인을 알 수 없을 때 남기는 실패 원문 발췌(최대 1000자).
+  detail?: string;
 }
 
 export interface RunStore {

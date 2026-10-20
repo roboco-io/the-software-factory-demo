@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createFakeAdapter, loadFakeScript } from "../src/agents/fake";
 import { main, type CliContext } from "../src/cli";
@@ -50,6 +53,20 @@ describe("cli main", () => {
     expect(JSON.parse(out.at(-1)!)).toEqual({ action: "commented", issue: 1 });
     expect(await main(["smoke-report", "--result", "success"], context(h, [], out))).toBe(0);
     expect(JSON.parse(out.at(-1)!)).toEqual({ action: "recovered", issue: 1 });
+  });
+
+  it("smoke-report reads --excerpt-file and still reports when the file is missing", async () => {
+    const h = makeTestDeps();
+    const out: string[] = [];
+    const dir = mkdtempSync(path.join(tmpdir(), "smoke-"));
+    const file = path.join(dir, "excerpt.txt");
+    writeFileSync(file, "== Hurl ==\nerror: Assert failure\n");
+    const args = ["smoke-report", "--result", "failure", "--excerpt-file"];
+    expect(await main([...args, file], context(h, [], out))).toBe(0);
+    expect((await h.gh.getIssue(1)).body).toContain("```text\n== Hurl ==\nerror: Assert failure");
+    expect(await main([...args, path.join(dir, "none.txt")], context(h, [], out))).toBe(0);
+    expect(JSON.parse(out.at(-1)!)).toEqual({ action: "commented", issue: 1 });
+    expect((await h.gh.listComments(1)).at(-1)!.body).not.toContain("```");
   });
 
   it("intake requires INTAKE_URL and INTAKE_TOKEN and calls nothing without them", async () => {
