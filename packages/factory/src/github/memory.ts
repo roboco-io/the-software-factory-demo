@@ -23,7 +23,7 @@ interface StoredPull extends Pull {
 }
 
 function toChanged(f: string | ChangedFile): ChangedFile {
-  return typeof f === "string" ? { filename: f, additions: [] } : { ...f };
+  return typeof f === "string" ? { filename: f, additions: [], deletions: [] } : { ...f };
 }
 
 function clonePull(p: StoredPull): Pull {
@@ -194,6 +194,20 @@ export class InMemoryGitHub implements GitHubPort {
     const i = this.issues.get(n);
     if (i) i.state = "closed";
   }
+  async reopenIssue(n: number): Promise<void> {
+    const i = this.issues.get(n);
+    if (i) i.state = "open";
+  }
+  async editComment(id: number, body: string): Promise<void> {
+    for (const list of this.comments.values()) {
+      const c = list.find((x) => x.id === id);
+      if (c) {
+        c.body = body;
+        return;
+      }
+    }
+    throw new Error(`comment ${id} not found`);
+  }
   async getPermission(user: string): Promise<Permission> {
     return this.permissions.get(user) ?? "none";
   }
@@ -289,6 +303,8 @@ export class InMemoryGitHub implements GitHubPort {
         author: p.author,
         labels: [...p.labels],
         mergedAt: p.mergedAt as string,
+        mergeSha: this.merges.find((m) => m.pr === p.number)?.mergeSha ?? null,
+        headSha: p.headSha,
       }));
   }
   async getCommitMessage(sha: string): Promise<string> {

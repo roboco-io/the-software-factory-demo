@@ -71,6 +71,8 @@ export interface MergedPull {
   author: string;
   labels: string[];
   mergedAt: string;
+  mergeSha: string | null;
+  headSha: string | null;
 }
 
 export interface BoardSpec {
@@ -105,6 +107,8 @@ export interface GitHubPort {
   comment(n: number, body: string): Promise<void>;
   listComments(n: number): Promise<Comment[]>;
   closeIssue(n: number): Promise<void>;
+  reopenIssue(n: number): Promise<void>;
+  editComment(id: number, body: string): Promise<void>;
   getPermission(user: string): Promise<Permission>;
   getPull(n: number): Promise<Pull>;
   findOpenPullByHead(branch: string): Promise<Pull | null>;

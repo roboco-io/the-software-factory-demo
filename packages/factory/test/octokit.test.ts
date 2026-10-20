@@ -479,7 +479,10 @@ describe("createOctokitPort reopenIssue and editComment", () => {
 
   it("edits a comment by id", async () => {
     const calls: string[] = [];
-    const gh = port([{ method: "PATCH", path: /issues\/comments\/55$/, status: 200, body: {} }], calls);
+    const gh = port(
+      [{ method: "PATCH", path: /issues\/comments\/55$/, status: 200, body: {} }],
+      calls,
+    );
     await gh.editComment(55, "new body");
     expect(calls).toEqual(["PATCH /repos/o/r/issues/comments/55"]);
   });
@@ -579,8 +582,8 @@ describe("createOctokitPort pagination and caps", () => {
       "/repos/o/r/pulls/9/files?page=2": { body: [{ filename: "b.ts" }] },
     });
     expect(await gh.listPullFiles(9)).toEqual([
-      { filename: "a.ts", additions: ["x"], additionCount: 1 },
-      { filename: "b.ts", additions: [], patchMissing: true },
+      { filename: "a.ts", additions: ["x"], deletions: [], additionCount: 1 },
+      { filename: "b.ts", additions: [], deletions: [], patchMissing: true },
     ]);
   });
 
@@ -628,7 +631,7 @@ describe("createOctokitPort pagination and caps", () => {
       "/repos/o/r/pulls/9/files?page=1": { body: [{ filename: "img.png" }] },
     });
     expect(await gh.listPullFiles(9)).toEqual([
-      { filename: "img.png", additions: [], patchMissing: true },
+      { filename: "img.png", additions: [], deletions: [], patchMissing: true },
     ]);
   });
 

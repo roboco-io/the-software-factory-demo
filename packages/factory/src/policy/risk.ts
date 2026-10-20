@@ -38,6 +38,8 @@ export interface ChangedFile {
   filename: string;
   previousFilename?: string;
   additions: string[];
+  /** 이 파일에서 삭제된 줄의 내용(diff의 `-` 접두사 제외). 포스트모템 타임라인이 쓴다. */
+  deletions?: string[];
   /** API가 알려 준 추가 줄 수. patch가 잘리거나 없을 때 `additions`와 비교한다. */
   additionCount?: number;
   /** GitHub가 patch를 주지 않았다(바이너리 또는 큰 diff). */
@@ -61,6 +63,21 @@ export function addedLinesFromPatch(patch: string | undefined): string[] {
       continue;
     }
     if (l.startsWith("+")) out.push(l.slice(1));
+  }
+  return out;
+}
+
+/** unified diff patch에서 삭제된 줄의 내용만 뽑는다. 헤더 처리는 addedLinesFromPatch와 같다. */
+export function deletedLinesFromPatch(patch: string | undefined): string[] {
+  if (!patch) return [];
+  const out: string[] = [];
+  let inHunk = false;
+  for (const l of patch.split("\n")) {
+    if (!inHunk) {
+      if (l.startsWith("@@")) inHunk = true;
+      continue;
+    }
+    if (l.startsWith("-")) out.push(l.slice(1));
   }
   return out;
 }

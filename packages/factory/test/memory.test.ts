@@ -23,7 +23,9 @@ describe("InMemoryGitHub", () => {
     expect((await gh.getPull(pr)).labels).toEqual(["risk:T1"]);
     expect((await gh.getIssue(issue.number)).labels).toEqual(["factory:triaged"]);
     expect((await gh.getIssue(pr)).isPullRequest).toBe(true);
-    expect(await gh.listPullFiles(pr)).toEqual([{ filename: "a.ts", additions: [] }]);
+    expect(await gh.listPullFiles(pr)).toEqual([
+      { filename: "a.ts", additions: [], deletions: [] },
+    ]);
   });
 
   it("moves an open pull's head when the branch is pushed again", async () => {

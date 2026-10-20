@@ -1,5 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -224,9 +231,9 @@ describe("createGit revert and restorePaths", () => {
     await expect(port.checkoutNewBranch("factory/revert-x", "origin/main")).rejects.toThrow(
       /invalid branch/,
     );
-    await expect(
-      port.checkoutNewBranch("factory/revert-issue-0", "origin/main"),
-    ).rejects.toThrow(/invalid branch/);
+    await expect(port.checkoutNewBranch("factory/revert-issue-0", "origin/main")).rejects.toThrow(
+      /invalid branch/,
+    );
     await expect(port.revert("--abort", "m")).rejects.toThrow(/invalid sha/);
   });
 });
