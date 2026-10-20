@@ -5,6 +5,9 @@ import { POSTMORTEM_MARKER } from "../src/postmortem/report";
 import { stepRecord } from "../src/stages/common";
 import { runPhase } from "../src/stages/phased";
 import { postmortemStage, type PostmortemArgs } from "../src/stages/postmortem";
+import { CandidateSchema } from "../src/stages/collect";
+import { POSTMORTEM_CANDIDATE_MARKER } from "../src/stages/improve";
+import { readMarker, writeMarker } from "../src/report/text";
 import { parseRevertIssues } from "../src/report/commit";
 import { parsePrMeta } from "../src/report/pr";
 import { BOT, makeTestDeps, type TestHarness } from "./helpers";
@@ -436,5 +439,186 @@ describe("postmortem revert PR", () => {
     await run(h, args({ event: "recovered" }));
     expect(h.git.reverts).toHaveLength(1);
     expect(await openPulls(h)).toHaveLength(0);
+  });
+});
+
+describe("postmortem followup", () => {
+  const prAt = (
+    h: TestHarness,
+    number: number,
+    over: Partial<{
+      title: string;
+      body: string;
+      state: "open" | "closed";
+      merged: boolean;
+      mergedAt: string;
+      labels: string[];
+      files: { filename: string; additions: string[]; deletions: string[] }[];
+    }> = {},
+  ) => {
+    h.gh.pulls.set(number, {
+      number,
+      title: over.title ?? `pr ${number}`,
+      body: over.body ?? "",
+      author: BOT,
+      headRef: `factory/pr-${number}`,
+      headSha: `head-${number}`,
+      baseRef: "main",
+      labels: over.labels ?? [],
+      draft: false,
+      state: over.state ?? "closed",
+      merged: over.merged ?? true,
+      mergedAt: over.mergedAt ?? "2026-10-12T08:00:00.000Z",
+      files: over.files ?? [],
+    });
+    h.gh.merges.push({
+      pr: number,
+      sha: `head-${number}`,
+      title: "t",
+      message: "m",
+      mergeSha: `merge-${number}`,
+    });
+  };
+  const meta = (issue: number, role: "implement" | "revert" = "implement") =>
+    writeMarker("factory:meta", {
+      issue,
+      role,
+      implementEngine: "claude",
+      implementModel: "m",
+      round: 0,
+    });
+  const recovery = (h: TestHarness) =>
+    h.deps.runs.append({ ...stepRecord("smoke", 1, null, true), ts: "2026-10-12T11:00:00.000Z" });
+
+  const FACT: PostmortemAnalysis = { ...ANALYSIS, causePr: null, excerptQuote: null };
+  const GUESS: PostmortemAnalysis = {
+    ...FACT,
+    rootCause: [{ text: "리뷰가 놓쳤을 수 있다", kind: "guess" }],
+    defenses: [{ text: "체크가 부족했을 수 있다", kind: "guess" }],
+  };
+
+  // 장애 이슈 #1에서 초기 분석(분석 결과 a1)을 마치고 복구한 뒤 사후 분석(a2)을 돌린다.
+  async function recovered(a1: PostmortemAnalysis, a2: PostmortemAnalysis) {
+    const { h, claude } = setup([step(a1), step(a2)]);
+    await smokeIssue(h);
+    return { h, claude };
+  }
+
+  it("reopens the cause PR's request issue once the revert PR is merged, without starting an implementation", async () => {
+    const { h } = await recovered(ANALYSIS, FACT);
+    const req = h.gh.addIssue({ title: "홈 제목 정리", labels: ["factory:deployed"] });
+    await h.gh.closeIssue(req.number);
+    prAt(h, 65, {
+      title: "feat: 홈 제목 정리",
+      body: meta(req.number),
+      files: [{ filename: "apps/web/src/pages/Home.tsx", deletions: ["conduit"], additions: [] }],
+    });
+    await run(h, args());
+    // 되돌리기 PR이 병합됐다.
+    prAt(h, 90, { body: meta(1, "revert"), mergedAt: "2026-10-12T10:30:00.000Z" });
+    await recovery(h);
+    h.gh.dispatches.length = 0;
+    await run(h, args({ event: "recovered" }));
+    const after = await h.gh.getIssue(req.number);
+    expect(after.state).toBe("open");
+    const comments = await h.gh.listComments(req.number);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]!.body).toContain("제목 복원");
+    expect(comments[0]!.body).toContain("#65");
+    expect(h.gh.dispatches.map((d) => d.file)).not.toContain("factory-implement.yml");
+  });
+
+  it("does not reopen when the revert PR is not merged or the policy disables it", async () => {
+    for (const mode of ["unmerged", "disabled"] as const) {
+      const { h } = await recovered(ANALYSIS, FACT);
+      const req = h.gh.addIssue({ title: "x", labels: ["factory:deployed"] });
+      await h.gh.closeIssue(req.number);
+      prAt(h, 65, {
+        body: meta(req.number),
+        files: [{ filename: "apps/web/src/pages/Home.tsx", deletions: ["conduit"], additions: [] }],
+      });
+      await run(h, args());
+      if (mode === "unmerged") {
+        prAt(h, 90, { body: meta(1, "revert"), merged: false, state: "open" });
+      } else {
+        prAt(h, 90, { body: meta(1, "revert"), mergedAt: "2026-10-12T10:30:00.000Z" });
+        h.deps.postmortem = {
+          ...h.deps.postmortem,
+          revert: { ...h.deps.postmortem.revert, reopenRequest: false },
+        };
+      }
+      await recovery(h);
+      await run(h, args({ event: "recovered" }));
+      expect((await h.gh.getIssue(req.number)).state, mode).toBe("closed");
+    }
+  });
+
+  it("labels the incident, leaves a candidate marker and dispatches the weekly improve when a cause is a fact", async () => {
+    const { h } = await recovered(FACT, FACT);
+    await run(h, args());
+    await recovery(h);
+    h.gh.dispatches.length = 0;
+    await run(h, args({ event: "recovered" }));
+    expect((await h.gh.getIssue(1)).labels).toContain("factory:postmortem");
+    expect(h.gh.dispatches).toEqual([{ file: "factory-weekly.yml", inputs: { issue: "1" } }]);
+    const candidate = (await h.gh.listComments(1))
+      .map((c) => readMarker(c.body, POSTMORTEM_CANDIDATE_MARKER, CandidateSchema))
+      .find((c) => c !== null);
+    expect(candidate).toMatchObject({ key: "smoke", count: 1, distinct: 1, issues: [1] });
+    expect(candidate!.samples).toEqual([
+      "PR 65가 홈 제목을 지웠다",
+      "e2e-preview는 필수 체크가 아니다",
+    ]);
+  });
+
+  it("uses the stall reason as the candidate key", async () => {
+    const { h } = setup([step({ ...FACT, classification: "stall" }), step(FACT)]);
+    const i = h.gh.addIssue({ title: "req", labels: ["factory:needs-human"] });
+    await h.deps.runs.append({
+      ...stepRecord("gate", i.number, 9, false, "smoke_contract"),
+      ts: "2026-10-12T10:00:00.000Z",
+    });
+    await run(h, { issue: i.number, kind: "stall", event: "detected" });
+    await run(h, { issue: i.number, kind: "stall", event: "recovered" });
+    const candidate = (await h.gh.listComments(i.number))
+      .map((c) => readMarker(c.body, POSTMORTEM_CANDIDATE_MARKER, CandidateSchema))
+      .find((c) => c !== null);
+    expect(candidate?.key).toBe("smoke_contract");
+  });
+
+  it("withholds the improvement when only guesses exist", async () => {
+    const { h } = await recovered(GUESS, GUESS);
+    await run(h, args());
+    await recovery(h);
+    h.gh.dispatches.length = 0;
+    await run(h, args({ event: "recovered" }));
+    expect(h.gh.dispatches).toEqual([]);
+    expect((await h.gh.getIssue(1)).labels).not.toContain("factory:postmortem");
+    expect((await h.gh.listComments(1))[0]!.body).toContain("근거 부족으로 개선 제안 보류");
+  });
+
+  it("does not dispatch while an improvement PR with the same key is open", async () => {
+    const { h } = await recovered(FACT, FACT);
+    prAt(h, 77, {
+      labels: ["factory:improve"],
+      body: writeMarker("factory:improve", { key: "smoke" }),
+      state: "open",
+      merged: false,
+    });
+    await run(h, args());
+    await recovery(h);
+    await run(h, args({ event: "recovered" }));
+    expect(h.gh.dispatches.filter((d) => d.file === "factory-weekly.yml")).toEqual([]);
+    expect((await h.gh.listComments(1))[0]!.body).toContain("열린 개선 PR");
+  });
+
+  it("changes nothing outside the replay issue on a dry-run followup", async () => {
+    const { h } = await recovered(FACT, FACT);
+    await run(h, args());
+    await recovery(h);
+    h.gh.dispatches.length = 0;
+    await run(h, args({ event: "recovered", dryRun: true }));
+    expect(h.gh.dispatches).toEqual([]);
+    expect((await h.gh.getIssue(1)).labels).not.toContain("factory:postmortem");
   });
 });
