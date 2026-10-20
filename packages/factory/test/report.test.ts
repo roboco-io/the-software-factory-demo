@@ -10,6 +10,7 @@ import {
   type Triage,
 } from "../src/report/comments";
 import {
+  extractHumanActions,
   extractRisks,
   formatDuration,
   parsePrMeta,
@@ -100,6 +101,16 @@ describe("renderPrBody (spec 5.5)", () => {
     expect(extractRisks("a\n남은 위험: x\n남은 위험: y")).toEqual(["x", "y"]);
     expect(formatDuration(59_000)).toBe("0분 59초");
   });
+
+  it("extracts human action lines and lists them in the PR body and meta", () => {
+    expect(extractHumanActions("a\n사람 조치 필요: x\n남은 위험: y")).toEqual(["x"]);
+    const meta = { ...report().meta, humanActions: ["스모크 갱신"] };
+    const body = renderPrBody({ ...report(), meta });
+    expect(body).toContain("## 사람 조치 필요");
+    expect(body).toContain("- 스모크 갱신");
+    expect(parsePrMeta(body)?.humanActions).toEqual(["스모크 갱신"]);
+    expect(renderPrBody(report())).not.toContain("## 사람 조치 필요");
+  });
 });
 
 describe("triage comment", () => {
@@ -116,6 +127,25 @@ describe("triage comment", () => {
     expect(body).toContain("`@factory go`");
     expect(findTriage([{ id: 1, author: BOT, body }], BOT)).toEqual(t);
     expect(findTriage([{ id: 1, author: "mallory", body }], BOT)).toBeNull();
+  });
+
+  it("lists protected contracts the request will break so a human updates them first (PR #65)", () => {
+    const t: Triage = {
+      type: "feature",
+      duplicateOf: null,
+      riskTier: "T1",
+      acceptanceCriteria: ["홈 heading이 conveyor다"],
+      summary: "s",
+      contractChanges: ["apps/web/e2e-smoke/home.spec.ts: heading 기대값 conduit"],
+    };
+    const body = renderTriageComment(t, { engine: "pi", model: "m" });
+    expect(body).toContain("먼저 갱신할 보호 계약");
+    expect(body).toContain("apps/web/e2e-smoke/home.spec.ts");
+    expect(findTriage([{ id: 1, author: BOT, body }], BOT)?.contractChanges).toEqual(
+      t.contractChanges,
+    );
+    const plain = renderTriageComment({ ...t, contractChanges: [] }, { engine: "pi", model: "m" });
+    expect(plain).not.toContain("먼저 갱신할 보호 계약");
   });
 });
 

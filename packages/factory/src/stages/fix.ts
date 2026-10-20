@@ -5,7 +5,7 @@ import type { Budget, EngineName } from "../agents/types";
 import { toBudget } from "../config/agents";
 import { latestVerdict } from "../report/comments";
 import { commitMessage } from "../report/commit";
-import { parsePrMeta, replaceMeta } from "../report/pr";
+import { extractHumanActions, parsePrMeta, replaceMeta } from "../report/pr";
 import { canTransition } from "../state/machine";
 import {
   MAX_ROUNDS,
@@ -372,7 +372,18 @@ export const fixStage: PhasedStage<FixArgs, FixPlan, FixOutcome> = {
     await deps.git.push(plan.branch, token, plan.sha);
     const meta = parsePrMeta(pull.body);
     if (meta) {
-      await deps.gh.updatePullBody(plan.pr, replaceMeta(pull.body, { ...meta, round: plan.round }));
+      // 사람 조치 항목은 사람만 지운다. 수정 라운드가 새로 선언한 항목을 앞선 항목에 더한다.
+      const humanActions = [
+        ...new Set([...(meta.humanActions ?? []), ...extractHumanActions(out.result.summary)]),
+      ].slice(0, 20);
+      await deps.gh.updatePullBody(
+        plan.pr,
+        replaceMeta(pull.body, {
+          ...meta,
+          round: plan.round,
+          ...(humanActions.length > 0 ? { humanActions } : {}),
+        }),
+      );
     }
     const moved = await moveTo(
       deps,

@@ -122,6 +122,81 @@ describe("review stage", () => {
     expect(t).toContain("diff가 90000자를 넘어 잘렸다");
   });
 
+  const reviewStep = (out: object) => ({
+    result: { summary: JSON.stringify(out), model: "gpt-6.1-sol", turns: 1 },
+  });
+  const SMOKE = {
+    file: "apps/web/src/pages/Home.tsx",
+    line: 8,
+    severity: "major",
+    message: "e2e-smoke/home.spec.ts의 conduit 기대값이 깨진다. T3라 사람이 갱신해야 한다",
+    category: "other",
+  };
+
+  it("hands the issue to a human instead of a fix round when a blocking finding needs a human (PR #65)", async () => {
+    const codex = createFakeAdapter(
+      [
+        reviewStep({
+          verdict: "REQUEST_CHANGES",
+          summary: "s",
+          findings: [{ ...SMOKE, needsHuman: true }],
+        }),
+      ],
+      "codex",
+    );
+    const h = makeTestDeps({ adapters: { codex } });
+    const { pr, issue } = await openBotPr(h);
+    await runPhase(reviewStage, "all", h.deps, { pr }, null);
+    expect(latestVerdict(await h.gh.listReviews(pr), BOT, "sha-a")?.verdict).toBe(
+      "REQUEST_CHANGES",
+    );
+    expect(h.gh.dispatches).toEqual([]);
+    expect((await h.gh.getIssue(issue)).labels).toEqual(["factory:needs-human"]);
+    expect((await h.gh.listComments(issue)).at(-1)?.body).toContain("e2e-smoke/home.spec.ts");
+  });
+
+  it("carries open findings into the next review and refuses an approval that leaves one unresolved (PR #65)", async () => {
+    const codex = createFakeAdapter(
+      [
+        reviewStep({ verdict: "REQUEST_CHANGES", summary: "s", findings: [SMOKE] }),
+        reviewStep({ verdict: "APPROVE", summary: "지적 사항 없음", findings: [] }),
+      ],
+      "codex",
+    );
+    const h = makeTestDeps({ adapters: { codex } });
+    const { pr, branch } = await openBotPr(h);
+    await runPhase(reviewStage, "all", h.deps, { pr }, null);
+    h.gh.setBranch(branch, "sha-b", ["apps/api/src/routes/tags.ts"]);
+    h.gh.dispatches.length = 0;
+    await runPhase(reviewStage, "all", h.deps, { pr }, null);
+    expect(codex.calls[1]?.prompt).toContain("conduit 기대값이 깨진다");
+    const v = latestVerdict(await h.gh.listReviews(pr), BOT, "sha-b");
+    expect(v?.verdict).toBe("REQUEST_CHANGES");
+    expect(v?.body).toContain("이전 리뷰 지적 1");
+    expect(h.gh.dispatches.map((d) => d.file)).toEqual(["factory-fix.yml"]);
+  });
+
+  it("approves when the reviewer marks every open finding from the last round as resolved", async () => {
+    const codex = createFakeAdapter(
+      [
+        reviewStep({ verdict: "REQUEST_CHANGES", summary: "s", findings: [SMOKE] }),
+        reviewStep({
+          verdict: "APPROVE",
+          summary: "ok",
+          findings: [],
+          previous: [{ index: 1, resolved: true, note: "기대값이 갱신됐다" }],
+        }),
+      ],
+      "codex",
+    );
+    const h = makeTestDeps({ adapters: { codex } });
+    const { pr, branch } = await openBotPr(h);
+    await runPhase(reviewStage, "all", h.deps, { pr }, null);
+    h.gh.setBranch(branch, "sha-b", ["apps/api/src/routes/tags.ts"]);
+    await runPhase(reviewStage, "all", h.deps, { pr }, null);
+    expect(latestVerdict(await h.gh.listReviews(pr), BOT, "sha-b")?.verdict).toBe("APPROVE");
+  });
+
   it("drops the verdict when the head moved during the review", async () => {
     const codex = createFakeAdapter(loadFakeScript("review-approve"), "codex");
     const h = makeTestDeps({ adapters: { codex } });
