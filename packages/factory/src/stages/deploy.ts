@@ -1,4 +1,4 @@
-import { parseFactoryIssues } from "../report/commit";
+import { parseFactoryIssues, parseRevertIssues } from "../report/commit";
 import { moveTo, record, runLink, stepRecord } from "./common";
 import type { StageDeps } from "./deps";
 import { requestPostmortem } from "./postmortem-trigger";
@@ -20,7 +20,17 @@ async function supersededIssues(deps: StageDeps, sha: string): Promise<number[]>
 
 export async function runDeployed(deps: StageDeps, { sha }: { sha: string }): Promise<number[]> {
   const done: number[] = [];
-  const own = parseFactoryIssues(await deps.gh.getCommitMessage(sha));
+  const message = await deps.gh.getCommitMessage(sha);
+  // 되돌리기 커밋은 장애 이슈를 닫지 않는다. 복구는 곧바로 dispatch하는 전체 스모크가 확인한다.
+  const reverted = parseRevertIssues(message);
+  for (const issue of reverted) {
+    await deps.gh.comment(
+      issue,
+      `되돌리기 커밋 \`${sha.slice(0, 7)}\`이 프로덕션에 배포되었다. 전체 스모크를 실행해 복구를 확인한다.${runLink(deps.settings)}`,
+    );
+  }
+  if (reverted.length > 0) await deps.gh.dispatchWorkflow("factory-smoke.yml", {});
+  const own = parseFactoryIssues(message);
   const earlier = (await supersededIssues(deps, sha)).filter((i) => !own.includes(i));
   for (const issue of [...own, ...new Set(earlier)]) {
     // 이전 실행이 라벨만 바꾸고 닫기 전에 끝났다면 다시 실행할 때 닫는다.
