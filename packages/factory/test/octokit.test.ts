@@ -440,8 +440,14 @@ describe("createOctokitPort listPullFiles", () => {
       },
     ]);
     expect(await gh.listPullFiles(4)).toEqual([
-      { filename: "a.ts", additions: ["added one", "added two"] },
-      { filename: "new.ts", previousFilename: "old.ts", additions: [], patchMissing: true },
+      { filename: "a.ts", additions: ["added one", "added two"], deletions: ["gone"] },
+      {
+        filename: "new.ts",
+        previousFilename: "old.ts",
+        additions: [],
+        deletions: [],
+        patchMissing: true,
+      },
     ]);
   });
 
@@ -458,8 +464,24 @@ describe("createOctokitPort listPullFiles", () => {
       },
     ]);
     expect(await gh.listPullFiles(5)).toEqual([
-      { filename: "a.test.ts", additions: [], additionCount: 0, removed: true },
+      { filename: "a.test.ts", additions: [], deletions: ["x"], additionCount: 0, removed: true },
     ]);
+  });
+});
+
+describe("createOctokitPort reopenIssue and editComment", () => {
+  it("reopens an issue with PATCH state open", async () => {
+    const calls: string[] = [];
+    const gh = port([{ method: "PATCH", path: /issues\/7$/, status: 200, body: {} }], calls);
+    await gh.reopenIssue(7);
+    expect(calls).toEqual(["PATCH /repos/o/r/issues/7"]);
+  });
+
+  it("edits a comment by id", async () => {
+    const calls: string[] = [];
+    const gh = port([{ method: "PATCH", path: /issues\/comments\/55$/, status: 200, body: {} }], calls);
+    await gh.editComment(55, "new body");
+    expect(calls).toEqual(["PATCH /repos/o/r/issues/comments/55"]);
   });
 });
 
@@ -702,6 +724,8 @@ describe("history listing", () => {
       labels: [{ name: "x" }],
       merged_at,
       updated_at,
+      merge_commit_sha: merged_at ? `m${number}` : null,
+      head: { sha: `h${number}` },
     });
     const gh = port(
       [
@@ -727,6 +751,8 @@ describe("history listing", () => {
         author: "u",
         labels: ["x"],
         mergedAt: "2026-10-11T00:00:00Z",
+        mergeSha: "m3",
+        headSha: "h3",
       },
     ]);
     expect(calls).toEqual([

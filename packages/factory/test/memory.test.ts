@@ -108,6 +108,42 @@ describe("InMemoryGitHub history", () => {
   });
 });
 
+describe("InMemoryGitHub reopen, editComment and merge shas", () => {
+  it("reopens a closed issue", async () => {
+    const gh = new InMemoryGitHub({ botLogin: BOT });
+    const n = await gh.createIssue("t", "b", []);
+    await gh.closeIssue(n);
+    await gh.reopenIssue(n);
+    expect((await gh.getIssue(n)).state).toBe("open");
+  });
+
+  it("edits a comment body in place", async () => {
+    const gh = new InMemoryGitHub({ botLogin: BOT });
+    const n = await gh.createIssue("t", "b", []);
+    await gh.comment(n, "old");
+    const [c] = await gh.listComments(n);
+    await gh.editComment(c!.id, "new");
+    expect((await gh.listComments(n)).map((x) => x.body)).toEqual(["new"]);
+    await expect(gh.editComment(99999, "x")).rejects.toThrow();
+  });
+
+  it("returns mergeSha and headSha from listMergedPulls", async () => {
+    const gh = new InMemoryGitHub({ botLogin: BOT });
+    gh.setBranch("factory/issue-1", "sha1", ["a.ts"]);
+    const n = await gh.createPull({
+      title: "t",
+      body: "b",
+      head: "factory/issue-1",
+      base: "main",
+      draft: false,
+    });
+    await gh.mergePull(n, { sha: "sha1", title: "t", message: "m" });
+    gh.pulls.get(n)!.mergedAt = "2026-10-11T00:00:00Z";
+    const [p] = await gh.listMergedPulls(new Date("2026-10-01"));
+    expect(p).toMatchObject({ number: n, mergeSha: `merge-${n}`, headSha: "sha1" });
+  });
+});
+
 describe("InMemoryGitHub listOpenPulls", () => {
   it("returns only open pulls", async () => {
     const gh = new InMemoryGitHub({ botLogin: BOT });

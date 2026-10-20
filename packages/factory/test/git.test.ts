@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -175,5 +175,58 @@ describe("createGit", () => {
       await expect(port.checkoutNewBranch("factory/issue-1", "-x")).rejects.toThrow(/start point/);
       await expect(port.importBundle("/tmp/x", "evil;rm")).rejects.toThrow(/invalid branch/);
     });
+  });
+});
+
+describe("createGit revert and restorePaths", () => {
+  it("reverts a commit onto a new sha and restores the file", async () => {
+    const { work, port } = await setup();
+    await port.checkoutNewBranch("factory/revert-issue-66", "origin/main");
+    writeFileSync(path.join(work, "README.md"), "changed\n");
+    const a = await port.commitAll("feat: a");
+    const sha = await port.revert(a, "revert: a\n\nFactory-Revert: #66");
+    expect(sha).toMatch(/^[0-9a-f]{40}$/);
+    expect(sha).not.toBe(a);
+    expect(await port.headSha()).toBe(sha);
+    expect(readFileSync(path.join(work, "README.md"), "utf8")).toBe("r\n");
+    expect(git(work, "log", "-1", "--format=%B")).toContain("Factory-Revert: #66");
+  });
+
+  it("returns null and leaves a clean tree when the revert conflicts", async () => {
+    const { work, port } = await setup();
+    await port.checkoutNewBranch("factory/revert-issue-67", "origin/main");
+    writeFileSync(path.join(work, "README.md"), "one\n");
+    const a = await port.commitAll("feat: one");
+    writeFileSync(path.join(work, "README.md"), "two\n");
+    const b = await port.commitAll("feat: two");
+    expect(await port.revert(a, "revert")).toBeNull();
+    expect(await port.headSha()).toBe(b);
+    expect(await port.changedFiles()).toEqual([]);
+    expect(existsSync(path.join(work, ".git/REVERT_HEAD"))).toBe(false);
+  });
+
+  it("restores only the given paths from a sha", async () => {
+    const { work, port } = await setup();
+    const base = await port.headSha();
+    await port.checkoutNewBranch("factory/revert-issue-68", "origin/main");
+    writeFileSync(path.join(work, "README.md"), "changed\n");
+    writeFileSync(path.join(work, "packages/factory/src/x.ts"), "y\n");
+    await port.commitAll("feat: both");
+    await port.restorePaths(["README.md"], base);
+    expect(readFileSync(path.join(work, "README.md"), "utf8")).toBe("r\n");
+    expect(readFileSync(path.join(work, "packages/factory/src/x.ts"), "utf8")).toBe("y\n");
+    await expect(port.restorePaths(["README.md"], "HEAD~1")).rejects.toThrow(/invalid sha/);
+  });
+
+  it("allows factory/revert-issue-N branches and rejects other revert names", async () => {
+    const { port } = await setup();
+    await port.checkoutNewBranch("factory/revert-issue-66", "origin/main");
+    await expect(port.checkoutNewBranch("factory/revert-x", "origin/main")).rejects.toThrow(
+      /invalid branch/,
+    );
+    await expect(
+      port.checkoutNewBranch("factory/revert-issue-0", "origin/main"),
+    ).rejects.toThrow(/invalid branch/);
+    await expect(port.revert("--abort", "m")).rejects.toThrow(/invalid sha/);
   });
 });

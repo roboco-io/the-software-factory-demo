@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addedLinesFromPatch,
+  deletedLinesFromPatch,
   classifyFiles,
   loadRiskPolicy,
   parseRiskPolicy,
@@ -143,5 +144,15 @@ describe("ChangedFile additions (F21)", () => {
     const f: ChangedFile = { filename: "tests/realworld/skip.txt", additions: ["x.hurl"] };
     expect(f.additions).toEqual(["x.hurl"]);
     expect(tierOf(f.filename, policy).tier).toBe("T1");
+  });
+});
+
+describe("deletedLinesFromPatch", () => {
+  it("extracts removed lines from hunks only", () => {
+    expect(deletedLinesFromPatch("@@ -1,3 +1,2 @@\n keep\n-old\n---x\n+new\n")).toEqual([
+      "old",
+      "--x",
+    ]);
+    expect(deletedLinesFromPatch(undefined)).toEqual([]);
   });
 });
