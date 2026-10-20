@@ -8,7 +8,11 @@ import { parsePrMeta } from "../src/report/pr";
 import { readMarker, writeMarker } from "../src/report/text";
 import { IMPROVE_MARKER, type Candidate } from "../src/stages/collect";
 import { runDeployed } from "../src/stages/deploy";
-import { improveStage, removedEslintLines } from "../src/stages/improve";
+import {
+  improveStage,
+  POSTMORTEM_CANDIDATE_MARKER,
+  removedEslintLines,
+} from "../src/stages/improve";
 import { runPhase } from "../src/stages/phased";
 import { REPORT_MARKER, latestReportMarker } from "../src/stages/weekly-marker";
 import { z } from "zod";
@@ -165,6 +169,57 @@ describe("improve stage", () => {
     expect(await h.deps.runs.since(new Date(0))).toMatchObject([
       { role: "improve", engine: "claude", issue: n, ok: true, turns: 10 },
     ]);
+  });
+
+  describe("postmortem candidate", () => {
+    const PM_CANDIDATE: Candidate = { ...CANDIDATE, key: "smoke", count: 1, distinct: 1 };
+    const postmortemIssue = (h: TestHarness, author = "someone") => {
+      const n = h.gh.addIssue({
+        title: "스모크 실패",
+        author,
+        labels: ["factory:postmortem"],
+      }).number;
+      h.gh.addComment(
+        n,
+        BOT,
+        `분석 결과\n\n${writeMarker(POSTMORTEM_CANDIDATE_MARKER, PM_CANDIDATE)}`,
+      );
+      return n;
+    };
+
+    it("reads the candidate from the bot comment on a postmortem-labeled incident", async () => {
+      const h = makeTestDeps();
+      const n = postmortemIssue(h);
+      const plan = await improveStage.prepare(h.deps, { issue: n });
+      expect(plan?.candidate).toEqual(PM_CANDIDATE);
+    });
+
+    it("ignores a candidate marker written by someone other than the bot", async () => {
+      const h = makeTestDeps();
+      const n = h.gh.addIssue({ title: "x", labels: ["factory:postmortem"] }).number;
+      h.gh.addComment(n, "mallory", writeMarker(POSTMORTEM_CANDIDATE_MARKER, PM_CANDIDATE));
+      expect(await improveStage.prepare(h.deps, { issue: n })).toBeNull();
+    });
+
+    it("words the PR source as the postmortem, not the weekly report", async () => {
+      const claude = createFakeAdapter([GOOD], "claude");
+      const h = makeTestDeps({ adapters: { claude } });
+      const n = postmortemIssue(h);
+      await run(h, n);
+      const pr = await h.gh.findOpenPullByHead(`factory/issue-${n}`);
+      expect(pr!.body).toContain(`포스트모템 #${n}의 개선 후보다.`);
+      expect(pr!.body).not.toContain("주간 리포트");
+      expect(parsePrMeta(pr!.body)?.issue).toBe(n);
+    });
+
+    it("keeps the weekly wording for a report issue", async () => {
+      const claude = createFakeAdapter([GOOD], "claude");
+      const h = makeTestDeps({ adapters: { claude } });
+      const n = reportIssue(h);
+      await run(h, n);
+      const pr = await h.gh.findOpenPullByHead(`factory/issue-${n}`);
+      expect(pr!.body).toContain(`주간 리포트 #${n}의 개선 후보다.`);
+    });
   });
 
   it("discards the result when the agent touches a path outside the allowed list", async () => {
