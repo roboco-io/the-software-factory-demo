@@ -49,7 +49,7 @@
 
 ## 운영자 안내: 자동 포스트모템
 
-프로덕션 장애와 요청 정체가 생기면 팩토리가 자동으로 원인을 분석하고 포스트모템 기록을 남긴다. 프로덕션 장애는 `source:smoke`, `source:deploy`, `source:error` 이슈이고, 정체는 요청 이슈가 `factory:needs-human`으로 옮겨진 경우다. 사람이 `@factory stop`으로 옮긴 `needs-human`은 정체로 보지 않는다. 분석은 각 단계가 장애 이슈를 처음 만들거나 상태를 옮기는 시점에 `factory-postmortem` 워크플로를 dispatch해 시작하며, 복구가 확인되면 사후 분석을 한 번 더 실행한다. 정기 스모크 주기를 기다리지 않는다. 분석 결과는 장애 이슈에 고정된 코멘트 하나로 쓰고 갱신한다. 이 절의 워크플로 입력 이름은 구현 계획 기준이며, `.github/workflows/factory-postmortem.yml`이 만들어진 뒤 실제 입력과 맞는지 확인해야 한다.
+프로덕션 장애와 요청 정체가 생기면 팩토리가 자동으로 원인을 분석하고 포스트모템 기록을 남긴다. 프로덕션 장애는 `source:smoke`, `source:deploy`, `source:error` 이슈이고, 정체는 요청 이슈가 `factory:needs-human`으로 옮겨진 경우다. 사람이 `@factory stop`으로 옮긴 `needs-human`은 정체로 보지 않는다. 분석은 각 단계가 장애 이슈를 처음 만들거나 상태를 옮기는 시점에 `factory-postmortem` 워크플로를 dispatch해 시작하며, 복구가 확인되면 사후 분석을 한 번 더 실행한다. 정기 스모크 주기를 기다리지 않는다. 분석 결과는 장애 이슈에 고정된 코멘트 하나로 쓰고 갱신한다. 닫힌 이슈 이벤트(`source:error` 또는 `factory:` 상태 라벨이 있는 이슈)도 사후 분석 후보로 같은 워크플로를 시작한다.
 
 어떤 사건을 분석할지, 비용과 보고서 길이는 `factory/postmortem-policy.yml` 한 파일이 정한다. 기본값은 장애당 분석 2회(1차와 사후 각 1회), 분석 1회당 2 USD와 15분, 하루 합계 10 USD, 보고서 6000자이다. 예산을 바꾸려면 이 파일의 `budget` 값을 고치는 PR을 연다. 이 파일은 `factory/` 아래라 T3이므로 CODEOWNERS 승인 뒤에만 병합된다. 일일 상한에 도달하면 이후 장애는 분석 없이 사실 수집 결과만 장애 이슈에 남긴다. 분석이 시간 초과나 출력 형식 오류로 실패하면 재시도하지 않고 사유만 남긴다. 분석 에이전트의 엔진은 `factory/agents.yml`의 `postmortem` 역할이, 모델은 그 엔진의 환경 변수(예: `CLAUDE_MODEL`)가 정한다.
 
@@ -57,7 +57,7 @@
 
 되돌리기 PR도 `factory/risk-policy.yml`의 위험 등급을 따른다. T0·T1이고 모든 체크가 통과하면 교차 리뷰 없이 자동 병합한다. T2·T3이면 PR만 열고 장애 이슈에 CODEOWNERS 승인 요청을 남긴다. 마이그레이션 파일은 되돌리지 않는다. 되돌리기 PR의 체크가 실패하면 수정 라운드나 새 포스트모템을 시작하지 않고 장애 이슈에 코멘트만 남긴다. 되돌리기 커밋이 배포되면 전체 스모크를 한 번 실행해 복구를 확인한다. 복구가 확인되면 원인 PR의 요청 이슈를 다시 열고 되돌린 이유를 남기지만, 다시 구현하려면 사람이 `@factory go`를 남겨야 한다.
 
-과거 장애나 임의 장애를 다시 분석하려면 dry-run으로 실행한다. 이 모드는 되돌리기 PR을 만들지 않는다. `gh workflow run factory-postmortem.yml -f issue=<이슈> -f kind=<smoke|deploy|error|stall> -f event=detected -f dry_run=true -f excerpt="<실패 원문 끝부분>"`을 쓴다. 이슈에 실패 원문이 없으면(예: PR #74 이전의 스모크 이슈 #66) 해당 스모크 run 로그에서 복사해 `excerpt`로 넣는다. 결과는 장애 이슈 대신 별도 검증 이슈에 쓰는 것이 좋다.
+과거 장애나 임의 장애를 다시 분석하려면 dry-run으로 실행한다. 이 모드는 새 이슈에만 결과를 쓰고 원래 장애 이슈와 되돌리기 PR은 건드리지 않는다. 입력 `issue`는 장애 이슈 번호(정체는 요청 이슈 번호), `kind`는 `smoke`·`deploy`·`error`·`stall` 중 하나, `event`는 `detected`(1차 분석) 또는 `recovered`(사후 분석)이다. `gh workflow run factory-postmortem.yml -f issue=<이슈> -f kind=<smoke|deploy|error|stall> -f event=detected -f dry_run=true -f excerpt="<실패 원문 끝부분>"`을 쓴다. 이슈에 실패 원문이 없으면(예: PR #74 이전의 스모크 이슈 #66) 해당 스모크 run 로그에서 복사해 `excerpt`로 넣는다.
 
 봇 PR 회귀를 실제로 확인하는 데모는 T1 변경으로 일부러 스모크를 깨는 방식이다. 순서는 다음과 같다.
 
