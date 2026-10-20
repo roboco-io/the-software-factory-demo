@@ -353,17 +353,54 @@ describe("modified P1 workflows", () => {
 
   it("preview.yml: PR-code jobs never persist credentials; e2e-preview is read-only; deploy passes the token explicitly (I-1)", () => {
     const wf = load("preview.yml");
-    for (const name of ["deploy", "e2e-preview"]) {
+    for (const name of ["deploy", "e2e-preview", "smoke-preview"]) {
       for (const step of checkouts(wf.jobs[name]!)) {
         expect(step.with?.["persist-credentials"], name).toBe(false);
       }
     }
     expect(wf.jobs["e2e-preview"]!.permissions).toEqual({ contents: "read" });
+    expect(wf.jobs["smoke-preview"]!.permissions).toEqual({ contents: "read" });
     expect(wf.jobs.deploy!.permissions).toEqual({ contents: "write", "pull-requests": "write" });
     const action = wf.jobs.deploy!.steps.find((s) =>
       s.uses?.startsWith("rossjrw/pr-preview-action"),
     )!;
     expect(action.with?.token).toBe("${{ secrets.GITHUB_TOKEN }}");
+  });
+
+  it("preview.yml runs the production read-only smoke against the PR preview (PR #65)", () => {
+    const wf = load("preview.yml");
+    const job = wf.jobs["smoke-preview"]!;
+    expect(job.needs).toBe("deploy");
+    const runs = job.steps.map((s) => s.run ?? "").join("\n");
+    expect(runs).toContain('hurl --test --variable "api=$API_URL/api" tests/smoke/readonly.hurl');
+    expect(runs).toContain("playwright test -c e2e-smoke/playwright.config.ts");
+    const web = job.steps.find((s) => s.run?.includes("e2e-smoke/playwright.config.ts"))!;
+    expect(web.env?.E2E_BASE_URL).toBe("${{ env.WEB_PREVIEW_URL }}");
+    expect(JSON.stringify(job)).not.toMatch(/secrets\./);
+  });
+
+  it("deploy and preview confirm the new build by commit SHA, not by the site name", () => {
+    const preview = load("preview.yml");
+    const build = preview.jobs.deploy!.steps.find((s) => s.name === "Build web")!;
+    expect(build.env?.VITE_BUILD_SHA).toBe("${{ github.event.pull_request.head.sha }}");
+    for (const name of ["e2e-preview", "smoke-preview"]) {
+      const reach = preview.jobs[name]!.steps.find((s) => s.name?.startsWith("Confirm preview"))!;
+      expect(reach.run, name).toContain('content=\\"$HEAD_SHA\\"');
+      expect(reach.env?.HEAD_SHA).toBe("${{ github.event.pull_request.head.sha }}");
+    }
+    const deploy = load("deploy.yml");
+    const steps = Object.values(deploy.jobs).flatMap((j) => j.steps ?? []);
+    const web = steps.find((s) => s.run === "pnpm --filter web build")!;
+    expect(web.env?.VITE_BUILD_SHA).toBe("${{ github.sha }}");
+    const index = steps.find((s) => s.name?.startsWith("Web index"))!;
+    expect(index.run).toContain("${{ github.sha }}");
+    expect(index.run).not.toMatch(/Conduit|Conveyor/);
+  });
+
+  it("factory-merge re-runs the gate when the preview workflow completes", () => {
+    const wf = load("factory-merge.yml");
+    const on = wf.on as { workflow_run: { workflows: string[] } };
+    expect(on.workflow_run.workflows).toEqual(["ci", "preview"]);
   });
 
   it("preview.yml: every checkout drops credentials; cleanup runs trusted default-branch code with an explicit token (FR-b)", () => {
