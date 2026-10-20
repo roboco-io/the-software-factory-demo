@@ -6,6 +6,10 @@
 
 ## 미출시 (Unreleased)
 
+### 추가
+
+- 데모 앱과 팩토리 대시보드에 Google Analytics 4를 추가했습니다. `roboco.io`에서 방문자가 동의 배너에서 동의한 뒤에만 GA를 불러오고, "통계 설정"에서 동의를 철회하면 수집을 끄고 데모 전용 GA 쿠키를 지웁니다. 로컬 실행과 PR 프리뷰에서는 배너와 GA를 불러오지 않습니다. [PR #68](https://github.com/roboco-io/the-software-factory-demo/pull/68)
+
 ### 변경
 
 - 웹 홈 화면에 표시되는 사이트 이름을 `conduit`에서 `conveyor`로 변경했습니다. 이름 변경 후 프로덕션 스모크·배포 확인·PR 프리뷰 확인이 옛 이름을 찾아 실패하던 문제도 새 이름 기준으로 고쳤습니다. [PR #65](https://github.com/roboco-io/the-software-factory-demo/pull/65), [PR #64](https://github.com/roboco-io/the-software-factory-demo/pull/64)

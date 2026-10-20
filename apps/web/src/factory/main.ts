@@ -1,4 +1,5 @@
 import "./factory.css";
+import { mountAnalytics } from "../analytics/mount";
 import { loadImprovements, loadRuns } from "./data";
 import { el, header, renderDashboard } from "./view";
 
@@ -38,4 +39,7 @@ export async function loadDashboard(root: HTMLElement): Promise<void> {
 }
 
 const root = document.getElementById("factory");
-if (root) void loadDashboard(root);
+if (root) {
+  void loadDashboard(root);
+  mountAnalytics();
+}

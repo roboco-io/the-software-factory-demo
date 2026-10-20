@@ -1,0 +1,60 @@
+/* GA4 동의 배너. the-software-factory의 BookAnalytics.astro 스타일을 옮겨 왔다. */
+.analytics-banner {
+  position: fixed;
+  z-index: 100;
+  bottom: 1rem;
+  left: 1rem;
+  right: 1rem;
+  max-width: 52rem;
+  margin-inline: auto;
+  padding: 1rem 1.25rem;
+  background: #fff;
+  color: #222;
+  border: 1px solid #d8e2ec;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px #0004;
+  max-height: 70vh;
+  overflow: auto;
+}
+.analytics-banner[hidden] {
+  display: none;
+}
+.analytics-banner p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+.analytics-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+.analytics-button {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: 1px solid #b8c4d0;
+  border-radius: 4px;
+  background: #fff;
+  color: #222;
+  font: inherit;
+  cursor: pointer;
+}
+.analytics-settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 1rem;
+  font-size: 0.8rem;
+  color: #526579;
+}
+.analytics-quiet {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
