@@ -46,12 +46,13 @@ const AGENT_WORKFLOWS = [
   "factory-implement.yml",
   "factory-review.yml",
   "factory-fix.yml",
+  "factory-postmortem.yml",
   "factory-weekly.yml",
   "factory-eval-live.yml",
 ];
 // 에이전트 두 개(구현·리뷰)를 쓰므로 엔진 키를 둘 다 받는 워크플로.
 const TWO_ENGINE_WORKFLOWS = ["factory-eval-live.yml"];
-const PHASED = /pnpm -s factory (triage|implement|review|fix|improve|eval-live)\b/;
+const PHASED = /pnpm -s factory (triage|implement|review|fix|improve|eval-live|postmortem)\b/;
 const text = (step: Step) => JSON.stringify(step);
 const steps = (wf: Workflow) => Object.values(wf.jobs).flatMap((j) => j.steps);
 const checkouts = (job: Job) => job.steps.filter((s) => s.uses?.startsWith("actions/checkout@"));
@@ -73,6 +74,7 @@ describe("factory workflows", () => {
       "factory-implement.yml",
       "factory-intake.yml",
       "factory-merge.yml",
+      "factory-postmortem.yml",
       "factory-review.yml",
       "factory-smoke.yml",
       "factory-triage.yml",
@@ -224,6 +226,21 @@ describe("factory workflows", () => {
     expect(wf.env?.PR).toBe("${{ inputs.pr }}");
     expect(wf.env?.ISSUE).toBe("${{ inputs.issue }}");
     expect(workCheckout(agent)?.with?.["fetch-depth"]).toBe(0);
+  });
+
+  it("factory-postmortem runs on dispatch and on closed issues, serialized per issue, with no token in the agent job", () => {
+    const wf = load("factory-postmortem.yml");
+    expect(Object.keys(wf.on).sort()).toEqual(["issues", "workflow_dispatch"]);
+    expect(wf.on.issues).toEqual({ types: ["closed"] });
+    const inputs = Object.keys((wf.on.workflow_dispatch as { inputs: object }).inputs).sort();
+    expect(inputs).toEqual(["dry_run", "event", "excerpt", "issue", "kind"]);
+    expect(wf.concurrency?.group).toBe(
+      "factory-postmortem-${{ inputs.issue || github.event.issue.number }}",
+    );
+    expect(wf.jobs.agent!["timeout-minutes"]).toBe(20);
+    expect(JSON.stringify(wf.jobs.agent)).not.toMatch(/FACTORY_TOKEN|GITHUB_TOKEN/);
+    // 사용자 입력은 env로만 넘긴다.
+    expect(wf.env?.EXCERPT).toBe("${{ inputs.excerpt }}");
   });
 
   it("factory-weekly runs on Mondays and on demand, reports before improving", () => {
