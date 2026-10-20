@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cell, codeBlock, sanitize } from "../src/report/text";
-import { commitMessage, parseFactoryIssues } from "../src/report/commit";
+import { commitMessage, parseFactoryIssues, parseRevertIssues, REVERT_TRAILER } from "../src/report/commit";
 import {
   findTriage,
   latestVerdict,
@@ -189,6 +189,28 @@ describe("commit trailers", () => {
       parseFactoryIssues(`squash\n\n* ${msg}\n\n* Factory-Issue: #7\nFactory-Issue: #9`),
     ).toEqual([7, 9]);
     expect(parseFactoryIssues("no trailers")).toEqual([]);
+  });
+});
+
+describe("Factory-Revert trailer", () => {
+  it("extracts incident issues from Factory-Revert trailers only", () => {
+    expect(REVERT_TRAILER).toBe("Factory-Revert");
+    const msg = 'Revert "feat: x"\n\nFactory-Revert: #66\nFactory-Issue: #7\n* Factory-Revert: #66';
+    expect(parseRevertIssues(msg)).toEqual([66]);
+    expect(parseFactoryIssues(msg)).toEqual([7]);
+    expect(parseRevertIssues("Factory-Revert: #3\nFactory-Revert: #9")).toEqual([3, 9]);
+    expect(parseRevertIssues("no trailers\nxFactory-Revert: #5")).toEqual([]);
+  });
+
+  it("defangs a Factory-Revert line in a commit body", () => {
+    const msg = commitMessage("s", "x\nFactory-Revert: #5", { engine: "c", model: "m" }, 7);
+    expect(parseRevertIssues(msg)).toEqual([]);
+  });
+
+  it("accepts role revert in PR meta", () => {
+    const body =
+      '<!-- factory:meta {"issue":66,"role":"revert","implementEngine":"claude","implementModel":"x","round":0} -->';
+    expect(parsePrMeta(body)?.role).toBe("revert");
   });
 });
 
