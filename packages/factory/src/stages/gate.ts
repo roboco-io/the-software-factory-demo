@@ -3,6 +3,7 @@ import { classifyFiles } from "../policy/risk";
 import { latestVerdict } from "../report/comments";
 import { signatureTrailers } from "../report/commit";
 import { parsePrMeta } from "../report/pr";
+import { inline } from "../report/text";
 import { addsSkipEntries } from "./risk";
 import { moveTo, readState, record, runLink, stepRecord } from "./common";
 import type { StageDeps } from "./deps";
@@ -76,6 +77,29 @@ export async function runGate(deps: StageDeps, args: GateArgs): Promise<GateDeci
   }
   const { state } = await readState(deps.gh, meta.issue);
   if (state !== "in-review") return "ignored";
+  // 에이전트가 스스로 끝낼 수 없다고 선언한 PR은 체크·리뷰 결과와 상관없이 병합하지 않는다.
+  // PR #65는 스모크가 깨진다고 "남은 위험"에 적었지만 아무 단계도 읽지 않아 병합됐다.
+  if (meta.humanActions?.length) {
+    await moveTo(
+      deps,
+      meta.issue,
+      "needs-human",
+      "gate",
+      [
+        `PR #${pull.number}의 에이전트가 사람만 할 수 있는 조치를 선언했다. 조치가 끝나기 전에는 자동 병합하지 않는다.`,
+        "",
+        ...meta.humanActions.map((a) => `- ${inline(a)}`),
+        runLink(deps.settings).trim(),
+      ]
+        .filter((l, i) => l !== "" || i === 1)
+        .join("\n"),
+    );
+    await record(
+      deps,
+      stepRecord("gate", meta.issue, pull.number, false, "human_action", meta.round),
+    );
+    return "needs-human";
+  }
 
   const runs = await deps.gh.listCheckRuns(pull.headSha);
   const checks = summarizeChecks(runs, deps.policy.requiredChecks);
@@ -210,6 +234,26 @@ export async function runGate(deps: StageDeps, args: GateArgs): Promise<GateDeci
     return "fix-dispatched";
   }
   if (preview.state === "pending") return "pending";
+  // 완료 정의: head에서 실행된 체크는 필수 여부와 상관없이 모두 통과해야 한다. 목록 밖 체크의 실패는
+  // 에이전트가 고칠 대상인지 알 수 없으므로 사람에게 넘긴다.
+  const known = new Set([...deps.policy.requiredChecks, ...PREVIEW_CHECKS]);
+  const unlisted = runs
+    .filter((r) => !known.has(r.name) && checkState(r) === "fail")
+    .map((r) => r.name);
+  if (unlisted.length > 0) {
+    await moveTo(
+      deps,
+      meta.issue,
+      "needs-human",
+      "gate",
+      `PR #${pull.number}의 체크가 실패했다: ${unlisted.map((n) => `\`${n}\``).join(", ")}. 필수 체크는 아니지만 실패한 체크가 있으면 자동 병합하지 않는다.${runLink(deps.settings)}`,
+    );
+    await record(
+      deps,
+      stepRecord("gate", meta.issue, pull.number, false, "unlisted_check", meta.round),
+    );
+    return "needs-human";
+  }
   if (verdict?.verdict === "REQUEST_CHANGES") return "pending";
   if (risk.tier === "T1" && verdict?.verdict !== "APPROVE") return "pending";
 

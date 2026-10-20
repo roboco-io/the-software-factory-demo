@@ -7,7 +7,13 @@ import { CHECK_SCRIPTS, formatCheckFailures } from "../exec/checks";
 import type { Issue } from "../github/port";
 import { findTriage } from "../report/comments";
 import { commitMessage } from "../report/commit";
-import { extractRisks, renderPrBody, type PrMeta, type PrReport } from "../report/pr";
+import {
+  extractHumanActions,
+  extractRisks,
+  renderPrBody,
+  type PrMeta,
+  type PrReport,
+} from "../report/pr";
 import { codeCell } from "../report/text";
 import { canTransition, stateLabel } from "../state/machine";
 import {
@@ -357,6 +363,8 @@ export const implementStage: PhasedStage<ImplementArgs, ImplementPlan, Implement
       implementModel: plan.model,
       round: 0,
     };
+    const humanActions = extractHumanActions(out.summary);
+    if (humanActions.length > 0) meta.humanActions = humanActions;
     const report = (preview: string): PrReport => ({
       meta,
       summary: out.summary,
