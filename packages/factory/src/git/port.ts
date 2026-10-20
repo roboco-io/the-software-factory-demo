@@ -164,8 +164,11 @@ export function createGit(
       assertRef("sha", fromSha, SHA);
       for (const p of paths) {
         const exists = await git("cat-file", ["cat-file", "-e", `${fromSha}:${p}`], true);
-        if (exists.code === 0) await git("checkout", ["checkout", fromSha, "--", p]);
-        else await git("rm", ["rm", "-rf", "--ignore-unmatch", "--", p]);
+        if (exists.code === 0) {
+          await git("checkout", ["--literal-pathspecs", "checkout", fromSha, "--", p]);
+        } else {
+          await git("rm", ["--literal-pathspecs", "rm", "-rf", "--ignore-unmatch", "--", p]);
+        }
       }
     },
     async isAncestor(baseSha) {

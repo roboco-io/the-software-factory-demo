@@ -239,4 +239,29 @@ describe("deploy and stall incidents", () => {
     expect(tl.windowStart).toBe("2026-10-11T10:00:00.000Z");
     expect(tl.candidates.map((c) => c.number)).toEqual([40]);
   });
+
+  it("keeps the request PR in range when earlier pre-merge failures exist", async () => {
+    const h = makeTestDeps({ now: new Date(T("12")) });
+    h.gh.addIssue({ title: "req" });
+    await addRun(h, T("05"), stepRecord("review", 1, 9, false, "review_needs_human"));
+    await addRun(h, T("10"), stepRecord("deploy", 1, null, false, "deploy_failed"));
+    const meta = writeMarker("factory:meta", {
+      issue: 1,
+      role: "implement",
+      implementEngine: "codex",
+      implementModel: "m",
+      round: 0,
+    });
+    addMergedPull(h, {
+      number: 40,
+      mergedAt: T("09"),
+      headSha: "s40",
+      body: meta,
+      files: [{ filename: "a.ts" }],
+    });
+    const incident = await resolveIncident(h.deps, 1, "deploy");
+    expect(incident.detectedAt).toBe(T("10"));
+    const tl = await collectTimeline(h.deps, incident);
+    expect(tl.candidates.map((c) => c.number)).toEqual([40]);
+  });
 });

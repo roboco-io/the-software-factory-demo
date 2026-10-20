@@ -41,7 +41,11 @@ export async function resolveIncident(
   const records = (await deps.runs.since(new Date(0))).filter((r) => r.issue === issue);
   const now = deps.now().toISOString();
   if (kind === "smoke") return { issue, kind, ...smokeEpisode(records, now) };
-  const first = records.find((r) => !r.ok);
+  // 배포 실패는 병합 뒤에 일어난다. 병합 전 리뷰·게이트 실패까지 첫 실패로 잡으면 요청 PR이 구간 밖이 된다.
+  const first =
+    kind === "deploy"
+      ? records.findLast((r) => r.role === "deploy" && !r.ok)
+      : records.find((r) => !r.ok);
   return {
     issue,
     kind,

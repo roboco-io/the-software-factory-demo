@@ -79,5 +79,6 @@ export function renderPostmortem(
     const body = build(rows);
     if (body.length <= maxChars) return body;
   }
-  return build(0).slice(0, Math.max(0, maxChars - TRUNCATED.length)) + TRUNCATED;
+  const room = maxChars - TRUNCATED.length;
+  return room > 0 ? build(0).slice(0, room) + TRUNCATED : build(0).slice(0, Math.max(0, maxChars));
 }

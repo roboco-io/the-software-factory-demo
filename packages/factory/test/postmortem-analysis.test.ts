@@ -176,6 +176,10 @@ describe("renderPostmortem", () => {
     expect(body).toContain("e2e-preview");
   });
 
+  it("never exceeds a maxChars smaller than the truncation notice", () => {
+    expect(renderPostmortem(TIMELINE_66, A, { action: "x" }, 10).length).toBeLessThanOrEqual(10);
+  });
+
   it("stays under maxChars by trimming timeline rows from the end", () => {
     const many = Array.from({ length: 200 }, (_, i) =>
       pr({ number: 1000 + i, title: `feat: a long title number ${i} ${"x".repeat(40)}` }),

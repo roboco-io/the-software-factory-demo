@@ -225,6 +225,18 @@ describe("createGit revert and restorePaths", () => {
     await expect(port.restorePaths(["README.md"], "HEAD~1")).rejects.toThrow(/invalid sha/);
   });
 
+  it("treats restorePaths entries literally, not as globs", async () => {
+    const { work, port } = await setup();
+    await port.checkoutNewBranch("factory/revert-issue-69", "origin/main");
+    const base = await port.headSha();
+    writeFileSync(path.join(work, "[a].txt"), "x\n");
+    writeFileSync(path.join(work, "a.txt"), "y\n");
+    await port.commitAll("feat: files");
+    await port.restorePaths(["[a].txt"], base);
+    expect(existsSync(path.join(work, "[a].txt"))).toBe(false);
+    expect(readFileSync(path.join(work, "a.txt"), "utf8")).toBe("y\n");
+  });
+
   it("allows factory/revert-issue-N branches and rejects other revert names", async () => {
     const { port } = await setup();
     await port.checkoutNewBranch("factory/revert-issue-66", "origin/main");
