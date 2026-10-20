@@ -3,6 +3,11 @@ on:
   schedule:
     - cron: "0 0 * * 1"
   workflow_dispatch:
+    inputs:
+      issue:
+        description: 이 이슈(포스트모템이 개선 후보를 남긴 장애 이슈)로 improve만 실행한다. 비우면 주간 리포트부터 실행한다.
+        required: false
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -21,6 +26,8 @@ jobs:
   # 팩토리 CLI는 항상 main을 체크아웃한 runtime 디렉토리에서 실행한다. work는 에이전트가 고치는 작업 트리다.
   # report가 주간 리포트 이슈를 만들고, 개선 후보가 있을 때만 prepare 이후 단계가 돈다.
   report:
+    # issue 입력이 있으면 리포트를 만들지 않고 그 이슈로 improve를 바로 실행한다.
+    if: ${{ inputs.issue == '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -52,9 +59,10 @@ jobs:
           FACTORY_TOKEN: ${{ steps.app.outputs.token }}
   prepare:
     needs: report
-    if: needs.report.outputs.candidates != '0'
+    # report가 건너뛰어져도(issue 입력) 이어 간다. report가 실패하거나 취소되면 이어 가지 않는다.
+    if: ${{ !cancelled() && (needs.report.result == 'success' || needs.report.result == 'skipped') && (inputs.issue != '' || needs.report.outputs.candidates != '0') }}
     env:
-      ISSUE: ${{ needs.report.outputs.issue }}
+      ISSUE: ${{ inputs.issue || needs.report.outputs.issue }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -93,12 +101,12 @@ jobs:
           retention-days: 7
   agent:
     needs: [report, prepare]
-    if: needs.prepare.outputs.has-plan == 'true'
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.has-plan == 'true' }}
     runs-on: ubuntu-latest
     # implement agent와 같은 상한을 둔다.
     timeout-minutes: 75
     env:
-      ISSUE: ${{ needs.report.outputs.issue }}
+      ISSUE: ${{ inputs.issue || needs.report.outputs.issue }}
     # GitHub App 토큰, Cloudflare 시크릿이 없다. 공개 리포 체크아웃에 필요한 읽기 권한만 둔다.
     permissions:
       contents: read
@@ -150,7 +158,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      ISSUE: ${{ needs.report.outputs.issue }}
+      ISSUE: ${{ inputs.issue || needs.report.outputs.issue }}
     steps:
       - uses: actions/checkout@v7
         with: { ref: main, path: runtime, persist-credentials: false }
