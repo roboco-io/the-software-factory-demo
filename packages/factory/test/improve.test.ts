@@ -383,6 +383,19 @@ describe("improve stage", () => {
     expect(pr!.body).not.toMatch(/fixes #1/);
   });
 
+  it.each([[[]], [["factory:needs-human", "source:deploy", "factory:postmortem"]]] as const)(
+    "leaves an incident issue (labels %j) open when its improvement commit is deployed",
+    async (labels) => {
+      const h = makeTestDeps();
+      const n = h.gh.addIssue({ title: "장애", labels: [...labels] }).number;
+      h.gh.commitMessages.set("abc1234", `x\n\nFactory-Issue: #${n}`);
+      expect(await runDeployed(h.deps, { sha: "abc1234" })).toEqual([]);
+      const after = await h.gh.getIssue(n);
+      expect(after.state).toBe("open");
+      expect(after.labels).toEqual([...labels]);
+    },
+  );
+
   it("leaves the report issue untouched when the improvement commit is deployed", async () => {
     const h = makeTestDeps();
     const n = reportIssue(h);
