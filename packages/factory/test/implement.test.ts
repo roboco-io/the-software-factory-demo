@@ -22,7 +22,11 @@ const TAGS: FakeStep = {
   },
 };
 
-function approvedIssue(h: TestHarness, labels = ["factory:approved", "type:feature"]): number {
+function approvedIssue(
+  h: TestHarness,
+  labels = ["factory:approved", "type:feature"],
+  contractChanges?: string[],
+): number {
   const issue = h.gh.addIssue({ title: "태그 목록 API", body: "GET /api/tags를 구현한다", labels });
   h.gh.addComment(
     issue.number,
@@ -34,6 +38,7 @@ function approvedIssue(h: TestHarness, labels = ["factory:approved", "type:featu
         riskTier: "T1",
         acceptanceCriteria: ["GET /api/tags가 태그 목록을 반환한다"],
         summary: "s",
+        ...(contractChanges ? { contractChanges } : {}),
       },
       { engine: "pi", model: "deepseek/deepseek-flash" },
     ),
@@ -48,6 +53,18 @@ const lastComment = async (h: TestHarness, n: number) =>
   (await h.gh.listComments(n)).at(-1)?.body ?? "";
 
 describe("implement stage", () => {
+  it("tells the agent which protected contracts to report as human actions", async () => {
+    const agent = createFakeAdapter([TAGS], "claude");
+    const h = makeTestDeps({ adapters: { claude: agent } });
+    await run(
+      h,
+      approvedIssue(h, undefined, ["apps/web/e2e-smoke/home.spec.ts: heading 기대값"]),
+      BOT,
+    );
+    expect(agent.calls[0]?.prompt).toContain("apps/web/e2e-smoke/home.spec.ts: heading 기대값");
+    expect(agent.calls[0]?.prompt).toContain("사람 조치 필요:");
+  });
+
   it("puts the reproduction-test rule into the prompt of type:bug issues only", async () => {
     const bugAgent = createFakeAdapter([TAGS], "claude");
     const bugH = makeTestDeps({ adapters: { claude: bugAgent } });

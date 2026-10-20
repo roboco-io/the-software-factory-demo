@@ -128,6 +128,25 @@ describe("triage comment", () => {
     expect(findTriage([{ id: 1, author: BOT, body }], BOT)).toEqual(t);
     expect(findTriage([{ id: 1, author: "mallory", body }], BOT)).toBeNull();
   });
+
+  it("lists protected contracts the request will break so a human updates them first (PR #65)", () => {
+    const t: Triage = {
+      type: "feature",
+      duplicateOf: null,
+      riskTier: "T1",
+      acceptanceCriteria: ["홈 heading이 conveyor다"],
+      summary: "s",
+      contractChanges: ["apps/web/e2e-smoke/home.spec.ts: heading 기대값 conduit"],
+    };
+    const body = renderTriageComment(t, { engine: "pi", model: "m" });
+    expect(body).toContain("먼저 갱신할 보호 계약");
+    expect(body).toContain("apps/web/e2e-smoke/home.spec.ts");
+    expect(findTriage([{ id: 1, author: BOT, body }], BOT)?.contractChanges).toEqual(
+      t.contractChanges,
+    );
+    const plain = renderTriageComment({ ...t, contractChanges: [] }, { engine: "pi", model: "m" });
+    expect(plain).not.toContain("먼저 갱신할 보호 계약");
+  });
 });
 
 describe("review verdict", () => {
