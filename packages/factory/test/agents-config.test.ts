@@ -32,6 +32,12 @@ describe("factory/agents.yml budgets (spec 5.3)", () => {
     });
     expect(cfg.roles.improve.budget).toEqual({ maxTurns: 60, timeoutMin: 30, maxUsd: 5 });
   });
+
+  it("assigns the postmortem role to claude with a 2 USD budget", () => {
+    expect(cfg.roles.postmortem.engine).toBe("claude");
+    expect(cfg.roles.postmortem.budget.maxUsd).toBe(2);
+    expect(cfg.roles.postmortem.budget.timeoutMin).toBe(15);
+  });
 });
 
 describe("assignEngines cross-review rule", () => {
@@ -62,6 +68,7 @@ roles:
   fix: { engine: same-as-implement, budget: { maxTurns: 1, timeoutMin: 1 } }
   review: { engine: codex, fallbackOrder: [codex], budget: { maxTurns: 1, timeoutMin: 1 } }
   improve: { engine: claude, budget: { maxTurns: 1, timeoutMin: 1 } }
+  postmortem: { engine: claude, budget: { maxTurns: 1, timeoutMin: 1 } }
 `,
     );
     expect(() => assignEngines(narrow, [])).toThrow(AssignmentError);
