@@ -260,6 +260,8 @@ describe("factory workflows", () => {
       "factory-postmortem-${{ inputs.issue || github.event.issue.number }}",
     );
     expect(wf.jobs.agent!["timeout-minutes"]).toBe(20);
+    // publish가 되돌리기 PR을 만들므로 전체 이력이 있는 작업 트리가 필요하다.
+    expect(workCheckout(wf.jobs.publish!)?.with?.["fetch-depth"]).toBe(0);
     expect(JSON.stringify(wf.jobs.agent)).not.toMatch(/FACTORY_TOKEN|GITHUB_TOKEN/);
     // 사용자 입력은 env로만 넘긴다.
     expect(wf.env?.EXCERPT).toBe("${{ inputs.excerpt }}");

@@ -128,6 +128,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with: { ref: main, path: runtime, persist-credentials: false }
+      # 되돌리기 PR용 작업 트리다. 여기 있는 코드는 실행하지 않는다.
+      - uses: actions/checkout@v7
+        with: { ref: main, path: work, fetch-depth: 0, persist-credentials: false }
       - uses: pnpm/action-setup@v6
         with: { package_json_file: runtime/package.json }
       - uses: actions/setup-node@v7
@@ -156,3 +159,4 @@ jobs:
         run: pnpm -s factory postmortem --issue "$ISSUE" --kind "$KIND" --event "$EVENT" --phase publish --state "$RUNNER_TEMP/in/plan.json" --outcome "$RUNNER_TEMP/out/outcome.json"
         env:
           FACTORY_TOKEN: ${{ steps.app.outputs.token }}
+          FACTORY_WORKDIR: ${{ github.workspace }}/work
