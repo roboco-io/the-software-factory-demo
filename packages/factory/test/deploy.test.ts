@@ -99,6 +99,16 @@ describe("revert deploy", () => {
     ]);
   });
 
+  it("comments and dispatches the smoke once when the same deploy runs again", async () => {
+    const h = makeTestDeps();
+    const incident = h.gh.addIssue({ title: "스모크 실패" });
+    h.gh.commitMessages.set("rev1234", `Revert "x" (#9)\n\nFactory-Revert: #${incident.number}`);
+    await runDeployed(h.deps, { sha: "rev1234" });
+    await runDeployed(h.deps, { sha: "rev1234" });
+    expect(h.gh.dispatches).toHaveLength(1);
+    expect(await h.gh.listComments(incident.number)).toHaveLength(1);
+  });
+
   it("does not dispatch a smoke for an ordinary deploy", async () => {
     const h = makeTestDeps();
     const issue = h.gh.addIssue({ title: "a", labels: ["factory:merged"] });
