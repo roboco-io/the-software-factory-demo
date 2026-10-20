@@ -80,3 +80,18 @@ describe("deploy result", () => {
     expect((await h.gh.listComments(merged.number))[0]?.body).toContain("롤백");
   });
 });
+
+describe("deploy failure postmortem trigger", () => {
+  it("requests a deploy postmortem for each moved issue", async () => {
+    const h = makeTestDeps();
+    const a = h.gh.addIssue({ title: "a", labels: ["factory:merged"] });
+    h.gh.commitMessages.set("abc1234", `feat: a (#9)\n\nFactory-Issue: #${a.number}`);
+    await runDeployFailed(h.deps, { sha: "abc1234" });
+    expect(h.gh.dispatches.filter((d) => d.inputs.kind === "deploy")).toEqual([
+      {
+        file: "factory-postmortem.yml",
+        inputs: { issue: String(a.number), kind: "deploy", event: "detected" },
+      },
+    ]);
+  });
+});

@@ -358,3 +358,19 @@ describe("runIntake repeat-comment throttle", () => {
     expect(await countComments(h)).toBe(2);
   });
 });
+
+describe("runIntake postmortem trigger", () => {
+  it("requests an error postmortem only when a new source:error issue is created", async () => {
+    const h = makeTestDeps();
+    const { client } = fake({ errors: [error()], feedback: [] });
+    await runIntake(h.deps, client);
+    expect(h.gh.dispatches.filter((d) => d.inputs.kind === "error")).toEqual([
+      {
+        file: "factory-postmortem.yml",
+        inputs: { issue: "1", kind: "error", event: "detected" },
+      },
+    ]);
+    await runIntake(h.deps, fake({ errors: [error({ count: 2 })], feedback: [] }).client);
+    expect(h.gh.dispatches.filter((d) => d.inputs.kind === "error")).toHaveLength(1);
+  });
+});
