@@ -458,6 +458,44 @@ describe("P3 intake workflows", () => {
     expect(run.env?.SMOKE_API_BASE).toBe("${{ inputs.api_base }}");
   });
 
+  it("factory-smoke.yml hands the failing output tail from checks to report by artifact id", () => {
+    const wf = load("factory-smoke.yml");
+    const checks = wf.jobs.checks!;
+    const report = wf.jobs.report!;
+    const hurl = checks.steps.find((s) => s.run?.includes("tests/smoke/readonly.hurl"))!;
+    const web = checks.steps.find((s) => s.run?.includes("e2e-smoke/playwright.config.ts"))!;
+    // 출력을 파일로 남기되 tee 때문에 실패가 성공으로 바뀌지 않게 한다.
+    for (const s of [hurl, web]) {
+      expect(s.id).toBeTruthy();
+      expect(s.run).toContain("set -o pipefail");
+      expect(s.run).toMatch(/2>&1 \| tee "\$RUNNER_TEMP\/smoke\//);
+    }
+    const excerpt = checks.steps.find((s) => s.id === "excerpt")!;
+    expect(excerpt.if).toBe("${{ !cancelled() }}");
+    expect(excerpt.env).toEqual({
+      HURL_OUTCOME: `\${{ steps.${hurl.id}.outcome }}`,
+      WEB_OUTCOME: `\${{ steps.${web.id}.outcome }}`,
+    });
+    expect(excerpt.run).toContain("tail -n 40");
+    expect(excerpt.run).toMatch(/head -c \d+/);
+    const upload = checks.steps.find((s) => s.uses?.startsWith("actions/upload-artifact@"))!;
+    expect(upload.id).toBe("excerpt-upload");
+    expect(upload.if).toContain("steps.excerpt.outputs.found == 'true'");
+    expect(checks.outputs?.["excerpt-artifact-id"]).toBe(
+      "${{ steps.excerpt-upload.outputs.artifact-id }}",
+    );
+    const download = report.steps.find((s) => s.uses?.startsWith("actions/download-artifact@"))!;
+    expect(download.if).toBe("${{ needs.checks.outputs.excerpt-artifact-id != '' }}");
+    expect(download.with?.["artifact-ids"]).toBe("${{ needs.checks.outputs.excerpt-artifact-id }}");
+    expect(report.steps.indexOf(download)).toBeLessThan(
+      report.steps.findIndex((s) => s.uses?.startsWith("actions/create-github-app-token@")),
+    );
+    const run = report.steps.find((s) => s.run?.includes("pnpm -s factory smoke-report"))!;
+    expect(run.run).toContain('--excerpt-file "$RUNNER_TEMP/smoke-in/smoke-excerpt.txt"');
+    // 권한 분리는 그대로다: report도 contents: read만 받는다.
+    expect(report.permissions).toEqual({ contents: "read" });
+  });
+
   it("factory-smoke.yml accepts an api_base override only under the production API, before any check runs", () => {
     const wf = load("factory-smoke.yml");
     const target = wf.jobs.target!;
