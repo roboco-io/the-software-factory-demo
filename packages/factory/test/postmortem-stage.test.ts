@@ -5,7 +5,9 @@ import { POSTMORTEM_MARKER } from "../src/postmortem/report";
 import { stepRecord } from "../src/stages/common";
 import { runPhase } from "../src/stages/phased";
 import { postmortemStage, type PostmortemArgs } from "../src/stages/postmortem";
-import { makeTestDeps, type TestHarness } from "./helpers";
+import { parseRevertIssues } from "../src/report/commit";
+import { parsePrMeta } from "../src/report/pr";
+import { BOT, makeTestDeps, type TestHarness } from "./helpers";
 
 const ANALYSIS: PostmortemAnalysis = {
   classification: "bot_regression",
@@ -283,5 +285,156 @@ describe("postmortem stage", () => {
     expect(await pmRecords(h)).toMatchObject([{ ok: false, failureReason: "engine_error" }]);
     expect(await bodyOf(h)).toEqual([]);
     expect((await h.gh.getIssue(1)).labels).toEqual(["source:smoke"]);
+  });
+});
+
+describe("postmortem revert PR", () => {
+  const addCause = (
+    h: TestHarness,
+    files: { filename: string; additions?: string[]; deletions?: string[] }[] = [
+      { filename: "apps/web/src/pages/Home.tsx", deletions: ["conduit"], additions: ["Home"] },
+    ],
+  ) => {
+    h.gh.pulls.set(65, {
+      number: 65,
+      title: "feat: 홈 제목 정리",
+      body: "",
+      author: BOT,
+      headRef: "factory/issue-60",
+      headSha: "head-65",
+      baseRef: "main",
+      labels: [],
+      draft: false,
+      state: "closed",
+      merged: true,
+      mergedAt: "2026-10-12T08:00:00.000Z",
+      files: files.map((f) => ({ additions: [], deletions: [], ...f })),
+    });
+    h.gh.merges.push({ pr: 65, sha: "head-65", title: "t", message: "m", mergeSha: "merge-65" });
+  };
+  const openPulls = (h: TestHarness) => h.gh.listOpenPulls();
+
+  it("opens one revert PR on factory/revert-issue-N with the revert meta and trailer (#66 replay)", async () => {
+    const { h } = setup();
+    await smokeIssue(h);
+    addCause(h);
+    h.deps.settings.token = "t";
+    await run(h, args());
+    expect(h.git.pushes.map((p) => p.branch)).toEqual(["factory/revert-issue-1"]);
+    const pulls = await openPulls(h);
+    expect(pulls).toHaveLength(1);
+    expect(pulls[0]!.title).toBe("revert: #65 feat: 홈 제목 정리 (장애 #1)");
+    expect(parsePrMeta(pulls[0]!.body)).toMatchObject({
+      issue: 1,
+      role: "revert",
+      implementEngine: "claude",
+      round: 0,
+    });
+    expect(h.git.reverts).toHaveLength(1);
+    expect(h.git.reverts[0]!.sha).toBe("merge-65");
+    expect(h.git.reverts[0]!.message).toContain("Factory-Revert: #1");
+    expect(parseRevertIssues(h.git.reverts[0]!.message)).toEqual([1]);
+    expect((await bodyOf(h))[0]).toContain(`되돌리기 PR #${pulls[0]!.number}`);
+    expect((await pmRecords(h))[0]).toMatchObject({
+      incident: { causePr: 65, reverted: true },
+    });
+  });
+
+  it("restores migration files after the revert", async () => {
+    const { h } = setup();
+    await smokeIssue(h);
+    addCause(h, [
+      { filename: "apps/web/src/pages/Home.tsx", deletions: ["conduit"] },
+      { filename: "apps/api/migrations/0004_x.sql" },
+    ]);
+    h.deps.settings.token = "t";
+    await run(h, args());
+    expect(h.git.restores).toEqual([
+      { paths: ["apps/api/migrations/0004_x.sql"], fromSha: "merge-65" },
+    ]);
+    expect(await openPulls(h)).toHaveLength(1);
+  });
+
+  it("only diagnoses when the revert conflicts with later commits", async () => {
+    const { h } = setup();
+    await smokeIssue(h);
+    addCause(h);
+    h.deps.settings.token = "t";
+    h.git.revertResult = null;
+    await run(h, args());
+    expect(await openPulls(h)).toHaveLength(0);
+    expect(h.git.pushes).toEqual([]);
+    expect((await bodyOf(h))[0]).toContain("되돌리기 충돌");
+    expect((await pmRecords(h))[0]).toMatchObject({ incident: { reverted: false } });
+  });
+
+  it("does not revert a cause that was already reverted by hand (Review Focus 3)", async () => {
+    const { h } = setup();
+    await smokeIssue(h);
+    addCause(h);
+    h.deps.settings.token = "t";
+    h.gh.pulls.set(68, {
+      ...h.gh.pulls.get(65)!,
+      number: 68,
+      title: 'Revert "feat: 홈 제목 정리" (#65)',
+      headSha: "head-68",
+      mergedAt: "2026-10-12T09:00:00.000Z",
+    });
+    await run(h, args());
+    expect(h.git.reverts).toEqual([]);
+    expect(await openPulls(h)).toHaveLength(0);
+    expect((await bodyOf(h))[0]).toContain("이미 되돌려졌다");
+  });
+
+  it("does not open a second revert PR while one is open", async () => {
+    const { h } = setup();
+    await smokeIssue(h);
+    addCause(h);
+    h.deps.settings.token = "t";
+    h.gh.pulls.set(90, {
+      number: 90,
+      title: "revert",
+      body: "",
+      author: BOT,
+      headRef: "factory/revert-issue-1",
+      headSha: "h90",
+      baseRef: "main",
+      labels: [],
+      draft: false,
+      state: "open",
+      merged: false,
+      files: [],
+    });
+    await run(h, args());
+    expect(h.git.reverts).toEqual([]);
+    expect(await openPulls(h)).toHaveLength(1);
+    expect((await bodyOf(h))[0]).toContain("#90");
+  });
+
+  it("never reverts in a dry-run replay", async () => {
+    const { h } = setup();
+    await smokeIssue(h);
+    addCause(h);
+    h.deps.settings.token = "t";
+    await run(h, args({ dryRun: true }));
+    expect(h.git.reverts).toEqual([]);
+    expect(await openPulls(h)).toHaveLength(0);
+  });
+
+  it("does not revert on the followup analysis", async () => {
+    const { h } = setup();
+    await smokeIssue(h);
+    addCause(h);
+    h.deps.settings.token = "t";
+    h.git.revertResult = null;
+    await run(h, args());
+    h.git.revertResult = "revert-sha";
+    await h.deps.runs.append({
+      ...stepRecord("smoke", 1, null, true),
+      ts: "2026-10-12T11:00:00.000Z",
+    });
+    await run(h, args({ event: "recovered" }));
+    expect(h.git.reverts).toHaveLength(1);
+    expect(await openPulls(h)).toHaveLength(0);
   });
 });
