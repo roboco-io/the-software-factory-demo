@@ -340,6 +340,7 @@ RealWorld Hurl 스위트는 업스트림 리포의 특정 커밋을 고정(pin)�
 
 - `ci.yml`의 `risk-tier`와 `preview.yml`의 `policy`에서 "base 커밋에 factory CLI가 없으면 건너뛴다"는 임시 분기를 제거한다. 이 분기는 P2 첫 병합을 위한 것이었고, main에 CLI가 생긴 뒤에는 CLI가 사라져도 체크가 조용히 통과하게 만드는 구멍이다.
 - 리뷰 publish는 이슈가 위험 등급(T2·T3) 때문에 `needs-human`에 있어도 교차 리뷰 판정 코멘트를 남긴다. 이때 상태는 바꾸지 않는다. 판정은 지금처럼 리뷰한 head SHA에 묶는다. 목적은 사람 리뷰어가 T2·T3 PR에서도 AI 리뷰 결과를 보게 하는 것이다(10.1 마지막 항목 해소).
+- (2026-10-21 추가) gate는 T2 PR을 교차 리뷰가 현재 head를 승인한 뒤에만 `needs-human`으로 옮긴다. 판정이 없거나 REQUEST_CHANGES이면 `pending`으로 두고, 리뷰 publish가 T1과 같이 수정 라운드를 보낸다. 라운드를 초과하면 기존처럼 사람에게 넘어간다. T3 PR은 구현 역할이 고칠 수 없는 경로이므로 CI 직후 바로 넘긴다. 이전 순서에서는 PR #69(T2)가 2026-10-18 13:57:34Z에 `needs-human`으로 옮겨진 9초 뒤 교차 리뷰가 major 지적 2건으로 REQUEST_CHANGES를 남겼고, 수정 라운드 없이 사람에게 넘어갔다. 근거: `gate.test.ts` "waits for the cross review before handing a T2 PR to a human, so REQUEST_CHANGES gets a fix round".
 
 #### 7.1.2 증거 게이트 `evidence`
 
@@ -537,7 +538,7 @@ P2 착수 전 미결 사항(CODEOWNERS 소유자, pi DeepSeek provider ID, Codex
 - agent job의 runner에는 Actions 런타임 토큰이 있다. runner를 장악한 에이전트는 Actions 캐시에 오염된 항목을 쓸 수 있고, 이후 신뢰하는 job이 그 캐시를 복원하면 오염된 의존성이 실행될 수 있다.
 - 프리뷰 웹은 프로덕션 웹과 같은 오리진에서 서빙되므로, 프리뷰 JS가 프로덕션 로그인 토큰을 읽는 것 자체는 막지 못한다. 토큰 키를 API 주소별로 나누고 프리뷰 Worker마다 별도 `JWT_SECRET`을 써서 프로덕션 토큰이 프리뷰 API에서 검증되지 않게 했다.
 - `preview` environment의 Cloudflare 토큰은 `production`과 분리되지 않았고 계정 단위 권한을 가진다. 완화책은 봇 PR이 T2·T3 경로를 바꾸면 프리뷰 배포를 생략하는 것이다(5.4 시크릿 격리).
-- (해소) T2 PR은 CI가 끝나자마자 gate가 `needs-human`으로 옮기므로, 리뷰 publish가 그 뒤에 끝나면 교차 리뷰 판정을 남기지 않았다(2026-10-11 PR #10에서 관찰). P3의 7.1.1에서 리뷰 publish가 위험 등급 때문에 `needs-human`에 있는 PR에도 판정을 남기도록 바꿨다(`review.test.ts` "posts the verdict for a T2 PR held in needs-human without changing state or dispatching"). 2026-10-12 기준 이 경로를 지난 실제 T2 봇 PR은 아직 없다.
+- (해소) T2 PR은 CI가 끝나자마자 gate가 `needs-human`으로 옮기므로, 리뷰 publish가 그 뒤에 끝나면 교차 리뷰 판정을 남기지 않았다(2026-10-11 PR #10에서 관찰). P3의 7.1.1에서 리뷰 publish가 위험 등급 때문에 `needs-human`에 있는 PR에도 판정을 남기도록 바꿨다(`review.test.ts` "posts the verdict for a T2 PR held in needs-human without changing state or dispatching"). 2026-10-12 기준 이 경로를 지난 실제 T2 봇 PR은 아직 없다. 2026-10-18 PR #69가 이 경로를 처음 지났고, 판정은 남았지만 REQUEST_CHANGES에 대한 수정 라운드가 돌지 않았다. 7.1.1의 2026-10-21 추가 항목으로 gate 순서를 바꿨다.
 
 다음은 P3에서 추가로 수용한 위험이다. `docs/operations.md` "팩토리 보안 한계"에도 기록했다.
 

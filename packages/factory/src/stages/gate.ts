@@ -142,6 +142,10 @@ export async function runGate(deps: StageDeps, args: GateArgs): Promise<GateDeci
     await record(deps, stepRecord("gate", meta.issue, pull.number, false, "skip_txt", meta.round));
     return "needs-human";
   }
+  // T2는 교차 리뷰가 현재 head를 승인한 뒤에 사람에게 넘긴다. 그 전에 넘기면 리뷰의 변경 요청이
+  // 수정 라운드를 거치지 않은 채 사람에게 간다(2026-10-18 PR #69). T3는 구현 역할이 바꿀 수 없는
+  // 경로이므로 수정 라운드 없이 바로 넘긴다.
+  if (risk.tier === "T2" && verdict?.verdict !== "APPROVE") return "pending";
   if (risk.tier === "T2" || risk.tier === "T3") {
     const deciding = risk.files
       .filter((f) => f.tier === risk.tier)
