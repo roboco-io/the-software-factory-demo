@@ -324,7 +324,7 @@ fix publish는 PR 브랜치를 한 커밋으로 다시 만든다(`reset --soft` 
 | `lint` | ESLint + Prettier check | P1 |
 | `unit` | Vitest. API는 `@cloudflare/vitest-plugin`, factory는 일반 Node | P1 |
 | `realworld-api` | 로컬 `wrangler dev`(로컬 D1)에 RealWorld 공식 Hurl 스위트 실행. 미구현 기능 테스트는 `tests/realworld/skip.txt`로 제외. 팩토리가 기능을 구현하면 skip 항목을 지우는 것이 수용 기준의 일부가 된다. skip 대상: favorites, feed, profiles, tags | P1 |
-| `e2e` | Playwright 스모크(가입→글 작성→댓글)를 로컬 서버(wrangler dev + vite preview)에 실행. PR 프리뷰 대상 실행은 `e2e-preview`(필수 아님) | P1 |
+| `e2e` | Playwright 스모크(가입→글 작성→댓글)를 로컬 서버(wrangler dev + vite preview)에 실행. PR 프리뷰 대상 실행은 `e2e-preview`(필수 아님). 같은 프리뷰에 프로덕션 읽기 전용 스모크를 돌리는 `smoke-preview`(필수 아님)도 있다. 두 체크는 보호 규칙의 필수 체크가 아니지만, gate는 T0·T1 봇 PR을 병합하기 전에 프리뷰 배포·`e2e-preview`·`smoke-preview`를 기다린다. `smoke-preview`나 프리뷰 배포가 실패하면 에이전트가 고칠 수 없으므로 사람에게 넘기고, `e2e-preview`가 실패하면 수정 라운드를 보낸다(2026-10-21, PR #65 사례) | P1 |
 | `risk-tier` | 변경 경로로 등급 판정, `risk:T0-3` 라벨 부착, 구현 역할의 T3 수정 차단 | P2 |
 | `evidence` | 버그 PR: 변경·추가된 테스트를 base 커밋에서 실행해 실패, head에서 통과해야 함. 실행 대상은 Vitest(`*.test.ts`, `*.test.tsx`)이고 Playwright E2E는 실행하지 않는다. 판정은 Vitest JSON 보고서의 단언(assertion) 결과로 한다. `evidence-plan` job이 실패해도 `!cancelled()`로 건너뛰지 않는다 | P3 |
 

@@ -57,6 +57,7 @@ jobs:
       - run: pnpm --filter web build
         env:
           VITE_API_BASE: ${{ env.API_URL }}/api
+          VITE_BUILD_SHA: ${{ github.sha }}
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -74,7 +75,7 @@ jobs:
       - name: Web index (Pages 반영 대기 최대 5분)
         run: |
           for i in $(seq 1 30); do
-            curl -fsS "${{ vars.WEB_URL }}" | grep -q 'Conveyor' && exit 0
+            curl -fsS "${{ vars.WEB_URL }}" | grep -qF "content=\"${{ github.sha }}\"" && exit 0
             sleep 10
           done
           exit 1

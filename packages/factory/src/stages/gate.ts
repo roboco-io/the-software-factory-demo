@@ -9,6 +9,9 @@ import type { StageDeps } from "./deps";
 
 export type CheckState = "pass" | "pending" | "fail";
 
+// preview.yml의 job 이름. main 보호 규칙의 필수 체크는 아니지만 gate는 T0·T1 병합 전에 확인한다.
+export const PREVIEW_CHECKS = ["deploy", "e2e-preview", "smoke-preview"];
+
 export function checkState(run: CheckRun | undefined): CheckState {
   if (!run || run.status !== "completed") return "pending";
   if (run.conclusion === "success" || run.conclusion === "skipped" || run.conclusion === "neutral")
@@ -74,10 +77,8 @@ export async function runGate(deps: StageDeps, args: GateArgs): Promise<GateDeci
   const { state } = await readState(deps.gh, meta.issue);
   if (state !== "in-review") return "ignored";
 
-  const checks = summarizeChecks(
-    await deps.gh.listCheckRuns(pull.headSha),
-    deps.policy.requiredChecks,
-  );
+  const runs = await deps.gh.listCheckRuns(pull.headSha);
+  const checks = summarizeChecks(runs, deps.policy.requiredChecks);
   const verdict = latestVerdict(
     await deps.gh.listReviews(pull.number),
     deps.settings.botLogin,
@@ -167,6 +168,44 @@ export async function runGate(deps: StageDeps, args: GateArgs): Promise<GateDeci
     );
     return "needs-human";
   }
+  // T0·T1 PR은 프리뷰(preview.yml)까지 보고 병합한다. 필수 체크가 아니어서 PR #65는 프로덕션 스모크
+  // 계약을 깬 채 병합됐다. T2·T3는 사람 승인 전에 프리뷰를 만들지 않으므로 여기에 오지 않는다.
+  const preview = summarizeChecks(runs, PREVIEW_CHECKS);
+  if (preview.failing.includes("deploy") || preview.failing.includes("smoke-preview")) {
+    const deploy = preview.failing.includes("deploy");
+    await moveTo(
+      deps,
+      meta.issue,
+      "needs-human",
+      "gate",
+      deploy
+        ? `PR #${pull.number}의 프리뷰 배포가 실패했다. 에이전트가 고칠 수 있는 실패가 아니므로 자동 병합하지 않는다. 사람이 확인한다.${runLink(deps.settings)}`
+        : `PR #${pull.number}이 프리뷰에서 프로덕션 스모크(\`tests/smoke/\`, \`apps/web/e2e-smoke/\`)를 통과하지 못했다. 변경이 스모크 계약을 깼다. 스모크는 T3라 에이전트가 고칠 수 없으므로 자동 병합하지 않는다. 의도한 변경이면 사람이 스모크를 갱신한다.${runLink(deps.settings)}`,
+    );
+    await record(
+      deps,
+      stepRecord(
+        "gate",
+        meta.issue,
+        pull.number,
+        false,
+        deploy ? "preview_deploy" : "smoke_contract",
+        meta.round,
+      ),
+    );
+    return "needs-human";
+  }
+  if (preview.state === "fail") {
+    if (verdict?.verdict === "REQUEST_CHANGES") return "pending";
+    await deps.gh.dispatchWorkflow("factory-fix.yml", {
+      pr: String(pull.number),
+      sha: pull.headSha,
+      reason: "ci",
+      issue: String(meta.issue),
+    });
+    return "fix-dispatched";
+  }
+  if (preview.state === "pending") return "pending";
   if (verdict?.verdict === "REQUEST_CHANGES") return "pending";
   if (risk.tier === "T1" && verdict?.verdict !== "APPROVE") return "pending";
 

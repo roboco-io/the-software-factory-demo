@@ -2,7 +2,8 @@ name: factory-merge
 run-name: factory-merge ${{ github.event.workflow_run.head_branch || github.event.pull_request.head.ref || inputs.pr }}
 on:
   workflow_run:
-    workflows: [ci]
+    # preview의 e2e-preview·smoke-preview 결과도 gate가 본다. 어느 쪽이 늦게 끝나도 gate가 다시 돈다.
+    workflows: [ci, preview]
     types: [completed]
   workflow_dispatch:
     inputs:
