@@ -233,7 +233,9 @@ describe("runIntake hostile text and regressions", () => {
       expect(lines.filter((l) => l === fence)).toHaveLength(expected);
       expect(lines.filter((l) => l.startsWith(fence) && l !== fence && l !== open)).toEqual([]);
     }
-    expect(body.match(/<!--/g)).toHaveLength(1);
+    // 오류 이슈에는 intake 표식 외에 첫 발생 시각 표식(Task 4)이 하나 더 붙는다. 신뢰할 수 없는 텍스트가 만든 표식이 없는지 본다.
+    const stripped = body.replace(/<!-- factory:error-first-seen \{"at":"[^"<>]*"\} -->/g, "");
+    expect(stripped.match(/<!--/g)).toHaveLength(1);
   }
 
   it("links the closed issue when a fixed error comes back", async () => {

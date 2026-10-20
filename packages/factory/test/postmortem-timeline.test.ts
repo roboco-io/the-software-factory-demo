@@ -7,7 +7,7 @@ import { stepRecord } from "../src/stages/common";
 import { renderErrorIssue } from "../src/stages/intake";
 import { BOT, makeTestDeps, type TestHarness } from "./helpers";
 
-const T = (s: string) => `2026-10-12T${s}:00.000Z`;
+const T = (s: string) => `2026-10-12T${s}:00:00.000Z`;
 
 async function addRun(h: TestHarness, ts: string, r: Omit<RunRecord, "ts">) {
   await h.deps.runs.append({ ts, ...r });
@@ -89,9 +89,9 @@ describe("smoke incident", () => {
     expect(c.author).toBe("bot");
     expect(c.mergeSha).toBeNull();
     expect(c.files).toEqual([
-      { path: "apps/web/src/pages/Home.tsx", tier: "T3", deletions: ["conduit"], additions: ["x"] },
+      { path: "apps/web/src/pages/Home.tsx", tier: "T1", deletions: ["conduit"], additions: ["x"] },
     ]);
-    expect(c.tier).toBe("T3");
+    expect(c.tier).toBe("T1");
     expect(c.checks).toContainEqual({ name: "e2e-preview", state: "fail" });
     expect(c.checks).toContainEqual({ name: "ci", state: "pass" });
     expect(tl.excerpt).toContain("conduit");
