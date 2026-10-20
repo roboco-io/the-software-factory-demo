@@ -33,20 +33,55 @@ export const ReviewSchema = z.object({
       message: z.string(),
       // 집계(spec 7.2.1)를 위해 고정 목록만 받는다. 빠졌거나 목록 밖이면 other.
       category: z.enum(FINDING_CATEGORIES).catch("other"),
+      // 구현 에이전트가 고칠 수 없는 지적(T3 경로 갱신, 설정·시크릿, 사람의 결정)이면 true.
+      needsHuman: z.boolean().optional().catch(undefined),
     }),
   ),
+  // 이전 리뷰의 미해결 지적(번호는 1부터)마다 이번 head에서 해소됐는지 답한다.
+  previous: z
+    .array(
+      z.object({
+        index: z.number().int().min(1),
+        resolved: z.boolean(),
+        note: z.string().catch(""),
+      }),
+    )
+    .optional()
+    .catch(undefined),
 });
 export type ReviewOutput = z.infer<typeof ReviewSchema>;
+
+// 판정 표식에 남기는 미해결 지적. 다음 라운드 리뷰가 이 목록의 해소 여부를 답해야 승인할 수 있다.
+const OpenFindingSchema = z.object({
+  file: z.string(),
+  message: z.string(),
+  needsHuman: z.boolean().catch(false),
+});
+export type OpenFinding = z.infer<typeof OpenFindingSchema>;
 
 const VerdictSchema = z.object({
   verdict: z.enum(["APPROVE", "REQUEST_CHANGES"]),
   sha: z.string().min(1),
+  open: z.array(OpenFindingSchema).catch([]).optional(),
 });
 
 export interface Verdict {
   verdict: "APPROVE" | "REQUEST_CHANGES";
   sha: string;
   body: string;
+}
+
+const MAX_OPEN = 10;
+
+export function openFindings(r: ReviewOutput): OpenFinding[] {
+  return r.findings
+    .filter((f) => f.severity !== "minor")
+    .slice(0, MAX_OPEN)
+    .map((f) => ({
+      file: f.file,
+      message: f.message.slice(0, 500),
+      needsHuman: f.needsHuman ?? false,
+    }));
 }
 
 const TRIAGE_DATA = "factory:triage-data";
@@ -100,8 +135,24 @@ export function renderReviewBody(
       ? ["| 심각도 | 위치 | 내용 |", "|---|---|---|", ...rows]
       : ["지적 사항 없음."]),
     "",
-    writeMarker(VERDICT, { verdict: r.verdict, sha: ctx.sha }),
+    writeMarker(VERDICT, { verdict: r.verdict, sha: ctx.sha, open: openFindings(r) }),
   ].join("\n");
+}
+
+// 현재 head가 아닌 커밋에 대한 가장 최근 판정의 미해결 지적. 다음 라운드 리뷰의 입력이다.
+export function previousOpenFindings(
+  reviews: Review[],
+  botLogin: string,
+  currentSha: string,
+): OpenFinding[] {
+  for (let i = reviews.length - 1; i >= 0; i--) {
+    const r = reviews[i]!;
+    if (r.author !== botLogin || r.state === "DISMISSED") continue;
+    const v = readMarker(r.body, VERDICT, VerdictSchema);
+    if (!v || v.sha === currentSha) continue;
+    return v.open ?? [];
+  }
+  return [];
 }
 
 export function latestVerdict(reviews: Review[], botLogin: string, sha: string): Verdict | null {

@@ -30,6 +30,7 @@ const DELIMITER_TAGS = [
   "diff",
   "feedback",
   "failures",
+  "previous-findings",
 ];
 const TAG = new RegExp(`<\\s*(/?)\\s*(${DELIMITER_TAGS.join("|")})`, "gi");
 const ZERO_WIDTH = /[\u200B-\u200D\u2060\uFEFF]/g;
