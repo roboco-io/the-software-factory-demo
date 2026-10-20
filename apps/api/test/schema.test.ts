@@ -13,6 +13,7 @@ describe("schema", () => {
       "error_events",
       "favorites",
       "feedback",
+      "images",
       "tags",
       "users",
     ]);

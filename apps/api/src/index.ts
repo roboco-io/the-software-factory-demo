@@ -11,6 +11,7 @@ import { commentsRouter } from "./routes/comments";
 import { profilesRouter } from "./routes/profiles";
 import { tagsRouter } from "./routes/tags";
 import { usersRouter } from "./routes/users";
+import { imagesRouter } from "./routes/images";
 
 const app = new Hono<AppEnv>();
 
@@ -27,6 +28,7 @@ const router = new Hono<AppEnv>();
 router.get("/health", (c) => c.json({ status: "ok" }));
 router.route("/", deferredRouter);
 router.route("/", usersRouter);
+router.route("/", imagesRouter);
 router.route("/", profilesRouter);
 router.route("/", articlesRouter);
 router.route("/", commentsRouter);

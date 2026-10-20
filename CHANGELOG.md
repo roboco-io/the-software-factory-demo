@@ -14,6 +14,7 @@
 
 ### 추가
 
+- 프로필 이미지 업로드를 추가했습니다. 로그인한 사용자가 PNG·JPEG·GIF·WebP(최대 1MB)를 올리면 아바타가 갱신됩니다. 이미지는 새 `images` 테이블(D1 마이그레이션)에 저장되고, 본문 크기는 스트림을 읽는 동안 제한해 Content-Length가 없는 초과 요청도 거부합니다(PR #69, 이슈 #67).
 - 데모 앱과 팩토리 대시보드에 Google Analytics 4를 추가했습니다. `roboco.io`에서 방문자가 동의 배너에서 동의한 뒤에만 GA를 불러오고, "통계 설정"에서 동의를 철회하면 수집을 끄고 데모 전용 GA 쿠키를 지웁니다. 로컬 실행과 PR 프리뷰에서는 배너와 GA를 불러오지 않습니다. [PR #68](https://github.com/roboco-io/the-software-factory-demo/pull/68)
 
 ### 변경
