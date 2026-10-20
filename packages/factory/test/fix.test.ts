@@ -33,6 +33,22 @@ describe("fix stage", () => {
     });
   });
 
+  it("adds human actions a fix round declares to the ones already in the PR meta", async () => {
+    const codex = createFakeAdapter(loadFakeScript("review-changes"), "codex");
+    const claude = createFakeAdapter(
+      [{ ...write(1), result: { summary: "고쳤다\n사람 조치 필요: 스모크 기대값 갱신" } }],
+      "claude",
+    );
+    const h = makeTestDeps({ adapters: { codex, claude } });
+    const { pr } = await openBotPr(h, { humanActions: ["시크릿 등록"] });
+    await runPhase(reviewStage, "all", h.deps, { pr }, null);
+    await runPhase(fixStage, "all", h.deps, { pr, sha: "sha-a", reason: "review" }, null);
+    expect(parsePrMeta((await h.gh.getPull(pr)).body)?.humanActions).toEqual([
+      "시크릿 등록",
+      "스모크 기대값 갱신",
+    ]);
+  });
+
   it("ignores a stale sha so a duplicate dispatch does nothing", async () => {
     const claude = createFakeAdapter([], "claude");
     const h = makeTestDeps({ adapters: { claude } });

@@ -216,6 +216,8 @@ async function runSide(
             ? plan.acceptanceCriteria.map((c) => `- ${c}`).join("\n")
             : "(트리아지 수용 기준 없음)",
         diff: truncateDiff(diff.stdout),
+        // 비교 실행은 첫 라운드 리뷰만 재현한다.
+        previousFindings: "(이전 리뷰의 미해결 지적 없음)",
       });
     } catch (e) {
       return result(true, `리뷰 프롬프트를 렌더하지 못했다: ${String(e)}`);

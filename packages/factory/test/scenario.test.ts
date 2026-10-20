@@ -21,6 +21,9 @@ const GREEN = {
   "risk-tier": "success",
   evidence: "success",
   eval: "success",
+  deploy: "success",
+  "e2e-preview": "success",
+  "smoke-preview": "success",
 };
 
 const TAGS: FakeStep = {

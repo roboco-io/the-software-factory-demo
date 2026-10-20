@@ -10,9 +10,12 @@ import {
   ReviewSchema,
   findTriage,
   latestVerdict,
+  previousOpenFindings,
   renderReviewBody,
+  type OpenFinding,
   type ReviewOutput,
 } from "../report/comments";
+import { inline } from "../report/text";
 import { parsePrMeta } from "../report/pr";
 import type { RunFinding } from "../runs/store";
 import {
@@ -50,6 +53,8 @@ export interface ReviewPlan {
   authorEngine: EngineName;
   issueTitle: string;
   acceptanceCriteria: string[];
+  // 앞선 커밋의 판정이 남긴 미해결 지적. 이번 리뷰가 각 항목의 해소 여부를 답해야 승인할 수 있다.
+  previous: OpenFinding[];
 }
 
 export interface ReviewOutcome {
@@ -68,6 +73,7 @@ const BoundedReviewSchema = ReviewSchema.extend({
         severity: z.enum(["blocker", "major", "minor"]),
         message: z.string().max(5_000),
         category: z.enum(FINDING_CATEGORIES).catch("other"),
+        needsHuman: z.boolean().optional().catch(undefined),
       }),
     )
     .max(100),
@@ -78,7 +84,8 @@ const OutcomeSchema = z.object({
   review: BoundedReviewSchema.nullable(),
 });
 
-// gate는 T2·T3 PR을 CI 직후 needs-human으로 옮긴다. 그 뒤에 끝난 리뷰도 사람 리뷰어가 볼 수 있게 판정만 남긴다(spec 7.1.1).
+// gate는 T3 PR을 CI 직후, T2 PR을 교차 리뷰 승인 뒤 needs-human으로 옮긴다. 그 뒤에 끝난 리뷰도
+// 사람 리뷰어가 볼 수 있게 판정만 남긴다(spec 7.1.1).
 // 변경 파일 목록을 끝까지 얻지 못하면 등급을 알 수 없으므로 T3로 본다.
 export async function heldForRisk(deps: StageDeps, pr: number): Promise<boolean> {
   try {
@@ -88,6 +95,29 @@ export async function heldForRisk(deps: StageDeps, pr: number): Promise<boolean>
     if (e instanceof TooManyFilesError) return true;
     throw e;
   }
+}
+
+// 이전 라운드의 미해결 지적을 해소됐다고 답하지 않은 승인은 승인이 아니다. PR #65에서는 1차 리뷰의
+// major 지적(T3 스모크 기대값)이 수정되지 않았는데 2차 리뷰가 "지적 사항 없음"으로 승인했다.
+export function enforcePrevious(review: ReviewOutput, previous: OpenFinding[]): ReviewOutput {
+  const resolved = new Set((review.previous ?? []).filter((p) => p.resolved).map((p) => p.index));
+  const unresolved = previous.map((f, i) => ({ f, n: i + 1 })).filter(({ n }) => !resolved.has(n));
+  if (unresolved.length === 0) return review;
+  return {
+    ...review,
+    verdict: "REQUEST_CHANGES",
+    findings: [
+      ...review.findings,
+      ...unresolved.map(({ f, n }) => ({
+        file: f.file,
+        line: null,
+        severity: "major" as const,
+        message: `이전 리뷰 지적 ${n}이 해소되지 않았다: ${f.message}`,
+        category: "other" as const,
+        needsHuman: f.needsHuman,
+      })),
+    ],
+  };
 }
 
 const SEVERITY_ORDER = { blocker: 0, major: 1, minor: 2 } as const;
@@ -133,7 +163,8 @@ export const reviewStage: PhasedStage<{ pr: number }, ReviewPlan, ReviewOutcome>
     if (!meta || pull.headRef !== branchFor(meta.issue)) return null;
     const { issue, state } = await readState(deps.gh, meta.issue);
     if (state !== "in-review") return null;
-    if (latestVerdict(await deps.gh.listReviews(pr), deps.settings.botLogin, pull.headSha)) {
+    const reviews = await deps.gh.listReviews(pr);
+    if (latestVerdict(reviews, deps.settings.botLogin, pull.headSha)) {
       return null;
     }
     let engine: EngineName;
@@ -168,6 +199,7 @@ export const reviewStage: PhasedStage<{ pr: number }, ReviewPlan, ReviewOutcome>
       authorEngine: meta.implementEngine,
       issueTitle: issue.title,
       acceptanceCriteria: triage?.acceptanceCriteria ?? [],
+      previous: previousOpenFindings(reviews, deps.settings.botLogin, pull.headSha),
     };
   },
 
@@ -205,13 +237,17 @@ export const reviewStage: PhasedStage<{ pr: number }, ReviewPlan, ReviewOutcome>
           ? plan.acceptanceCriteria.map((c) => `- ${c}`).join("\n")
           : "(트리아지 수용 기준 없음)",
       diff,
+      previousFindings:
+        plan.previous.length > 0
+          ? plan.previous.map((f, i) => `${i + 1}. \`${f.file}\`: ${f.message}`).join("\n")
+          : "(이전 리뷰의 미해결 지적 없음)",
     });
     const { result, value } = await runStructured(
       deps.adapterFor(plan.engine, plan.model),
       { role: "review", prompt, cwd: deps.settings.workdir, readOnly: true, budget: plan.budget },
       ReviewSchema,
     );
-    return { result, review: value };
+    return { result, review: value ? enforcePrevious(value, plan.previous) : value };
   },
 
   parseOutcome(raw) {
@@ -269,6 +305,23 @@ export const reviewStage: PhasedStage<{ pr: number }, ReviewPlan, ReviewOutcome>
     if (held) {
       // 사람이 병합을 결정하는 PR이다. 상태를 바꾸지 않고 fix·merge도 보내지 않는다.
       deps.log(`review: verdict posted on held PR #${plan.pr}; #${plan.issue} stays needs-human`);
+      return;
+    }
+    const forHuman = review.findings.filter((f) => f.severity !== "minor" && f.needsHuman);
+    if (review.verdict === "REQUEST_CHANGES" && forHuman.length > 0) {
+      // 구현 에이전트가 고칠 수 없는 지적이다. 수정 라운드를 보내도 해결되지 않으므로 사람에게 넘긴다.
+      await moveTo(
+        deps,
+        plan.issue,
+        "needs-human",
+        "review",
+        [
+          `PR #${plan.pr} 리뷰가 구현 에이전트가 고칠 수 없는 지적을 남겼다. 수정 라운드 대신 사람에게 넘긴다.`,
+          "",
+          ...forHuman.map((f) => `- \`${inline(f.file)}\`: ${inline(f.message)}`),
+          ...(runLink(deps.settings) ? ["", runLink(deps.settings).trim()] : []),
+        ].join("\n"),
+      );
       return;
     }
     if (review.verdict === "REQUEST_CHANGES") {

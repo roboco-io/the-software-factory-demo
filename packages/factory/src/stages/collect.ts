@@ -53,7 +53,12 @@ export function failureEvents(runs: RunRecord[], commits: CommitInfo[]): Failure
     if (r.role === "improve") continue;
     const base = { issue: r.issue, pr: r.pr, ts: r.ts };
     if (!r.ok && r.role === "smoke") {
-      out.push({ ...base, key: "smoke", detail: null, distinctKey: r.ts.slice(0, 10) });
+      out.push({
+        ...base,
+        key: "smoke",
+        detail: typeof r.detail === "string" ? r.detail : null,
+        distinctKey: r.ts.slice(0, 10),
+      });
     } else if (!r.ok && !isIgnored(r.failureReason)) {
       out.push({
         ...base,

@@ -34,6 +34,8 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    outputs:
+      excerpt-artifact-id: ${{ steps.excerpt-upload.outputs.artifact-id }}
     env:
       API_BASE: ${{ inputs.api_base || format('https://sfd-api.{0}.workers.dev/api', vars.WORKERS_SUBDOMAIN) }}
       E2E_BASE_URL: ${{ vars.WEB_URL }}
@@ -45,14 +47,51 @@ jobs:
         with: { node-version-file: .nvmrc, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - uses: gacts/install-hurl@v1
+      # 출력은 로그와 파일 양쪽에 남긴다. pipefail로 tee가 실패를 성공으로 바꾸지 않게 한다.
       - name: API 읽기 전용 스모크(Hurl)
-        run: hurl --test --variable "api=$API_BASE" tests/smoke/readonly.hurl
+        id: hurl
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/smoke"
+          hurl --test --variable "api=$API_BASE" tests/smoke/readonly.hurl 2>&1 | tee "$RUNNER_TEMP/smoke/hurl.log"
       # Hurl이 실패해도 웹 스모크까지 실행해 실패 범위를 한 run에서 보이게 한다.
       - if: ${{ !cancelled() }}
         run: pnpm --filter web exec playwright install --with-deps chromium
       - name: 웹 읽기 전용 스모크(Playwright)
+        id: web
         if: ${{ !cancelled() }}
-        run: pnpm --filter web exec playwright test -c e2e-smoke/playwright.config.ts
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/smoke"
+          pnpm --filter web exec playwright test -c e2e-smoke/playwright.config.ts 2>&1 | tee "$RUNNER_TEMP/smoke/web.log"
+      # 실패한 쪽 출력의 끝부분(각 40줄, 전체 6000바이트 이내)만 report에 넘긴다. 이슈 본문과 주간 리포트의 원문이 된다.
+      - name: 실패 원문 발췌
+        id: excerpt
+        if: ${{ !cancelled() }}
+        env:
+          HURL_OUTCOME: ${{ steps.hurl.outcome }}
+          WEB_OUTCOME: ${{ steps.web.outcome }}
+        run: |
+          dir="$RUNNER_TEMP/smoke"
+          mkdir -p "$dir"
+          {
+            if [ "$HURL_OUTCOME" = failure ] && [ -s "$dir/hurl.log" ]; then
+              echo "== Hurl (tests/smoke/readonly.hurl) =="
+              tail -n 40 "$dir/hurl.log"
+            fi
+            if [ "$WEB_OUTCOME" = failure ] && [ -s "$dir/web.log" ]; then
+              echo "== Playwright (apps/web/e2e-smoke) =="
+              tail -n 40 "$dir/web.log"
+            fi
+          } | head -c 6000 > "$dir/smoke-excerpt.txt"
+          if [ -s "$dir/smoke-excerpt.txt" ]; then echo "found=true" >> "$GITHUB_OUTPUT"; fi
+      - id: excerpt-upload
+        if: ${{ !cancelled() && steps.excerpt.outputs.found == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-excerpt
+          path: ${{ runner.temp }}/smoke/smoke-excerpt.txt
+          retention-days: 7
   report:
     needs: [target, checks]
     if: ${{ !cancelled() && needs.target.result == 'success' }}
@@ -67,13 +106,19 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      # 실패 원문 발췌가 없으면(성공, 또는 checks가 취소·시간 초과) 내려받지 않고 원문 없이 보고한다.
+      - if: ${{ needs.checks.outputs.excerpt-artifact-id != '' }}
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.checks.outputs.excerpt-artifact-id }}
+          path: ${{ runner.temp }}/smoke-in
       - id: app
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
       # F6: checks가 취소·시간 초과로 끝나도 실패로 넘긴다. 스모크 실패가 이슈 없이 사라지지 않게 한다.
-      - run: pnpm -s factory smoke-report --result "$RESULT"
+      - run: pnpm -s factory smoke-report --result "$RESULT" --excerpt-file "$RUNNER_TEMP/smoke-in/smoke-excerpt.txt"
         env:
           FACTORY_TOKEN: ${{ steps.app.outputs.token }}
           FACTORY_BOT_USER_ID: ${{ vars.FACTORY_BOT_USER_ID }}

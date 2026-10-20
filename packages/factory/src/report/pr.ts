@@ -9,6 +9,8 @@ export const PrMetaSchema = z.object({
   implementEngine: z.enum(ENGINES),
   implementModel: z.string().min(1),
   round: z.number().int().min(0),
+  // 구현·수정 에이전트가 "사람 조치 필요:"로 선언한 항목. 하나라도 있으면 gate가 병합하지 않는다(PR #65).
+  humanActions: z.array(z.string().min(1)).max(20).optional(),
 });
 export type PrMeta = z.infer<typeof PrMetaSchema>;
 
@@ -37,6 +39,15 @@ export function extractRisks(summary: string): string[] {
     .split(/\r?\n/)
     .map((l) => /^\s*남은 위험:\s*(.+)$/.exec(l)?.[1]?.trim())
     .filter((l): l is string => Boolean(l));
+}
+
+// 에이전트가 권한 밖이라 끝낼 수 없다고 선언한 일. T3 경로 수정, 설정·시크릿 변경, 고칠 수 없는 체크 실패 등이다.
+export function extractHumanActions(summary: string): string[] {
+  return summary
+    .split(/\r?\n/)
+    .map((l) => /^\s*사람 조치 필요:\s*(.+)$/.exec(l)?.[1]?.trim())
+    .filter((l): l is string => Boolean(l))
+    .slice(0, 20);
 }
 
 export function renderPrBody(r: PrReport): string {
@@ -75,6 +86,16 @@ export function renderPrBody(r: PrReport): string {
     "필수 CI 체크(typecheck, lint, unit, realworld-api, e2e, risk-tier, evidence, eval)는 이 PR에서 다시 실행된다. evidence는 연결 이슈가 type:bug일 때 재현 테스트가 수정 전 코드에서 실패하고 이 PR에서 통과하는지 검사한다.",
     `프리뷰: ${inline(r.preview)}`,
     "",
+    ...(r.meta.humanActions?.length
+      ? [
+          "## 사람 조치 필요",
+          "",
+          "에이전트가 권한 밖이라 끝내지 못한 일이다. 이 항목이 있으면 팩토리는 자동 병합하지 않는다.",
+          "",
+          ...r.meta.humanActions.map((x) => `- ${inline(x)}`),
+          "",
+        ]
+      : []),
     "## 남은 위험",
     "",
     ...(r.risks.length > 0

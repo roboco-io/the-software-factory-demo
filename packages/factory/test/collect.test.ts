@@ -65,6 +65,26 @@ describe("collect", () => {
     expect(new Set(ev.map((e) => e.distinctKey)).size).toBe(1);
   });
 
+  it("uses the recorded smoke failure excerpt as the sample", () => {
+    const runs = ["01", "02", "03"].map((d) =>
+      rec({
+        issue: 66,
+        ok: false,
+        role: "smoke",
+        failureReason: "smoke_failed",
+        ts: `2026-10-${d}T00:00:00Z`,
+        detail: `expected <conduit> ${d}`,
+      }),
+    );
+    const { candidates } = rankCandidates(failureEvents(runs, []), new Set());
+    expect(candidates[0]).toMatchObject({ key: "smoke", issues: [66] });
+    expect(candidates[0]!.samples).toEqual([
+      "expected <conduit> 03",
+      "expected <conduit> 02",
+      "expected <conduit> 01",
+    ]);
+  });
+
   it("skips improve records so improve failures are not candidates", () => {
     const ev = failureEvents(
       [
