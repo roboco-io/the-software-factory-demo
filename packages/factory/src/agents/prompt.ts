@@ -15,7 +15,7 @@ export function bugRuleFor(labels: string[]): string {
   return labels.includes("type:bug") ? BUG_RULE : NOT_BUG_RULE;
 }
 
-export type PromptName = "triage" | "implement" | "review" | "fix" | "improve";
+export type PromptName = "triage" | "implement" | "review" | "fix" | "improve" | "postmortem";
 
 export function loadPrompt(name: PromptName, dir = path.join(FACTORY_DIR, "prompts")): string {
   return readFileSync(path.join(dir, `${name}.md`), "utf8");
@@ -31,6 +31,7 @@ const DELIMITER_TAGS = [
   "feedback",
   "failures",
   "previous-findings",
+  "timeline",
 ];
 const TAG = new RegExp(`<\\s*(/?)\\s*(${DELIMITER_TAGS.join("|")})`, "gi");
 const ZERO_WIDTH = /[\u200B-\u200D\u2060\uFEFF]/g;

@@ -29,6 +29,7 @@ const ConfigSchema = z.object({
     fix: z.object({ engine: z.literal("same-as-implement"), budget: BudgetSchema }),
     review: RoleSchema.extend({ fallbackOrder: z.array(EngineSchema).min(1) }),
     improve: RoleSchema,
+    postmortem: RoleSchema,
   }),
 });
 

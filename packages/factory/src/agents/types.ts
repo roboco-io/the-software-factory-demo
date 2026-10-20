@@ -1,6 +1,6 @@
 export const ENGINES = ["claude", "codex", "pi"] as const;
 export type EngineName = (typeof ENGINES)[number];
-export type Role = "triage" | "implement" | "review" | "fix" | "improve";
+export type Role = "triage" | "implement" | "review" | "fix" | "improve" | "postmortem";
 export type FailureReason = "max_turns" | "timeout" | "budget" | "engine_error" | "invalid_output";
 
 export interface Budget {
