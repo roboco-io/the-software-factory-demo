@@ -152,6 +152,35 @@ describe("runGate", () => {
     expect(await runGate(h.deps, { pr })).toBe("needs-human");
   });
 
+  it("hands a PR to a human when any check on the head fails, even one outside the required list", async () => {
+    const h = makeTestDeps();
+    const { pr, issue } = await openBotPr(h);
+    await verdict(h, pr, "sha-a", "APPROVE");
+    h.gh.setChecks("sha-a", { ...GREEN, "Analyze (actions)": "failure" });
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
+    expect(h.gh.merges).toEqual([]);
+    expect(h.gh.dispatches).toEqual([]);
+    expect((await h.gh.listComments(issue))[0]?.body).toContain("Analyze (actions)");
+    expect((await h.deps.runs.since(new Date(0)))[0]).toMatchObject({
+      failureReason: "unlisted_check",
+    });
+  });
+
+  it("hands a PR to a human when its author declared an action only a human can take (PR #65)", async () => {
+    const h = makeTestDeps();
+    const { pr, issue } = await openBotPr(h, {
+      humanActions: ["apps/web/e2e-smoke/home.spec.ts의 heading 기대값을 conveyor로 갱신해야 한다"],
+    });
+    await verdict(h, pr, "sha-a", "APPROVE");
+    h.gh.setChecks("sha-a", GREEN);
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
+    expect(h.gh.merges).toEqual([]);
+    expect((await h.gh.listComments(issue))[0]?.body).toContain("e2e-smoke/home.spec.ts");
+    expect((await h.deps.runs.since(new Date(0)))[0]).toMatchObject({
+      failureReason: "human_action",
+    });
+  });
+
   it("finds the PR by branch for workflow_run events", async () => {
     const h = makeTestDeps();
     const { pr, branch } = await openBotPr(h);

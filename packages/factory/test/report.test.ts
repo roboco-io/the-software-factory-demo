@@ -10,6 +10,7 @@ import {
   type Triage,
 } from "../src/report/comments";
 import {
+  extractHumanActions,
   extractRisks,
   formatDuration,
   parsePrMeta,
@@ -99,6 +100,16 @@ describe("renderPrBody (spec 5.5)", () => {
   it("extracts risk lines and formats durations", () => {
     expect(extractRisks("a\n남은 위험: x\n남은 위험: y")).toEqual(["x", "y"]);
     expect(formatDuration(59_000)).toBe("0분 59초");
+  });
+
+  it("extracts human action lines and lists them in the PR body and meta", () => {
+    expect(extractHumanActions("a\n사람 조치 필요: x\n남은 위험: y")).toEqual(["x"]);
+    const meta = { ...report().meta, humanActions: ["스모크 갱신"] };
+    const body = renderPrBody({ ...report(), meta });
+    expect(body).toContain("## 사람 조치 필요");
+    expect(body).toContain("- 스모크 갱신");
+    expect(parsePrMeta(body)?.humanActions).toEqual(["스모크 갱신"]);
+    expect(renderPrBody(report())).not.toContain("## 사람 조치 필요");
   });
 });
 
