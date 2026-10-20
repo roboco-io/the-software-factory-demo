@@ -101,6 +101,7 @@ jobs:
         run: pnpm --filter web build
         env:
           VITE_API_BASE: ${{ env.API_URL }}/api
+          VITE_BUILD_SHA: ${{ github.event.pull_request.head.sha }}
       - uses: rossjrw/pr-preview-action@v1
         with:
           source-dir: apps/web/dist
@@ -127,9 +128,42 @@ jobs:
       - run: pnpm --filter web exec playwright install --with-deps chromium
       - name: Confirm preview reachable (최대 5분)
         run: |
-          for i in $(seq 1 30); do curl -fsS "$WEB_PREVIEW_URL" | grep -q Conveyor && exit 0; sleep 10; done
+          for i in $(seq 1 30); do curl -fsS "$WEB_PREVIEW_URL" | grep -qF "content=\"$HEAD_SHA\"" && exit 0; sleep 10; done
           exit 1
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       - run: pnpm --filter web e2e
+        env:
+          E2E_BASE_URL: ${{ env.WEB_PREVIEW_URL }}
+  smoke-preview:
+    # 프로덕션 읽기 전용 스모크를 PR 프리뷰에 먼저 돌린다. 실패하면 gate가 병합 대신 사람에게 넘긴다.
+    # 스모크 파일은 T3라 구현 에이전트 PR에서는 main과 같다(risk-tier).
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Confirm preview reachable (최대 5분)
+        run: |
+          for i in $(seq 1 30); do curl -fsS "$WEB_PREVIEW_URL" | grep -qF "content=\"$HEAD_SHA\"" && exit 0; sleep 10; done
+          exit 1
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      - uses: gacts/install-hurl@v1
+      - name: API 읽기 전용 스모크(Hurl)
+        run: hurl --test --variable "api=$API_URL/api" tests/smoke/readonly.hurl
+      - if: ${{ !cancelled() }}
+        run: pnpm --filter web exec playwright install --with-deps chromium
+      - name: 웹 읽기 전용 스모크(Playwright)
+        if: ${{ !cancelled() }}
+        run: pnpm --filter web exec playwright test -c e2e-smoke/playwright.config.ts
         env:
           E2E_BASE_URL: ${{ env.WEB_PREVIEW_URL }}
   cleanup:

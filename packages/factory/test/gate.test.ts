@@ -13,6 +13,9 @@ export const GREEN = {
   "risk-tier": "success",
   evidence: "success",
   eval: "success",
+  deploy: "success",
+  "e2e-preview": "success",
+  "smoke-preview": "success",
 };
 
 export async function verdict(
@@ -70,6 +73,83 @@ describe("runGate", () => {
       `Agent-Signature: claude/claude-sonnet-5-5\nFactory-Issue: #${issue}`,
     );
     expect((await h.deps.runs.since(new Date(0)))[0]).toMatchObject({ role: "gate", ok: true, pr });
+  });
+
+  it("waits for the PR preview before merging a T1 PR", async () => {
+    const h = makeTestDeps();
+    const { pr } = await openBotPr(h);
+    await verdict(h, pr, "sha-a", "APPROVE");
+    const { "smoke-preview": _s, ...withoutSmoke } = GREEN;
+    void _s;
+    h.gh.setChecks("sha-a", withoutSmoke);
+    expect(await runGate(h.deps, { pr })).toBe("pending");
+    h.gh.setChecks("sha-a", { ...GREEN, "e2e-preview": null });
+    expect(await runGate(h.deps, { pr })).toBe("pending");
+    expect(h.gh.merges).toEqual([]);
+    h.gh.setChecks("sha-a", GREEN);
+    expect(await runGate(h.deps, { pr })).toBe("merged");
+  });
+
+  it("hands a smoke-preview failure to a human because the agent cannot change the smoke contract", async () => {
+    const h = makeTestDeps();
+    const { pr, issue } = await openBotPr(h);
+    await verdict(h, pr, "sha-a", "APPROVE");
+    h.gh.setChecks("sha-a", { ...GREEN, "smoke-preview": "failure" });
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
+    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.merges).toEqual([]);
+    expect((await h.gh.getIssue(issue)).labels).toEqual(["factory:needs-human"]);
+    expect((await h.gh.listComments(issue))[0]?.body).toContain("스모크");
+    expect((await h.deps.runs.since(new Date(0)))[0]).toMatchObject({
+      role: "gate",
+      ok: false,
+      failureReason: "smoke_contract",
+    });
+  });
+
+  it("hands a failed preview deploy to a human instead of dispatching a fix", async () => {
+    const h = makeTestDeps();
+    const { pr } = await openBotPr(h);
+    await verdict(h, pr, "sha-a", "APPROVE");
+    h.gh.setChecks("sha-a", {
+      ...GREEN,
+      deploy: "failure",
+      "e2e-preview": "skipped",
+      "smoke-preview": "skipped",
+    });
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
+    expect(h.gh.dispatches).toEqual([]);
+    expect((await h.deps.runs.since(new Date(0)))[0]).toMatchObject({
+      failureReason: "preview_deploy",
+    });
+  });
+
+  it("dispatches a ci fix when e2e-preview fails unless review already requested changes", async () => {
+    const h = makeTestDeps();
+    const { pr, issue } = await openBotPr(h);
+    h.gh.setChecks("sha-a", { ...GREEN, "e2e-preview": "failure" });
+    expect(await runGate(h.deps, { pr })).toBe("fix-dispatched");
+    expect(h.gh.dispatches).toEqual([
+      {
+        file: "factory-fix.yml",
+        inputs: { pr: String(pr), sha: "sha-a", reason: "ci", issue: String(issue) },
+      },
+    ]);
+    await verdict(h, pr, "sha-a", "REQUEST_CHANGES");
+    expect(await runGate(h.deps, { pr })).toBe("pending");
+    expect(h.gh.dispatches).toHaveLength(1);
+  });
+
+  it("does not wait for preview checks on a T2 PR, whose preview is skipped until a human approves", async () => {
+    const h = makeTestDeps();
+    const { pr } = await openBotPr(h, {}, ["apps/api/migrations/0002_x.sql"]);
+    const { deploy: _d, "e2e-preview": _e, "smoke-preview": _s, ...required } = GREEN;
+    void _d;
+    void _e;
+    void _s;
+    h.gh.setChecks("sha-a", required);
+    await verdict(h, pr, "sha-a", "APPROVE");
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
   });
 
   it("finds the PR by branch for workflow_run events", async () => {
@@ -139,6 +219,28 @@ describe("runGate", () => {
     expect(comments[0]?.body).toContain("apps/api/migrations/0002_favorites.sql");
   });
 
+  it("waits for the cross review before handing a T2 PR to a human, so REQUEST_CHANGES gets a fix round", async () => {
+    const h = makeTestDeps();
+    const { pr, issue } = await openBotPr(h, {}, ["apps/api/migrations/0002_favorites.sql"]);
+    h.gh.setChecks("sha-a", GREEN);
+    expect(await runGate(h.deps, { pr })).toBe("pending");
+    await verdict(h, pr, "sha-a", "REQUEST_CHANGES");
+    expect(await runGate(h.deps, { pr })).toBe("pending");
+    // 리뷰 publish가 fix를 보내므로 gate는 이슈를 in-review에 두고 아무것도 보내지 않는다.
+    expect((await h.gh.getIssue(issue)).labels).toEqual(["factory:in-review"]);
+    expect(await h.gh.listComments(issue)).toEqual([]);
+    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.merges).toEqual([]);
+  });
+
+  it("hands a T3 PR to a human without waiting for the review", async () => {
+    const h = makeTestDeps();
+    const { pr, issue } = await openBotPr(h, {}, ["packages/factory/src/x.ts"]);
+    h.gh.setChecks("sha-a", GREEN);
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
+    expect((await h.gh.getIssue(issue)).labels).toEqual(["factory:needs-human"]);
+  });
+
   it("treats a rename out of a T3 path as T3 and never merges it", async () => {
     const h = makeTestDeps();
     const { pr, branch, issue } = await openBotPr(h);
@@ -192,6 +294,7 @@ describe("runGate", () => {
     const h = makeTestDeps();
     const { pr } = await openBotPr(h, {}, ["apps/api/migrations/0002_x.sql"]);
     h.gh.setChecks("sha-a", GREEN);
+    await verdict(h, pr, "sha-a", "APPROVE");
     await runGate(h.deps, { pr });
     expect((await h.deps.runs.since(new Date(0)))[0]).toMatchObject({
       role: "gate",
