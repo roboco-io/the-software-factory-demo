@@ -78,7 +78,8 @@ const OutcomeSchema = z.object({
   review: BoundedReviewSchema.nullable(),
 });
 
-// gate는 T2·T3 PR을 CI 직후 needs-human으로 옮긴다. 그 뒤에 끝난 리뷰도 사람 리뷰어가 볼 수 있게 판정만 남긴다(spec 7.1.1).
+// gate는 T3 PR을 CI 직후, T2 PR을 교차 리뷰 승인 뒤 needs-human으로 옮긴다. 그 뒤에 끝난 리뷰도
+// 사람 리뷰어가 볼 수 있게 판정만 남긴다(spec 7.1.1).
 // 변경 파일 목록을 끝까지 얻지 못하면 등급을 알 수 없으므로 T3로 본다.
 export async function heldForRisk(deps: StageDeps, pr: number): Promise<boolean> {
   try {

@@ -219,6 +219,28 @@ describe("runGate", () => {
     expect(comments[0]?.body).toContain("apps/api/migrations/0002_favorites.sql");
   });
 
+  it("waits for the cross review before handing a T2 PR to a human, so REQUEST_CHANGES gets a fix round", async () => {
+    const h = makeTestDeps();
+    const { pr, issue } = await openBotPr(h, {}, ["apps/api/migrations/0002_favorites.sql"]);
+    h.gh.setChecks("sha-a", GREEN);
+    expect(await runGate(h.deps, { pr })).toBe("pending");
+    await verdict(h, pr, "sha-a", "REQUEST_CHANGES");
+    expect(await runGate(h.deps, { pr })).toBe("pending");
+    // 리뷰 publish가 fix를 보내므로 gate는 이슈를 in-review에 두고 아무것도 보내지 않는다.
+    expect((await h.gh.getIssue(issue)).labels).toEqual(["factory:in-review"]);
+    expect(await h.gh.listComments(issue)).toEqual([]);
+    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.merges).toEqual([]);
+  });
+
+  it("hands a T3 PR to a human without waiting for the review", async () => {
+    const h = makeTestDeps();
+    const { pr, issue } = await openBotPr(h, {}, ["packages/factory/src/x.ts"]);
+    h.gh.setChecks("sha-a", GREEN);
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
+    expect((await h.gh.getIssue(issue)).labels).toEqual(["factory:needs-human"]);
+  });
+
   it("treats a rename out of a T3 path as T3 and never merges it", async () => {
     const h = makeTestDeps();
     const { pr, branch, issue } = await openBotPr(h);
@@ -272,6 +294,7 @@ describe("runGate", () => {
     const h = makeTestDeps();
     const { pr } = await openBotPr(h, {}, ["apps/api/migrations/0002_x.sql"]);
     h.gh.setChecks("sha-a", GREEN);
+    await verdict(h, pr, "sha-a", "APPROVE");
     await runGate(h.deps, { pr });
     expect((await h.deps.runs.since(new Date(0)))[0]).toMatchObject({
       role: "gate",
