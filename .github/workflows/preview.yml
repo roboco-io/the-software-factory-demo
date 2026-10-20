@@ -127,7 +127,7 @@ jobs:
       - run: pnpm --filter web exec playwright install --with-deps chromium
       - name: Confirm preview reachable (최대 5분)
         run: |
-          for i in $(seq 1 30); do curl -fsS "$WEB_PREVIEW_URL" | grep -q Conduit && exit 0; sleep 10; done
+          for i in $(seq 1 30); do curl -fsS "$WEB_PREVIEW_URL" | grep -q Conveyor && exit 0; sleep 10; done
           exit 1
       - run: pnpm --filter web e2e
         env:
