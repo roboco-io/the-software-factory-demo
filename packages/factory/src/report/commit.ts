@@ -26,3 +26,11 @@ export function parseFactoryIssues(message: string): number[] {
   );
   return [...new Set(found)];
 }
+
+// 포스트모템 되돌리기 커밋의 장애 이슈 trailer. Factory-Issue와 달리 deploy 상태 전이 대상이 아니다.
+export const REVERT_TRAILER = "Factory-Revert";
+
+export function parseRevertIssues(message: string): number[] {
+  const re = new RegExp(`^\\s*(?:\\*\\s*)?${REVERT_TRAILER}: #(\\d+)\\s*$`, "gm");
+  return [...new Set([...message.matchAll(re)].map((m) => Number(m[1])))];
+}

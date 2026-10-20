@@ -5,7 +5,7 @@ import { cell, codeCell, demote, inline, readMarker, writeMarker } from "./text"
 
 export const PrMetaSchema = z.object({
   issue: z.number().int().positive(),
-  role: z.enum(["implement", "improve"]),
+  role: z.enum(["implement", "improve", "revert"]),
   implementEngine: z.enum(ENGINES),
   implementModel: z.string().min(1),
   round: z.number().int().min(0),

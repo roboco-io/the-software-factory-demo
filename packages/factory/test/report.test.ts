@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { cell, codeBlock, sanitize } from "../src/report/text";
-import { commitMessage, parseFactoryIssues, parseRevertIssues, REVERT_TRAILER } from "../src/report/commit";
+import {
+  commitMessage,
+  parseFactoryIssues,
+  parseRevertIssues,
+  REVERT_TRAILER,
+} from "../src/report/commit";
 import {
   findTriage,
   latestVerdict,
