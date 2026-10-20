@@ -4,6 +4,13 @@ import type { CandidatePr, Timeline } from "./timeline";
 
 export const POSTMORTEM_MARKER = "factory:postmortem";
 
+// 줄 시작의 블록 마크다운(제목·인용·목록·표·번호·펜스)이 되지 않게 첫 글자를 이스케이프한다.
+function line(s: string): string {
+  return inline(s)
+    .replace(/^(\d+)([.)])/, "$1\\$2")
+    .replace(/^([#>\-+*|=~`])/, "\\$1");
+}
+
 const TRUNCATED = "\n\n(길이 상한 때문에 이후 내용을 줄였다.)";
 
 function span(t: Timeline): string {
@@ -63,7 +70,7 @@ export function renderPostmortem(
       ].join("\n\n");
     }
     return [
-      `## 요약\n\n${inline(a.summary)}\n\n영향 기간: ${inline(span(t))}`,
+      `## 요약\n\n${line(a.summary)}\n\n영향 기간: ${inline(span(t))}`,
       timelineSection(t, outcome.action, rows),
       ["## 원인", "", ...tagged(a.rootCause)].join("\n"),
       ["## 막지 못한 방어선", "", ...tagged(a.defenses)].join("\n"),

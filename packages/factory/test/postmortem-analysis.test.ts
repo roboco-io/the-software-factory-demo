@@ -117,6 +117,11 @@ describe("decideRevert", () => {
     ["no quote", { excerptQuote: null }, "quote_not_in_excerpt"],
     ["invented quote", { excerptQuote: "TypeError: x" }, "quote_not_in_excerpt"],
     ["unrelated PR", { causePr: 70 }, "no_overlap"],
+    [
+      "generic-only quote",
+      { causePr: 65, excerptQuote: "Error: expect(locator).toBeVisible()" },
+      "no_overlap",
+    ],
   ])("refuses to revert: %s", (_n, over, reason) => {
     expect(decideRevert(TIMELINE_66, { ...A, ...over }, POLICY)).toEqual({ revert: false, reason });
   });
@@ -210,6 +215,14 @@ describe("renderPostmortem", () => {
     expect(body).not.toContain("@someone");
     expect(body).not.toContain("<!--");
     expect(body.match(/^## 가짜 절/m)).toBeNull();
+  });
+
+  it("escapes block markdown at the start of the summary line", () => {
+    for (const md of ["# 가짜 제목", "> 인용", "- 항목", "| a | b |", "1. 번호"]) {
+      const body = renderPostmortem(TIMELINE_66, { ...A, summary: md }, { action: "x" }, 6000);
+      const want = /^\d/.test(md) ? md.replace(".", "\\.") : `\\${md}`;
+      expect(body).toContain(`## 요약\n\n${want}`);
+    }
   });
 
   it("exposes the marker name", () => {

@@ -35,9 +35,22 @@ export type RevertDecision =
 
 const TOKEN = /[\p{L}\p{N}_-]{4,}/gu;
 
+// 테스트 실패 원문에 흔한 일반 토큰. 어떤 PR의 코드에도 나올 수 있어 겹침 근거가 되지 못한다.
+const STOPWORDS = new Set(
+  (
+    "error errors failed failure failures fail expect expected received timeout timed test tests " +
+    "assert assertion assertions locator element elements page true false null undefined none " +
+    "function return const await async this that with from have been when then there which " +
+    "text value values name type object string number class call line file path code step " +
+    "waiting waited exceeded status response request match matches matching actual"
+  ).split(" "),
+);
+
 // 인용에서 뽑은 단어가 원인 PR의 변경 줄이나 파일 경로에 나오면 실패 원문과 변경이 겹친다고 본다.
 function overlaps(quote: string, pr: CandidatePr): boolean {
-  const tokens = [...new Set(quote.toLowerCase().match(TOKEN) ?? [])];
+  const tokens = [...new Set(quote.toLowerCase().match(TOKEN) ?? [])].filter(
+    (t) => !STOPWORDS.has(t),
+  );
   return pr.files.some((f) => {
     const path = f.path.toLowerCase();
     const lines = [...f.deletions, ...f.additions].map((l) => l.toLowerCase());
