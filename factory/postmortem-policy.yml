@@ -1,0 +1,36 @@
+# 자동 포스트모템 정책. 어떤 사건에서 원인 분석을 실행할지, 비용 한도와 보고서 길이를 정한다.
+# triggers.production: 프로덕션 사건 이슈에 붙는 라벨. 이 라벨이 있으면 분석 대상이다.
+# triggers.stall.reasons: 요청이 멈춘 이유 중 분석 대상인 것. exclude에 있는 이유는 사람 판단 영역이라 분석하지 않는다.
+# 같은 이유를 reasons와 exclude에 함께 둘 수 없다(로더가 거부한다).
+# budget: 사건당 분석 횟수, 분석 1회의 비용(USD)·시간(분), 하루 총 비용(USD)의 상한.
+# revert.require와 에이전트 역할은 여기에 두지 않는다. 앞의 것은 코드가 고정하고, 역할은 agents.yml이 정한다.
+# 이 파일은 factory/ 아래라 T3이며 CODEOWNERS 승인이 필요하다.
+triggers:
+  production: [source:smoke, source:deploy, source:error]
+  stall:
+    reasons:
+      - max_turns
+      - timeout
+      - budget
+      - engine_error
+      - invalid_output
+      - merge_refused
+      - smoke_contract
+      - preview_deploy
+      - human_action
+      - unlisted_check
+      - risk_tier
+      - too_many_files
+      - skip_txt
+      - review_needs_human
+    exclude: [risk_t2, risk_t3, permission_denied, deploy_failed]
+revert:
+  enabled: true
+  reopen_request: true
+budget:
+  per_incident_analyses: 2
+  per_analysis_usd: 2
+  per_analysis_minutes: 15
+  daily_usd: 10
+report:
+  max_chars: 6000

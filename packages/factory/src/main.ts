@@ -4,6 +4,7 @@ import { runProcess } from "./exec/process";
 import { createGit } from "./git/port";
 import { forbiddenGitHub } from "./github/forbidden";
 import { createOctokitPort } from "./github/octokit";
+import { loadPostmortemPolicy } from "./policy/postmortem";
 import { loadRiskPolicy } from "./policy/risk";
 import { createRunStore } from "./runs/store";
 import { loadSettings, type StageDeps } from "./stages/deps";
@@ -38,6 +39,7 @@ export function buildDeps(env: NodeJS.ProcessEnv, phase: Phase): StageDeps {
     adapterFor: (engine, model) => createAdapter(engine, model, agents, env),
     agents,
     policy: loadRiskPolicy(),
+    postmortem: loadPostmortemPolicy(),
     settings,
     now: () => new Date(),
     log: (msg) => console.error(msg),

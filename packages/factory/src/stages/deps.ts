@@ -3,6 +3,7 @@ import type { AgentsConfig } from "../config/agents";
 import type { SpawnFn } from "../exec/process";
 import type { GitPort } from "../git/port";
 import type { GitHubPort } from "../github/port";
+import type { PostmortemPolicy } from "../policy/postmortem";
 import type { RiskPolicy } from "../policy/risk";
 import type { RunStore } from "../runs/store";
 
@@ -33,6 +34,7 @@ export interface StageDeps {
   adapterFor(engine: EngineName, model: string): AgentAdapter;
   agents: AgentsConfig;
   policy: RiskPolicy;
+  postmortem: PostmortemPolicy;
   settings: Settings;
   now(): Date;
   log(msg: string): void;

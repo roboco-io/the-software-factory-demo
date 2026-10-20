@@ -7,6 +7,7 @@ import type { SpawnFn } from "../src/exec/process";
 import type { GitPort } from "../src/git/port";
 import { InMemoryGitHub } from "../src/github/memory";
 import { renderPrBody, type PrMeta } from "../src/report/pr";
+import { loadPostmortemPolicy } from "../src/policy/postmortem";
 import { loadRiskPolicy, type ChangedFile } from "../src/policy/risk";
 import { createRunStore } from "../src/runs/store";
 import { DEFAULT_BOT_LOGIN, type Settings, type StageDeps } from "../src/stages/deps";
@@ -180,6 +181,7 @@ export function makeTestDeps(
     },
     agents: loadAgentsConfig(),
     policy: loadRiskPolicy(),
+    postmortem: loadPostmortemPolicy(),
     settings,
     now: () => now,
     log: (m) => logs.push(m),
