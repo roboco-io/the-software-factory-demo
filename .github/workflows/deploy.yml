@@ -74,7 +74,7 @@ jobs:
       - name: Web index (Pages 반영 대기 최대 5분)
         run: |
           for i in $(seq 1 30); do
-            curl -fsS "${{ vars.WEB_URL }}" | grep -q 'Conduit' && exit 0
+            curl -fsS "${{ vars.WEB_URL }}" | grep -q 'Conveyor' && exit 0
             sleep 10
           done
           exit 1
