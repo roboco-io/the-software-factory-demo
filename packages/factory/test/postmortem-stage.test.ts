@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { createFakeAdapter } from "../src/agents/fake";
 import type { PostmortemAnalysis } from "../src/postmortem/analysis";
 import { POSTMORTEM_MARKER } from "../src/postmortem/report";
-import type { RunRecord } from "../src/runs/store";
 import { stepRecord } from "../src/stages/common";
 import { runPhase } from "../src/stages/phased";
 import { postmortemStage, type PostmortemArgs } from "../src/stages/postmortem";
@@ -264,7 +263,11 @@ describe("postmortem stage", () => {
   });
 
   it("records a failed analysis and still posts the timeline with the reason", async () => {
-    const { h } = setup([{ result: { summary: "not json", model: "m", turns: 1, costUsd: 0.1 } }]);
+    const { h } = setup(
+      Array.from({ length: 2 }, () => ({
+        result: { summary: "not json", model: "m", turns: 1, costUsd: 0.1 },
+      })),
+    );
     await smokeIssue(h);
     await run(h, args());
     const [comment] = await bodyOf(h);

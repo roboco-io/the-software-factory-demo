@@ -25,6 +25,19 @@ export interface RunRecord {
   findings?: RunFinding[];
   // 스모크 실패처럼 사유 코드만으로 원인을 알 수 없을 때 남기는 실패 원문 발췌(최대 1000자).
   detail?: string;
+  // 포스트모템 레코드의 장애 정보. 대시보드가 장애 목록과 복구 시간을 만든다.
+  incident?: IncidentInfo;
+}
+
+export interface IncidentInfo {
+  key: string;
+  kind: "smoke" | "deploy" | "error" | "stall";
+  phase: "initial" | "followup";
+  detectedAt: string;
+  recoveredAt: string | null;
+  causePr: number | null;
+  reverted: boolean;
+  classification: string | null;
 }
 
 export interface RunStore {
