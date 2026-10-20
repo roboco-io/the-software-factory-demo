@@ -53,6 +53,7 @@ describe("revert PR", () => {
     const h = makeTestDeps();
     const incident = h.gh.addIssue({ title: "스모크 실패", labels: ["factory:needs-human"] });
     const { pr } = await openBotPr(h, { role: "revert", issue: incident.number, ...meta }, files);
+    h.gh.pulls.get(pr)!.headRef = `factory/revert-issue-${incident.number}`;
     return { h, pr, incident: incident.number };
   }
   const bodies = async (h: TestHarness, n: number) =>
@@ -67,6 +68,22 @@ describe("revert PR", () => {
     expect(h.gh.merges[0]!.message).toContain(`Factory-Revert: #${incident}`);
     expect(h.gh.merges[0]!.message).not.toContain("Factory-Issue");
     expect((await h.gh.getIssue(incident)).labels).toEqual(["factory:needs-human"]);
+  });
+
+  it("ignores a revert meta on a bot PR whose branch is not factory/revert-issue-N", async () => {
+    const { h, pr } = await openRevert();
+    h.gh.pulls.get(pr)!.headRef = "factory/issue-999";
+    h.gh.setChecks("sha-a", GREEN);
+    expect(await runGate(h.deps, { pr })).toBe("ignored");
+    expect(h.gh.merges).toEqual([]);
+  });
+
+  it("ignores a human-authored PR that carries a revert meta", async () => {
+    const { h, pr } = await openRevert();
+    h.gh.pulls.get(pr)!.author = "someone";
+    h.gh.setChecks("sha-a", GREEN);
+    expect(await runGate(h.deps, { pr })).toBe("ignored");
+    expect(h.gh.merges).toEqual([]);
   });
 
   it("asks CODEOWNERS on the incident issue for a T2 revert PR", async () => {

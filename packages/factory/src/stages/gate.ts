@@ -185,7 +185,14 @@ export async function runGate(deps: StageDeps, args: GateArgs): Promise<GateDeci
     deps.log(`gate: 개선 PR #${pull.number}은 사람이 병합한다`);
     return "ignored";
   }
-  if (meta.role === "revert") return gateRevert(deps, pull, meta);
+  if (meta.role === "revert") {
+    // 되돌리기 PR만 이 분기로 들어온다. 브랜치가 다르면 표식이 위조된 PR이므로 건드리지 않는다.
+    if (pull.headRef !== `factory/revert-issue-${meta.issue}`) {
+      deps.log(`gate ignored PR #${pull.number}: revert meta but head is ${pull.headRef}`);
+      return "ignored";
+    }
+    return gateRevert(deps, pull, meta);
+  }
   const { state } = await readState(deps.gh, meta.issue);
   if (state !== "in-review") return "ignored";
   // 에이전트가 스스로 끝낼 수 없다고 선언한 PR은 체크·리뷰 결과와 상관없이 병합하지 않는다.
