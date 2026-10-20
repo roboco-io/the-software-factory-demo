@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Run } from "./data";
-import { improvementStories, issueStories, roleStats } from "./insights";
+import { improvementStories, incidents, issueStories, roleStats } from "./insights";
 
 function run(
   issue: number,
@@ -320,4 +320,64 @@ describe("improvementStories", () => {
       });
     },
   );
+});
+
+describe("incidents", () => {
+  const inc = (
+    phase: "initial" | "followup",
+    over: Partial<NonNullable<Run["incident"]>> = {},
+  ): NonNullable<Run["incident"]> => ({
+    key: "66#1",
+    kind: "smoke",
+    phase,
+    detectedAt: "2026-10-20T01:00:00Z",
+    recoveredAt: null,
+    causePr: null,
+    reverted: false,
+    classification: null,
+    ...over,
+  });
+
+  it("merges initial and followup into one row and prefers the followup recoveredAt", () => {
+    const rows = incidents([
+      run(66, "postmortem", "2026-10-20T01:05:00Z", { incident: inc("initial", { causePr: 65 }) }),
+      run(66, "postmortem", "2026-10-20T03:00:00Z", {
+        incident: inc("followup", {
+          recoveredAt: "2026-10-20T01:45:00Z",
+          causePr: 65,
+          reverted: true,
+          classification: "test_gap",
+        }),
+      }),
+    ]);
+    expect(rows).toEqual([
+      {
+        key: "66#1",
+        issue: 66,
+        kind: "smoke",
+        detectedAt: "2026-10-20T01:00:00Z",
+        recoveredAt: "2026-10-20T01:45:00Z",
+        mttrMinutes: 45,
+        causePr: 65,
+        reverted: true,
+        classification: "test_gap",
+      },
+    ]);
+  });
+
+  it("reports mttrMinutes null before recovery and sorts by latest detection", () => {
+    const rows = incidents([
+      run(66, "postmortem", "2026-10-20T01:05:00Z", { incident: inc("initial") }),
+      run(70, "postmortem", "2026-10-20T05:05:00Z", {
+        incident: inc("initial", { key: "70#1", detectedAt: "2026-10-20T05:00:00Z" }),
+      }),
+      run(1, "triage", "2026-10-20T06:00:00Z"),
+    ]);
+    expect(rows.map((r) => r.key)).toEqual(["70#1", "66#1"]);
+    expect(rows[0]).toMatchObject({ recoveredAt: null, mttrMinutes: null, causePr: null });
+  });
+
+  it("returns an empty list without incident records", () => {
+    expect(incidents([run(1, "triage", "2026-10-20T06:00:00Z")])).toEqual([]);
+  });
 });

@@ -9,7 +9,7 @@ export interface RiskReport {
   tier: Tier;
   files: FileTier[];
   botAuthor: boolean;
-  role: "implement" | "improve" | null;
+  role: "implement" | "improve" | "revert" | null;
   forbidden: string[];
   // sha를 받았는데 PR head가 그 SHA가 아니면 true다. 판정한 커밋과 배포할 커밋이 다를 수 있으므로 프리뷰를 막는다.
   stale: boolean;
@@ -52,7 +52,7 @@ export async function runRisk(
   // 봇 PR의 역할은 PR 본문 표식으로 읽는다. 표식이 없으면 가장 엄격한 implement로 본다.
   const role = botAuthor ? (parsePrMeta(pull.body)?.role ?? "implement") : null;
   const forbidden: string[] = [];
-  if (role === "implement") {
+  if (role === "implement" || role === "revert") {
     if (!changed) forbidden.push("(변경 파일이 너무 많아 등급을 판정할 수 없다)");
     else {
       forbidden.push(...risk.files.filter((f) => f.tier === "T3").map((f) => f.file));

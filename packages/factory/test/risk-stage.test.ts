@@ -4,6 +4,14 @@ import { runRisk } from "../src/stages/risk";
 import { makeTestDeps, openBotPr } from "./helpers";
 
 describe("runRisk", () => {
+  it("forbids T3 paths in a revert PR like in an implement PR", async () => {
+    const h = makeTestDeps();
+    const { pr } = await openBotPr(h, { role: "revert" }, ["factory/risk-policy.yml"]);
+    const r = await runRisk(h.deps, { pr, check: false });
+    expect(r.role).toBe("revert");
+    expect(r.forbidden).toEqual(["factory/risk-policy.yml"]);
+  });
+
   it("counts the old path of a rename, so moving a T3 file out is still T3 and forbidden", async () => {
     const h = makeTestDeps();
     const { pr, branch } = await openBotPr(h);

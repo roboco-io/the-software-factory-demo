@@ -46,12 +46,13 @@ const AGENT_WORKFLOWS = [
   "factory-implement.yml",
   "factory-review.yml",
   "factory-fix.yml",
+  "factory-postmortem.yml",
   "factory-weekly.yml",
   "factory-eval-live.yml",
 ];
 // 에이전트 두 개(구현·리뷰)를 쓰므로 엔진 키를 둘 다 받는 워크플로.
 const TWO_ENGINE_WORKFLOWS = ["factory-eval-live.yml"];
-const PHASED = /pnpm -s factory (triage|implement|review|fix|improve|eval-live)\b/;
+const PHASED = /pnpm -s factory (triage|implement|review|fix|improve|eval-live|postmortem)\b/;
 const text = (step: Step) => JSON.stringify(step);
 const steps = (wf: Workflow) => Object.values(wf.jobs).flatMap((j) => j.steps);
 const checkouts = (job: Job) => job.steps.filter((s) => s.uses?.startsWith("actions/checkout@"));
@@ -73,6 +74,7 @@ describe("factory workflows", () => {
       "factory-implement.yml",
       "factory-intake.yml",
       "factory-merge.yml",
+      "factory-postmortem.yml",
       "factory-review.yml",
       "factory-smoke.yml",
       "factory-triage.yml",
@@ -90,6 +92,28 @@ describe("factory workflows", () => {
         }
       }
     }
+  });
+
+  it("lets factory-weekly start improve for a given issue and skip the report job", () => {
+    const wf = load("factory-weekly.yml");
+    const dispatch = wf.on.workflow_dispatch as { inputs?: Record<string, { required?: boolean }> };
+    expect(dispatch.inputs?.issue).toBeDefined();
+    expect(dispatch.inputs?.issue?.required).not.toBe(true);
+    // 입력이 있으면 리포트를 만들지 않는다. 스케줄 실행은 입력이 비어 있으므로 기존대로 돈다.
+    expect(wf.jobs.report!.if).toBe("${{ inputs.issue == '' }}");
+    for (const name of ["prepare", "agent", "publish"]) {
+      expect(wf.jobs[name]!.env?.ISSUE, name).toBe(
+        "${{ inputs.issue || needs.report.outputs.issue }}",
+      );
+    }
+    // report가 건너뛰어져도 이어지는 job이 건너뛰어지지 않아야 한다. 실패·취소는 이어 가지 않는다.
+    expect(wf.jobs.prepare!.if).toContain("!cancelled()");
+    expect(wf.jobs.prepare!.if).toContain("needs.report.result == 'skipped'");
+    expect(wf.jobs.prepare!.if).toContain("inputs.issue != ''");
+    expect(wf.jobs.prepare!.if).toContain("needs.report.outputs.candidates != '0'");
+    expect(wf.jobs.agent!.if).toContain("!cancelled()");
+    expect(wf.jobs.agent!.if).toContain("needs.prepare.result == 'success'");
+    expect(wf.jobs.agent!.if).toContain("needs.prepare.outputs.has-plan == 'true'");
   });
 
   it("allow unprivileged user namespaces before running an agent, so the Codex sandbox works on ubuntu-24.04", () => {
@@ -224,6 +248,23 @@ describe("factory workflows", () => {
     expect(wf.env?.PR).toBe("${{ inputs.pr }}");
     expect(wf.env?.ISSUE).toBe("${{ inputs.issue }}");
     expect(workCheckout(agent)?.with?.["fetch-depth"]).toBe(0);
+  });
+
+  it("factory-postmortem runs on dispatch and on closed issues, serialized per issue, with no token in the agent job", () => {
+    const wf = load("factory-postmortem.yml");
+    expect(Object.keys(wf.on).sort()).toEqual(["issues", "workflow_dispatch"]);
+    expect(wf.on.issues).toEqual({ types: ["closed"] });
+    const inputs = Object.keys((wf.on.workflow_dispatch as { inputs: object }).inputs).sort();
+    expect(inputs).toEqual(["dry_run", "event", "excerpt", "issue", "kind"]);
+    expect(wf.concurrency?.group).toBe(
+      "factory-postmortem-${{ inputs.issue || github.event.issue.number }}",
+    );
+    expect(wf.jobs.agent!["timeout-minutes"]).toBe(20);
+    // publish가 되돌리기 PR을 만들므로 전체 이력이 있는 작업 트리가 필요하다.
+    expect(workCheckout(wf.jobs.publish!)?.with?.["fetch-depth"]).toBe(0);
+    expect(JSON.stringify(wf.jobs.agent)).not.toMatch(/FACTORY_TOKEN|GITHUB_TOKEN/);
+    // 사용자 입력은 env로만 넘긴다.
+    expect(wf.env?.EXCERPT).toBe("${{ inputs.excerpt }}");
   });
 
   it("factory-weekly runs on Mondays and on demand, reports before improving", () => {

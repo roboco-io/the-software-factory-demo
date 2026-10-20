@@ -113,7 +113,7 @@ describe("review stage", () => {
     const { pr, issue } = await openBotPr(h);
     await runPhase(reviewStage, "all", h.deps, { pr }, null);
     expect((await h.gh.getIssue(issue)).labels).toContain("factory:needs-human");
-    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.dispatches.filter((d) => d.file !== "factory-postmortem.yml")).toEqual([]);
   });
 
   it("truncates very large diffs", () => {
@@ -150,7 +150,16 @@ describe("review stage", () => {
     expect(latestVerdict(await h.gh.listReviews(pr), BOT, "sha-a")?.verdict).toBe(
       "REQUEST_CHANGES",
     );
-    expect(h.gh.dispatches).toEqual([]);
+    // fix·merge는 보내지 않는다. 정체 포스트모템 요청만 나간다.
+    expect(h.gh.dispatches.map((d) => d.file)).toEqual(["factory-postmortem.yml"]);
+    expect(await h.deps.runs.since(new Date(0))).toContainEqual(
+      expect.objectContaining({
+        role: "review",
+        issue,
+        ok: false,
+        failureReason: "review_needs_human",
+      }),
+    );
     expect((await h.gh.getIssue(issue)).labels).toEqual(["factory:needs-human"]);
     expect((await h.gh.listComments(issue)).at(-1)?.body).toContain("e2e-smoke/home.spec.ts");
   });
@@ -232,7 +241,7 @@ describe("review stage", () => {
     expect(codex.calls).toHaveLength(0);
     expect(await h.gh.listReviews(pr)).toHaveLength(0);
     expect((await h.gh.getIssue(issue)).labels).toContain("factory:needs-human");
-    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.dispatches.filter((d) => d.file !== "factory-postmortem.yml")).toEqual([]);
   });
 
   it("does not approve an empty diff", async () => {
@@ -244,7 +253,7 @@ describe("review stage", () => {
     expect((await h.gh.getIssue(issue)).labels).toContain("factory:needs-human");
     expect(codex.calls).toHaveLength(0);
     expect(await h.gh.listReviews(pr)).toHaveLength(0);
-    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.dispatches.filter((d) => d.file !== "factory-postmortem.yml")).toEqual([]);
   });
 
   it("ignores a PR whose branch is not the factory branch of its issue", async () => {

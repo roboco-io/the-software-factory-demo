@@ -28,6 +28,7 @@ import {
   readState,
   record,
   runLink,
+  stepRecord,
 } from "./common";
 import type { StageDeps } from "./deps";
 import { flattenFiles } from "./gate";
@@ -310,6 +311,10 @@ export const reviewStage: PhasedStage<{ pr: number }, ReviewPlan, ReviewOutcome>
     const forHuman = review.findings.filter((f) => f.severity !== "minor" && f.needsHuman);
     if (review.verdict === "REQUEST_CHANGES" && forHuman.length > 0) {
       // 구현 에이전트가 고칠 수 없는 지적이다. 수정 라운드를 보내도 해결되지 않으므로 사람에게 넘긴다.
+      await record(
+        deps,
+        stepRecord("review", plan.issue, plan.pr, false, "review_needs_human", plan.round),
+      );
       await moveTo(
         deps,
         plan.issue,

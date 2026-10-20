@@ -348,7 +348,7 @@ describe("implement stage", () => {
     expect(second?.draft).toBe(false);
     expect(second?.labels).toEqual(["risk:T1"]);
     expect((await h.gh.getIssue(n)).labels).toContain("factory:in-review");
-    expect(h.gh.dispatches).toHaveLength(1);
+    expect(h.gh.dispatches.filter((d) => d.file !== "factory-postmortem.yml")).toHaveLength(1);
   });
 
   it("keeps a reused draft PR draft while checks still fail", async () => {
@@ -356,7 +356,7 @@ describe("implement stage", () => {
     const h = makeTestDeps({ adapters: { claude }, spawn: scriptedSpawn({ test: [1, 1] }) });
     const n = approvedIssue(h);
     await run(h, n, BOT);
-    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.dispatches.filter((d) => d.file !== "factory-postmortem.yml")).toEqual([]);
     expect((await h.gh.findOpenPullByHead(`factory/issue-${n}`))?.draft).toBe(true);
   });
 });

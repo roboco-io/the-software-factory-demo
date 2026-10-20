@@ -13,6 +13,7 @@ import {
 } from "../state/machine";
 import { syncBoard } from "./board";
 import type { Settings, StageDeps } from "./deps";
+import { requestPostmortem } from "./postmortem-trigger";
 
 export const FailureReasonSchema = z.enum([
   "max_turns",
@@ -78,6 +79,10 @@ export async function moveTo(
   await deps.gh.addLabels(n, [stateLabel(to)]);
   await syncBoard(deps, n, to);
   if (reason) await deps.gh.comment(n, reason);
+  // 사람이 `@factory stop`으로 옮긴 needs-human은 정체가 아니다.
+  if (to === "needs-human" && actor !== "command") {
+    await requestPostmortem(deps, { issue: n, kind: "stall", event: "detected" });
+  }
   return true;
 }
 
@@ -187,7 +192,7 @@ export function crashRecord(
 }
 
 export function stepRecord(
-  role: "command" | "gate" | "deploy" | "intake" | "smoke",
+  role: "command" | "gate" | "deploy" | "intake" | "smoke" | "review",
   issue: number,
   pr: number | null,
   ok: boolean,

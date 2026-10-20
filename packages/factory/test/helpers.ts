@@ -7,6 +7,7 @@ import type { SpawnFn } from "../src/exec/process";
 import type { GitPort } from "../src/git/port";
 import { InMemoryGitHub } from "../src/github/memory";
 import { renderPrBody, type PrMeta } from "../src/report/pr";
+import { loadPostmortemPolicy } from "../src/policy/postmortem";
 import { loadRiskPolicy, type ChangedFile } from "../src/policy/risk";
 import { createRunStore } from "../src/runs/store";
 import { DEFAULT_BOT_LOGIN, type Settings, type StageDeps } from "../src/stages/deps";
@@ -102,6 +103,17 @@ export class FakeGit implements GitPort {
     return this.baseSha;
   }
   async resetSoft(): Promise<void> {}
+  // revert 결과를 테스트가 정한다. null이면 충돌.
+  revertResult: string | null = "revert-sha";
+  readonly reverts: { sha: string; message: string }[] = [];
+  readonly restores: { paths: string[]; fromSha: string }[] = [];
+  async revert(sha: string, message: string): Promise<string | null> {
+    this.reverts.push({ sha, message });
+    return this.revertResult;
+  }
+  async restorePaths(paths: string[], fromSha: string): Promise<void> {
+    this.restores.push({ paths: [...paths], fromSha });
+  }
   async isAncestor(): Promise<boolean> {
     return this.descendsFromBase;
   }
@@ -180,6 +192,7 @@ export function makeTestDeps(
     },
     agents: loadAgentsConfig(),
     policy: loadRiskPolicy(),
+    postmortem: loadPostmortemPolicy(),
     settings,
     now: () => now,
     log: (m) => logs.push(m),

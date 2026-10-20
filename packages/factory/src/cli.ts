@@ -23,6 +23,7 @@ import type { StageDeps } from "./stages/deps";
 import { evalLiveStage } from "./stages/eval-live";
 import { runPhase, type Phase, type PhasedStage } from "./stages/phased";
 import { runCollect } from "./stages/collect";
+import { postmortemStage } from "./stages/postmortem";
 import { reviewStage } from "./stages/review";
 import { createIntakeClient, runIntake } from "./stages/intake";
 import { normalizeSmokeResult, runSmokeReport } from "./stages/smoke";
@@ -59,6 +60,9 @@ const OPTIONS = {
   base: { type: "string" },
   result: { type: "string" },
   "excerpt-file": { type: "string" },
+  kind: { type: "string" },
+  event: { type: "string" },
+  "dry-run": { type: "boolean" },
 } as const;
 
 const PHASES: readonly Phase[] = ["prepare", "agent", "publish", "all"];
@@ -126,6 +130,28 @@ export const COMMANDS: Record<string, Handler> = {
     });
     ctx.stdout(outcome);
     return 0;
+  },
+  postmortem: (ctx, v) => {
+    const kind = reqStr(v, "kind");
+    if (kind !== "smoke" && kind !== "deploy" && kind !== "error" && kind !== "stall") {
+      throw new UsageError("--kind는 smoke|deploy|error|stall 중 하나다");
+    }
+    const event = reqStr(v, "event");
+    if (event !== "detected" && event !== "recovered") {
+      throw new UsageError("--event는 detected|recovered 중 하나다");
+    }
+    // 워크플로는 사용자 입력을 env로만 넘기므로 DRY_RUN env도 받는다.
+    const dryRun = v["dry-run"] === true || ctx.env.DRY_RUN === "true";
+    // 재생용 실패 원문. 파일이 없거나 비어 있으면 쓰지 않는다.
+    const file = str(v, "excerpt-file");
+    const raw = file && existsSync(file) ? readFileSync(file, "utf8").slice(0, 64_000) : "";
+    return phased(ctx, v, postmortemStage, {
+      issue: num(v, "issue"),
+      kind,
+      event,
+      ...(dryRun ? { dryRun } : {}),
+      ...(raw.trim() ? { excerptOverride: raw } : {}),
+    });
   },
   review: (ctx, v) => phased(ctx, v, reviewStage, { pr: num(v, "pr") }),
   fix: (ctx, v) => {

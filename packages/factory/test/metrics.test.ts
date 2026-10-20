@@ -37,6 +37,8 @@ const pull = (number: number, o: Partial<MergedPull> = {}): MergedPull => ({
   author: BOT,
   labels: [],
   mergedAt: "2026-10-10T00:00:00Z",
+  mergeSha: null,
+  headSha: null,
   ...o,
 });
 

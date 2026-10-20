@@ -8,8 +8,16 @@ import { formatCheckFailures } from "../exec/checks";
 import { addedCaseSlugs, IMPROVE_PATHS, isImprovePath } from "../policy/improve-paths";
 import { commitMessage } from "../report/commit";
 import { replaceMeta } from "../report/pr";
-import { codeBlock, codeCell, demote, inline, neutralizeRefs, writeMarker } from "../report/text";
-import { IMPROVE_MARKER, type Candidate } from "./collect";
+import {
+  codeBlock,
+  codeCell,
+  demote,
+  inline,
+  neutralizeRefs,
+  readMarker,
+  writeMarker,
+} from "../report/text";
+import { CandidateSchema, IMPROVE_MARKER, type Candidate } from "./collect";
 import {
   TimedResultSchema,
   FailureReasonSchema,
@@ -30,6 +38,9 @@ import { checkWorkdir } from "./worktree";
 import { latestReportMarker } from "./weekly-marker";
 
 const REPORT_LABEL = "factory:report";
+const POSTMORTEM_LABEL = "factory:postmortem";
+// 포스트모템이 장애 이슈에 남기는 개선 후보 표식. 값은 CandidateSchema다.
+export const POSTMORTEM_CANDIDATE_MARKER = "factory:postmortem-candidate";
 const IMPROVE_LABELS = ["factory:improve", "risk:T3"];
 const MAX_TITLE = 70;
 const MAX_SUMMARY = 3000;
@@ -43,6 +54,8 @@ export interface ImproveArgs {
 
 export interface ImprovePlan {
   issue: number;
+  // 후보가 나온 곳. weekly는 주간 리포트 이슈, postmortem은 장애 이슈다.
+  sourceKind: "weekly" | "postmortem";
   branch: string;
   candidate: Candidate;
   engine: "claude";
@@ -155,7 +168,9 @@ export function renderImproveBody(a: {
     "",
     "## 근거",
     "",
-    `주간 리포트 #${plan.issue}의 개선 후보다.`,
+    plan.sourceKind === "postmortem"
+      ? `포스트모템 #${plan.issue}의 개선 후보다.`
+      : `주간 리포트 #${plan.issue}의 개선 후보다.`,
     "",
     `- 범주: \`${codeCell(c.key)}\``,
     `- 횟수: ${c.count}회(서로 다른 이슈 ${c.distinct}건)`,
@@ -285,11 +300,13 @@ export const improveStage: PhasedStage<ImproveArgs, ImprovePlan, ImproveOutcome>
   async prepare(deps, args) {
     const issue = await deps.gh.getIssue(args.issue);
     // 리포트가 아닌 이슈에는 차단 사유 코멘트도 남기지 않도록 리포트 여부를 먼저 본다.
+    // 포스트모템 이슈는 사람이 연 요청일 수 있으므로 작성자 대신 봇이 쓴 후보 표식을 믿는다.
+    const sourceKind = issue.labels.includes(POSTMORTEM_LABEL) ? "postmortem" : "weekly";
     if (
       issue.isPullRequest ||
       issue.state !== "open" ||
-      !isBot(deps.settings, issue.author) ||
-      !issue.labels.includes(REPORT_LABEL)
+      (sourceKind === "weekly" &&
+        (!isBot(deps.settings, issue.author) || !issue.labels.includes(REPORT_LABEL)))
     ) {
       deps.log(`improve: #${args.issue} is not an open factory report; skipping`);
       return null;
@@ -299,12 +316,16 @@ export const improveStage: PhasedStage<ImproveArgs, ImprovePlan, ImproveOutcome>
       await deps.gh.comment(args.issue, `개선을 시작하지 않았다. ${blocked}`);
       return null;
     }
-    const marker = latestReportMarker(
-      issue,
-      await deps.gh.listComments(args.issue),
-      deps.settings.botLogin,
-    );
-    const candidate = marker?.candidates[0];
+    const issueComments = await deps.gh.listComments(args.issue);
+    let candidate: Candidate | null | undefined;
+    if (sourceKind === "postmortem") {
+      for (const c of issueComments.filter((c) => c.author === deps.settings.botLogin).reverse()) {
+        candidate = readMarker(c.body, POSTMORTEM_CANDIDATE_MARKER, CandidateSchema);
+        if (candidate) break;
+      }
+    } else {
+      candidate = latestReportMarker(issue, issueComments, deps.settings.botLogin)?.candidates[0];
+    }
     if (!candidate) {
       deps.log(`improve: report #${args.issue} has no candidate`);
       return null;
@@ -329,6 +350,7 @@ export const improveStage: PhasedStage<ImproveArgs, ImprovePlan, ImproveOutcome>
     const baseSha = await deps.git.revParse("origin/main");
     return {
       issue: args.issue,
+      sourceKind,
       branch,
       candidate,
       engine,

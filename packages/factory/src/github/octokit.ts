@@ -12,7 +12,7 @@ import {
   type Permission,
   type Pull,
 } from "./port";
-import { addedLinesFromPatch } from "../policy/risk";
+import { addedLinesFromPatch, deletedLinesFromPatch } from "../policy/risk";
 
 const FIND_BOARD = `query($org: String!, $q: String!) {
   organization(login: $org) {
@@ -255,6 +255,12 @@ export function createOctokitPort(o: {
     async closeIssue(n) {
       await octokit.rest.issues.update({ ...base, issue_number: n, state: "closed" });
     },
+    async reopenIssue(n) {
+      await octokit.rest.issues.update({ ...base, issue_number: n, state: "open" });
+    },
+    async editComment(id, body) {
+      await octokit.rest.issues.updateComment({ ...base, comment_id: id, body });
+    },
     async getPermission(user) {
       try {
         const { data } = await octokit.rest.repos.getCollaboratorPermissionLevel({
@@ -313,6 +319,7 @@ export function createOctokitPort(o: {
         filename: f.filename,
         ...(f.previous_filename ? { previousFilename: f.previous_filename } : {}),
         additions: addedLinesFromPatch(f.patch ?? ""),
+        deletions: deletedLinesFromPatch(f.patch ?? ""),
         additionCount: f.additions,
         ...(f.patch === undefined ? { patchMissing: true } : {}),
         ...(f.status === "removed" ? { removed: true } : {}),
@@ -420,6 +427,8 @@ export function createOctokitPort(o: {
               author: p.user?.login ?? "",
               labels: p.labels.map((l) => l.name ?? ""),
               mergedAt: p.merged_at,
+              mergeSha: p.merge_commit_sha ?? null,
+              headSha: p.head?.sha ?? null,
             });
         }
         const last = res.data.at(-1);

@@ -1,8 +1,8 @@
 import { TooManyFilesError, type ChangedFile, type CheckRun, type Pull } from "../github/port";
 import { classifyFiles } from "../policy/risk";
 import { latestVerdict } from "../report/comments";
-import { signatureTrailers } from "../report/commit";
-import { parsePrMeta } from "../report/pr";
+import { REVERT_TRAILER, signatureTrailers } from "../report/commit";
+import { parsePrMeta, type PrMeta } from "../report/pr";
 import { inline } from "../report/text";
 import { addsSkipEntries } from "./risk";
 import { moveTo, readState, record, runLink, stepRecord } from "./common";
@@ -61,6 +61,116 @@ async function findPull(deps: StageDeps, args: GateArgs): Promise<Pull | null> {
   return null;
 }
 
+// 되돌리기 PR의 meta.issue는 장애 이슈다. 장애 이슈는 in-review가 아니므로 상태를 옮기지 않고,
+// 결과는 장애 이슈 코멘트로만 알린다. 같은 head와 사유의 코멘트는 한 번만 쓴다.
+async function revertNote(
+  deps: StageDeps,
+  pull: Pull,
+  meta: PrMeta,
+  reason: string,
+  text: string,
+): Promise<GateDecision> {
+  const marker = `<!-- factory:revert-gate pr=${pull.number} sha=${pull.headSha} reason=${reason} -->`;
+  const prior = await deps.gh.listComments(meta.issue);
+  if (!prior.some((c) => c.body.includes(marker))) {
+    await deps.gh.comment(meta.issue, `${text}${runLink(deps.settings)}\n${marker}`);
+    await record(deps, stepRecord("gate", meta.issue, pull.number, false, reason, meta.round));
+  }
+  return "needs-human";
+}
+
+async function gateRevert(deps: StageDeps, pull: Pull, meta: PrMeta): Promise<GateDecision> {
+  const label = `되돌리기 PR #${pull.number}`;
+  if (meta.humanActions?.length) {
+    return revertNote(
+      deps,
+      pull,
+      meta,
+      "human_action",
+      `${label}의 에이전트가 사람만 할 수 있는 조치를 선언했다. 자동 병합하지 않는다.\n\n${meta.humanActions.map((a) => `- ${inline(a)}`).join("\n")}\n`,
+    );
+  }
+  const runs = await deps.gh.listCheckRuns(pull.headSha);
+  const checks = summarizeChecks(runs, deps.policy.requiredChecks);
+  if (checks.state === "fail") {
+    return revertNote(
+      deps,
+      pull,
+      meta,
+      checks.failing.includes("risk-tier") ? "risk_tier" : "revert_checks_failed",
+      `${label}의 체크가 실패했다: ${checks.failing.map((n) => `\`${n}\``).join(", ")}. 되돌리기 PR은 수정 라운드를 돌리지 않는다. 사람이 확인한다.`,
+    );
+  }
+  if (checks.state === "pending") return "pending";
+  let files: ChangedFile[];
+  try {
+    files = await deps.gh.listPullFiles(pull.number);
+  } catch (e) {
+    if (!(e instanceof TooManyFilesError)) throw e;
+    return revertNote(
+      deps,
+      pull,
+      meta,
+      "too_many_files",
+      `${label}의 변경 파일이 너무 많아 위험 등급을 판정할 수 없다. T3로 보고 자동 병합하지 않는다.`,
+    );
+  }
+  const risk = classifyFiles(flattenFiles(files), deps.policy);
+  if (risk.tier === "T2" || risk.tier === "T3") {
+    const deciding = risk.files
+      .filter((f) => f.tier === risk.tier)
+      .map((f) => `\`${f.file}\``)
+      .join(", ");
+    return revertNote(
+      deps,
+      pull,
+      meta,
+      `risk_${risk.tier.toLowerCase()}`,
+      `${label}은 위험 등급 ${risk.tier}이므로 자동 병합하지 않는다. CODEOWNERS(@serithemage)가 승인한 뒤 사람이 병합한다. 등급을 정한 파일: ${deciding}.`,
+    );
+  }
+  const preview = summarizeChecks(runs, PREVIEW_CHECKS);
+  if (preview.state === "fail") {
+    return revertNote(
+      deps,
+      pull,
+      meta,
+      "revert_preview_failed",
+      `${label}의 프리뷰 체크가 실패했다: ${preview.failing.map((n) => `\`${n}\``).join(", ")}. 자동 병합하지 않는다.`,
+    );
+  }
+  if (preview.state === "pending") return "pending";
+  const known = new Set([...deps.policy.requiredChecks, ...PREVIEW_CHECKS]);
+  const unlisted = runs
+    .filter((r) => !known.has(r.name) && checkState(r) === "fail")
+    .map((r) => r.name);
+  if (unlisted.length > 0) {
+    return revertNote(
+      deps,
+      pull,
+      meta,
+      "unlisted_check",
+      `${label}의 체크가 실패했다: ${unlisted.map((n) => `\`${n}\``).join(", ")}. 필수 체크는 아니지만 실패한 체크가 있으면 자동 병합하지 않는다.`,
+    );
+  }
+  const merged = await deps.gh.mergePull(pull.number, {
+    sha: pull.headSha,
+    title: `${pull.title} (#${pull.number})`,
+    message: `Refs #${meta.issue}\n\n${REVERT_TRAILER}: #${meta.issue}`,
+  });
+  if (!merged) {
+    return revertNote(
+      deps,
+      pull,
+      meta,
+      "merge_refused",
+      `${label} 자동 병합을 GitHub가 거부했다(충돌 또는 보호 규칙). 사람이 확인한다.`,
+    );
+  }
+  await record(deps, stepRecord("gate", meta.issue, pull.number, true, null, meta.round));
+  return "merged";
+}
+
 export async function runGate(deps: StageDeps, args: GateArgs): Promise<GateDecision> {
   const pull = await findPull(deps, args);
   if (!pull || pull.state !== "open" || pull.draft || pull.author !== deps.settings.botLogin)
@@ -74,6 +184,14 @@ export async function runGate(deps: StageDeps, args: GateArgs): Promise<GateDeci
   if (meta.role === "improve") {
     deps.log(`gate: 개선 PR #${pull.number}은 사람이 병합한다`);
     return "ignored";
+  }
+  if (meta.role === "revert") {
+    // 되돌리기 PR만 이 분기로 들어온다. 브랜치가 다르면 표식이 위조된 PR이므로 건드리지 않는다.
+    if (pull.headRef !== `factory/revert-issue-${meta.issue}`) {
+      deps.log(`gate ignored PR #${pull.number}: revert meta but head is ${pull.headRef}`);
+      return "ignored";
+    }
+    return gateRevert(deps, pull, meta);
   }
   const { state } = await readState(deps.gh, meta.issue);
   if (state !== "in-review") return "ignored";
@@ -292,6 +410,15 @@ export async function runOnClosed(deps: StageDeps, { pr }: { pr: number }): Prom
       meta.issue,
       pull.merged ? `개선 PR #${pr}이 병합되었다.` : `개선 PR #${pr}이 병합 없이 닫혔다.`,
     );
+    return false;
+  }
+  if (meta.role === "revert") {
+    // 되돌리기 PR의 meta.issue는 장애 이슈다. 상태 라벨은 바꾸지 않고 닫힘만 알린다.
+    if (!pull.merged)
+      await deps.gh.comment(
+        meta.issue,
+        `되돌리기 PR #${pr}이 병합 없이 닫혔다. 자동 되돌리기는 다시 시도하지 않는다. 사람이 확인한다.${runLink(deps.settings)}`,
+      );
     return false;
   }
   if (!pull.merged) {

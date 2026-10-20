@@ -25,15 +25,19 @@ export interface GitPort {
   isAncestor(base: string): Promise<boolean>;
   // HEAD를 sha(40자)로 되돌리되 변경 내용은 스테이지에 남긴다. publish가 커밋을 직접 다시 만들 때 쓴다.
   resetSoft(sha: string): Promise<void>;
+  // sha(40자) 커밋을 되돌리는 새 커밋을 message로 만들고 그 SHA를 돌려준다. 충돌하면 되돌리기를 중단하고 null.
+  revert(sha: string, message: string): Promise<string | null>;
+  // 지정한 경로만 fromSha(40자)의 내용으로 되돌려 작업 트리·스테이지에 올린다. fromSha에 없던 파일은 지운다. 커밋은 하지 않는다.
+  restorePaths(paths: string[], fromSha: string): Promise<void>;
 }
 
 function splitZ(out: string): string[] {
   return out.split("\0").filter((s) => s.length > 0);
 }
 
-const BRANCH = /^(main|factory\/issue-[1-9]\d*)$/;
+const BRANCH = /^(main|factory\/(issue|revert-issue)-[1-9]\d*)$/;
 const SHA = /^[0-9a-f]{40}$/;
-const START_POINT = /^((origin\/)?(main|factory\/issue-[1-9]\d*)|[0-9a-f]{40})$/;
+const START_POINT = /^((origin\/)?(main|factory\/(issue|revert-issue)-[1-9]\d*)|[0-9a-f]{40})$/;
 
 function assertRef(kind: string, value: string, re: RegExp): void {
   if (!re.test(value)) throw new Error(`git: invalid ${kind}: ${JSON.stringify(value)}`);
@@ -145,6 +149,27 @@ export function createGit(
     async resetSoft(sha) {
       assertRef("sha", sha, SHA);
       await git("reset", ["reset", "--soft", sha]);
+    },
+    async revert(sha, message) {
+      assertRef("sha", sha, SHA);
+      const r = await git("revert", ["revert", "--no-commit", sha], true);
+      if (r.code !== 0) {
+        await git("revert", ["revert", "--abort"], true);
+        return null;
+      }
+      await git("commit", ["commit", "--no-verify", "-m", message]);
+      return port.headSha();
+    },
+    async restorePaths(paths, fromSha) {
+      assertRef("sha", fromSha, SHA);
+      for (const p of paths) {
+        const exists = await git("cat-file", ["cat-file", "-e", `${fromSha}:${p}`], true);
+        if (exists.code === 0) {
+          await git("checkout", ["--literal-pathspecs", "checkout", fromSha, "--", p]);
+        } else {
+          await git("rm", ["--literal-pathspecs", "rm", "-rf", "--ignore-unmatch", "--", p]);
+        }
+      }
     },
     async isAncestor(baseSha) {
       assertRef("sha", baseSha, SHA);

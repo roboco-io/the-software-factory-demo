@@ -5,12 +5,13 @@ import { COLLECT } from "./collect";
 import { isBot, record, runLink, stepRecord } from "./common";
 import type { Settings, StageDeps } from "./deps";
 import { findIntakeIssue, intakeMarker } from "./intake";
+import { requestPostmortem } from "./postmortem-trigger";
 
 export const SMOKE_MARKER = "factory:smoke";
 export const SMOKE_KEY = "production";
 const SmokeStatusSchema = z.object({ status: z.enum(["failing", "recovered"]) });
 export type SmokeStatus = z.infer<typeof SmokeStatusSchema>["status"];
-export type SmokeAction = "created" | "commented" | "recovered" | "none";
+export type SmokeAction = "created" | "commented" | "recovered" | "refailed" | "none";
 // 워크플로가 Hurl·Playwright 출력 끝부분을 각 40줄 이내로 잘라 넘긴다. 여기서 한 번 더 상한을 건다.
 export const SMOKE_EXCERPT = { maxLines: 80, maxChars: 4000 } as const;
 
@@ -94,12 +95,18 @@ export async function runSmokeReport(
   if (result === "failure") {
     const failing = writeMarker(SMOKE_MARKER, { status: "failing" });
     if (issue) {
-      const streak = failureStreak(issue, await deps.gh.listComments(issue.number), deps.settings);
+      const comments = await deps.gh.listComments(issue.number);
+      const refailed = smokeStatus(issue, comments, deps.settings) === "recovered";
+      const streak = failureStreak(issue, comments, deps.settings);
       await deps.gh.comment(
         issue.number,
         `${CHECKS}가 실패했다(복구 없이 ${streak + 1}회째). 대상: ${target(deps.settings)}.${run}${excerptSection(excerpt)}\n\n${failing}`,
       );
       await record(deps, failureRecord(issue.number, excerpt));
+      if (refailed) {
+        await requestPostmortem(deps, { issue: issue.number, kind: "smoke", event: "detected" });
+        return { action: "refailed", issue: issue.number };
+      }
       return { action: "commented", issue: issue.number };
     }
     const body = [
@@ -114,6 +121,7 @@ export async function runSmokeReport(
       "source:smoke",
     ]);
     await record(deps, failureRecord(n, excerpt));
+    await requestPostmortem(deps, { issue: n, kind: "smoke", event: "detected" });
     return { action: "created", issue: n };
   }
   if (!issue) return { action: "none", issue: null };
@@ -125,5 +133,6 @@ export async function runSmokeReport(
     `복구됨: ${CHECKS}가 다시 통과했다. 대상: ${target(deps.settings)}.${run} 원인 조사와 이슈 종료는 사람이 정한다.\n\n${writeMarker(SMOKE_MARKER, { status: "recovered" })}`,
   );
   await record(deps, stepRecord("smoke", issue.number, null, true));
+  await requestPostmortem(deps, { issue: issue.number, kind: "smoke", event: "recovered" });
   return { action: "recovered", issue: issue.number };
 }

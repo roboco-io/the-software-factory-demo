@@ -1,6 +1,7 @@
-import { parseFactoryIssues } from "../report/commit";
+import { parseFactoryIssues, parseRevertIssues } from "../report/commit";
 import { moveTo, record, runLink, stepRecord } from "./common";
 import type { StageDeps } from "./deps";
+import { requestPostmortem } from "./postmortem-trigger";
 
 export const SUPERSEDED_SCAN = { days: 14, maxCommits: 50 } as const;
 
@@ -19,7 +20,21 @@ async function supersededIssues(deps: StageDeps, sha: string): Promise<number[]>
 
 export async function runDeployed(deps: StageDeps, { sha }: { sha: string }): Promise<number[]> {
   const done: number[] = [];
-  const own = parseFactoryIssues(await deps.gh.getCommitMessage(sha));
+  const message = await deps.gh.getCommitMessage(sha);
+  // 되돌리기 커밋은 장애 이슈를 닫지 않는다. 복구는 곧바로 dispatch하는 전체 스모크가 확인한다.
+  // 같은 커밋의 deploy 단계를 다시 실행해도 코멘트와 스모크 dispatch는 한 번만 한다.
+  let dispatchSmoke = false;
+  for (const issue of parseRevertIssues(message)) {
+    const marker = `<!-- factory:revert-deployed sha=${sha} -->`;
+    if ((await deps.gh.listComments(issue)).some((c) => c.body.includes(marker))) continue;
+    await deps.gh.comment(
+      issue,
+      `되돌리기 커밋 \`${sha.slice(0, 7)}\`이 프로덕션에 배포되었다. 전체 스모크를 실행해 복구를 확인한다.${runLink(deps.settings)}\n${marker}`,
+    );
+    dispatchSmoke = true;
+  }
+  if (dispatchSmoke) await deps.gh.dispatchWorkflow("factory-smoke.yml", {});
+  const own = parseFactoryIssues(message);
   const earlier = (await supersededIssues(deps, sha)).filter((i) => !own.includes(i));
   for (const issue of [...own, ...new Set(earlier)]) {
     // 이전 실행이 라벨만 바꾸고 닫기 전에 끝났다면 다시 실행할 때 닫는다.
@@ -63,6 +78,7 @@ export async function runDeployFailed(
     if (!moved) continue;
     await deps.gh.addLabels(issue, ["source:deploy"]);
     await record(deps, stepRecord("deploy", issue, null, false, "deploy_failed"));
+    await requestPostmortem(deps, { issue, kind: "deploy", event: "detected" });
     done.push(issue);
   }
   return done;

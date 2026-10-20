@@ -233,7 +233,9 @@ describe("runIntake hostile text and regressions", () => {
       expect(lines.filter((l) => l === fence)).toHaveLength(expected);
       expect(lines.filter((l) => l.startsWith(fence) && l !== fence && l !== open)).toEqual([]);
     }
-    expect(body.match(/<!--/g)).toHaveLength(1);
+    // 오류 이슈에는 intake 표식 외에 첫 발생 시각 표식(Task 4)이 하나 더 붙는다. 신뢰할 수 없는 텍스트가 만든 표식이 없는지 본다.
+    const stripped = body.replace(/<!-- factory:error-first-seen \{"at":"[^"<>]*"\} -->/g, "");
+    expect(stripped.match(/<!--/g)).toHaveLength(1);
   }
 
   it("links the closed issue when a fixed error comes back", async () => {
@@ -356,5 +358,21 @@ describe("runIntake repeat-comment throttle", () => {
     h.setNow(new Date("2026-10-13T03:30:00.000Z"));
     await run(h, 4, "2026-10-13T03:00:00.000Z"); // 24시간 이상 지남
     expect(await countComments(h)).toBe(2);
+  });
+});
+
+describe("runIntake postmortem trigger", () => {
+  it("requests an error postmortem only when a new source:error issue is created", async () => {
+    const h = makeTestDeps();
+    const { client } = fake({ errors: [error()], feedback: [] });
+    await runIntake(h.deps, client);
+    expect(h.gh.dispatches.filter((d) => d.inputs.kind === "error")).toEqual([
+      {
+        file: "factory-postmortem.yml",
+        inputs: { issue: "1", kind: "error", event: "detected" },
+      },
+    ]);
+    await runIntake(h.deps, fake({ errors: [error({ count: 2 })], feedback: [] }).client);
+    expect(h.gh.dispatches.filter((d) => d.inputs.kind === "error")).toHaveLength(1);
   });
 });

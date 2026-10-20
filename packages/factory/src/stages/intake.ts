@@ -3,6 +3,7 @@ import type { Issue } from "../github/port";
 import { cell, codeCell, inline, codeBlock, readMarker, writeMarker } from "../report/text";
 import { isBot, record, runLink, stepRecord } from "./common";
 import type { Settings, StageDeps } from "./deps";
+import { requestPostmortem } from "./postmortem-trigger";
 
 export const INTAKE_MARKER = "factory:intake";
 export const INTAKE_SOURCES = ["source:error", "source:feedback", "source:smoke"] as const;
@@ -152,6 +153,7 @@ export function renderErrorIssue(
       `같은 fingerprint의 에러가 다시 기록되면 새 이슈 대신 이 이슈에 코멘트로 횟수를 갱신한다. ${GO_NOTE}${runLink(settings)}`,
       "",
       intakeMarker("error", e.fingerprint),
+      writeMarker("factory:error-first-seen", { at: e.firstSeen }),
     ].join("\n"),
   };
 }
@@ -292,6 +294,11 @@ export async function runIntake(deps: StageDeps, client: IntakeClient): Promise<
           "source:error",
           "type:bug",
         ]);
+        await requestPostmortem(deps, {
+          issue: summary.created[summary.created.length - 1]!,
+          kind: "error",
+          event: "detected",
+        });
       }
       ack.errors.push({ fingerprint: e.fingerprint, lastSeen: e.lastSeen });
     } catch (err) {

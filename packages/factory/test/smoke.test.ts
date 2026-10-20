@@ -219,3 +219,28 @@ describe("production smoke files", () => {
     expect(spec).toMatch(/test\.skip\(\s*!feedbackAllowed\(process\.env\.E2E_BASE_URL\)/);
   });
 });
+
+describe("runSmokeReport postmortem triggers", () => {
+  const dispatched = (h: ReturnType<typeof makeTestDeps>) =>
+    h.gh.dispatches.map((d) => `${d.inputs.event}/${d.inputs.kind}#${d.inputs.issue}`);
+
+  it("requests detected on created, nothing on a plain repeat, recovered on recovery", async () => {
+    const h = makeTestDeps();
+    await runSmokeReport(h.deps, { result: "failure" });
+    await runSmokeReport(h.deps, { result: "failure" });
+    expect(dispatched(h)).toEqual(["detected/smoke#1"]);
+    await runSmokeReport(h.deps, { result: "success" });
+    expect(dispatched(h)).toEqual(["detected/smoke#1", "recovered/smoke#1"]);
+  });
+
+  it("reports refailed and requests a new detected postmortem when a recovered issue fails again", async () => {
+    const h = makeTestDeps();
+    await runSmokeReport(h.deps, { result: "failure" });
+    await runSmokeReport(h.deps, { result: "success" });
+    expect(await runSmokeReport(h.deps, { result: "failure" })).toEqual({
+      action: "refailed",
+      issue: 1,
+    });
+    expect(dispatched(h)).toEqual(["detected/smoke#1", "recovered/smoke#1", "detected/smoke#1"]);
+  });
+});

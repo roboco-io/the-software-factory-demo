@@ -1,0 +1,162 @@
+name: factory-postmortem
+run-name: factory-postmortem [factory/issue-${{ inputs.issue || github.event.issue.number }}] ${{ inputs.kind || 'closed' }} ${{ inputs.event || 'recovered' }}
+on:
+  workflow_dispatch:
+    inputs:
+      issue: { description: 장애 이슈 번호(정체는 요청 이슈 번호), required: true, type: string }
+      kind: { description: smoke|deploy|error|stall, required: true, type: string }
+      event: { description: detected|recovered, required: true, type: string }
+      dry_run:
+        {
+          description: 재생 모드(새 이슈에만 쓰고 장애 이슈는 건드리지 않는다),
+          required: false,
+          type: boolean,
+          default: false,
+        }
+      excerpt: { description: 재생용 실패 원문(선택), required: false, type: string }
+  # 닫힌 이슈가 source:error 또는 factory: 상태 라벨을 가지면 사후 분석 후보다. 필터는 단계가 한 번 더 한다.
+  issues:
+    types: [closed]
+permissions:
+  contents: read
+concurrency:
+  group: factory-postmortem-${{ inputs.issue || github.event.issue.number }}
+  cancel-in-progress: false
+env:
+  ISSUE: ${{ inputs.issue || github.event.issue.number }}
+  KIND: ${{ inputs.kind || (contains(github.event.issue.labels.*.name, 'source:error') && 'error' || 'stall') }}
+  EVENT: ${{ inputs.event || 'recovered' }}
+  DRY_RUN: ${{ inputs.dry_run }}
+  EXCERPT: ${{ inputs.excerpt }}
+  FACTORY_BOT_USER_ID: ${{ vars.FACTORY_BOT_USER_ID }}
+  CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+  CODEX_MODEL: ${{ vars.CODEX_MODEL }}
+  PI_MODEL: ${{ vars.PI_MODEL }}
+jobs:
+  # 사실 수집 단계다. 닫힌 이슈 이벤트는 관련 라벨이 있을 때만 이어 간다.
+  prepare:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'source:error') || contains(join(github.event.issue.labels.*.name, ','), 'factory:') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      has-plan: ${{ steps.prepare.outputs.has-plan }}
+      engine: ${{ steps.prepare.outputs.engine }}
+      plan-artifact-id: ${{ steps.plan.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v7
+        with: { ref: main, path: runtime, persist-credentials: false }
+      - uses: pnpm/action-setup@v6
+        with: { package_json_file: runtime/package.json }
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: runtime/.nvmrc
+          cache: pnpm
+          cache-dependency-path: runtime/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: runtime
+      - id: app
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+      - id: prepare
+        working-directory: runtime
+        run: |
+          printf '%s' "$EXCERPT" > "$RUNNER_TEMP/excerpt.txt"
+          pnpm -s factory postmortem --issue "$ISSUE" --kind "$KIND" --event "$EVENT" --excerpt-file "$RUNNER_TEMP/excerpt.txt" --phase prepare --state "$RUNNER_TEMP/plan.json"
+          jq -r '"has-plan=\(.plan != null)", "engine=\(.plan.engine // "")"' "$RUNNER_TEMP/plan.json" >> "$GITHUB_OUTPUT"
+        env:
+          FACTORY_TOKEN: ${{ steps.app.outputs.token }}
+      - id: plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: factory-plan
+          path: ${{ runner.temp }}/plan.json
+          retention-days: 7
+  agent:
+    needs: prepare
+    if: needs.prepare.outputs.has-plan == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # GitHub App 토큰, Cloudflare 시크릿이 없다. 공개 리포 체크아웃에 필요한 읽기 권한만 둔다.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with: { ref: main, path: runtime, persist-credentials: false }
+      - uses: actions/checkout@v7
+        with: { ref: main, path: work, fetch-depth: 0, persist-credentials: false }
+      - uses: pnpm/action-setup@v6
+        with: { package_json_file: runtime/package.json }
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: runtime/.nvmrc
+          cache: pnpm
+          cache-dependency-path: runtime/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: runtime
+      - uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.prepare.outputs.plan-artifact-id }}
+          path: ${{ runner.temp }}/in
+      # Codex CLI의 Linux 샌드박스(bubblewrap)는 비특권 user namespace가 필요하다.
+      # ubuntu-24.04 러너는 AppArmor가 이를 막아 쓰기·명령 실행이 조용히 실패하므로 해제한다.
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: agent (GitHub 토큰 없음, 배정된 엔진의 키만 있음)
+        working-directory: runtime
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          pnpm -s factory postmortem --issue "$ISSUE" --kind "$KIND" --event "$EVENT" --phase agent --state "$RUNNER_TEMP/in/plan.json" --outcome "$RUNNER_TEMP/out/outcome.json"
+        env:
+          FACTORY_WORKDIR: ${{ github.workspace }}/work
+          ANTHROPIC_API_KEY: ${{ needs.prepare.outputs.engine == 'claude' && secrets.ANTHROPIC_API_KEY || '' }}
+          CODEX_API_KEY: ${{ needs.prepare.outputs.engine == 'codex' && secrets.CODEX_API_KEY || '' }}
+          DEEPSEEK_API_KEY: ${{ needs.prepare.outputs.engine == 'pi' && secrets.DEEPSEEK_API_KEY || '' }}
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: factory-outcome
+          path: ${{ runner.temp }}/out/
+          if-no-files-found: ignore
+          retention-days: 7
+  publish:
+    needs: [prepare, agent]
+    # 취소된 run은 publish하지 않는다. agent job 실패·시간 초과는 publish가 crashed()로 처리한다.
+    if: ${{ !cancelled() && needs.prepare.outputs.has-plan == 'true' && needs.agent.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with: { ref: main, path: runtime, persist-credentials: false }
+      # 되돌리기 PR용 작업 트리다. 여기 있는 코드는 실행하지 않는다.
+      - uses: actions/checkout@v7
+        with: { ref: main, path: work, fetch-depth: 0, persist-credentials: false }
+      - uses: pnpm/action-setup@v6
+        with: { package_json_file: runtime/package.json }
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: runtime/.nvmrc
+          cache: pnpm
+          cache-dependency-path: runtime/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: runtime
+      # 계획은 prepare job이 올린 artifact(ID 고정)에서만 읽는다.
+      - uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.prepare.outputs.plan-artifact-id }}
+          path: ${{ runner.temp }}/in
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: factory-outcome
+          path: ${{ runner.temp }}/out
+      - id: app
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+      - working-directory: runtime
+        run: pnpm -s factory postmortem --issue "$ISSUE" --kind "$KIND" --event "$EVENT" --phase publish --state "$RUNNER_TEMP/in/plan.json" --outcome "$RUNNER_TEMP/out/outcome.json"
+        env:
+          FACTORY_TOKEN: ${{ steps.app.outputs.token }}
+          FACTORY_WORKDIR: ${{ github.workspace }}/work
