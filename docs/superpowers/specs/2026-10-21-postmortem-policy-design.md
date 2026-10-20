@@ -72,13 +72,13 @@ triggers:
   production: [source:smoke, source:deploy, source:error]
   stall:
     # 이 사유로 needs-human이 되면 정체로 본다. 런 기록의 failureReason 값이다.
-    reasons: [max_turns, timeout, budget, engine_error, invalid_output, publish_failed,
-              bundle_rejected, merge_refused, smoke_contract, preview_deploy, review_failed]
-    # 설계상 사람을 기다리는 사유. 정체로 보지 않는다.
-    exclude: [risk_t2, risk_t3, permission_denied]
+    reasons: [max_turns, timeout, budget, engine_error, invalid_output, merge_refused,
+              smoke_contract, preview_deploy, human_action, unlisted_check, risk_tier,
+              too_many_files, skip_txt, review_needs_human]
+    # 설계상 사람을 기다리거나 다른 경로가 맡는 사유. 정체로 보지 않는다.
+    exclude: [risk_t2, risk_t3, permission_denied, deploy_failed]
 revert:
   enabled: true
-  require: [single_candidate_or_evidence, failure_excerpt, file_overlap]
   reopen_request: true
 budget:
   per_incident_analyses: 2      # 1차 1회 + 사후 1회
@@ -91,7 +91,7 @@ agent:
   role: postmortem              # 엔진·모델은 factory/agents 설정의 역할 배정을 따른다
 ```
 
-정체 사유 목록의 정확한 값은 구현자가 현재 코드의 `failureReason`과 `stepRecord` 사유를 전수 조사해 확정한다. 위 목록은 2026-10-21 main에서 확인한 값과 PR #75가 추가하는 `smoke_contract`·`preview_deploy`를 합친 것이다. `review_failed`는 설계자가 붙인 이름이다. 2026-10-21 main에서 리뷰 실패는 별도 사유 없이 엔진의 `failureReason`(기본 `invalid_output`)으로 기록된다. 구현자는 리뷰 실패와 구현 실패를 구분할 사유를 추가할지 정한다.
+정체 사유 목록은 2026-10-21 main의 `failureReason`과 `stepRecord` 사유를 전수 조사해 확정했다(구현 계획에서 확정한 값이며 초안과 다르다). 정체로 보는 사유는 위 `reasons`이다. `risk_t2`·`risk_t3`·`permission_denied`는 설계상 사람을 기다리는 사유이고, `deploy_failed`는 배포 실패 경로(4.2)가 따로 맡으므로 `exclude`에 둔다. 초안의 `review_failed`는 `review_needs_human`으로 바뀌었다. 리뷰가 에이전트가 고칠 수 없는 지적을 남겨 사람에게 넘기는 경우를 이 사유로 새로 기록한다. 초안에 있던 `publish_failed`·`bundle_rejected`는 사람에게 넘기는 사유가 아니라서 뺐다. `revert.require`(확신 조건)는 정책 파일이 아니라 코드가 고정한다(4.4). 에이전트 역할의 엔진·모델은 `factory/agents.yml`의 `postmortem` 역할이 정한다.
 
 ### 4.2 트리거
 
@@ -99,7 +99,7 @@ agent:
 
 정체의 1차 분석은 이슈가 `factory:needs-human`으로 옮겨지고 그 런 기록의 사유가 `triggers.stall.reasons`에 있을 때 시작한다. `@factory stop`처럼 사람이 직접 옮긴 경우는 제외한다.
 
-사후 분석은 장애가 복구됐을 때 시작한다. 스모크는 "복구됨" 표식이 남을 때이다. 되돌리기 PR의 배포에 포함된 스모크(`deploy.yml`의 smoke job)가 성공해도 복구로 인정하고 "복구됨" 표식을 남긴다. 그래야 정기 스모크 주기(6시간)만큼 복구 확인이 늦어지지 않는다(설계자 판단). 배포 실패는 같은 커밋 계열의 다음 배포가 성공할 때이다. 프로덕션 오류는 이슈가 닫힐 때이다. 정체는 요청 이슈가 `merged` 또는 `deployed`가 되거나 사람이 닫을 때이다.
+사후 분석은 장애가 복구됐을 때 시작한다. 스모크는 "복구됨" 표식이 남을 때이다. `deploy.yml`의 smoke job은 curl 3개만 실행하고 복구 표식을 남기지 않는다. 그래서 되돌리기 커밋이 배포되면 `runDeployed`가 전체 스모크(`factory-smoke.yml`)를 즉시 dispatch하고, 그 스모크의 기존 복구 경로가 "복구됨" 표식을 남긴다. 정기 스모크 주기(6시간)를 기다리지 않는다는 의도는 같다(구현 계획에서 확정한 방식). 배포 실패는 같은 커밋 계열의 다음 배포가 성공할 때이다. 프로덕션 오류는 이슈가 닫힐 때이다. 정체는 요청 이슈가 `merged` 또는 `deployed`가 되거나 사람이 닫을 때이다.
 
 배포 실패(`runDeployFailed`)는 별도 장애 이슈를 만들지 않고 원인 요청 이슈에 `source:deploy`를 붙여 `needs-human`으로 옮긴다. 이때 원인 PR은 이미 알려져 있고, 배포가 실패했으므로 프로덕션은 대체로 이전 버전에 머문다. 그래서 배포 실패의 1차 분석은 진단만 하고 되돌리지 않는다. 배포가 일부만 반영되어 프로덕션이 실제로 깨졌다면 다음 스모크가 별도 장애로 잡고, 그 장애에서 되돌리기를 판정한다. 같은 이슈가 정체 트리거로도 잡히지 않도록 `deploy_failed`는 정체 사유에서 뺀다(설계자 판단).
 
@@ -131,7 +131,7 @@ agent:
 4. 원인 PR의 변경 파일이 실패 원문이 가리키는 영역과 겹친다. 겹침의 판정 방식은 구현자가 정한다. 다만 판정은 결정적이어야 하고 테스트로 고정해야 한다.
 5. 원인 PR 이후의 커밋과 되돌리기가 충돌하지 않는다.
 
-조건을 충족하면 코드가 `git revert`로 되돌리기 PR을 만든다. 이 PR에는 팩토리 표식(`role: "revert"`, `issue`: 장애 이슈 번호)을 붙인다. 원인 PR의 요청 이슈는 이미 `deployed`로 닫혀 있으므로 연결 대상이 아니다. gate는 `revert` 역할에 대해 `in-review` 상태 검사를 건너뛰는 분기를 둔다. deploy 단계는 `revert` 역할 커밋의 이슈를 상태 머신으로 옮기지 않고, 장애 이슈에 배포 결과만 코멘트로 남긴다. 이렇게 해야 다시 연 요청 이슈를 deploy가 곧바로 닫지 않는다(설계자 판단). 병합은 기존 gate가 위험 등급에 따라 처리한다. T0·T1은 체크가 통과하면 자동 병합된다. 되돌리기 PR에는 교차 리뷰 승인을 요구하지 않는다. 이것은 설계자의 판단이며, 이유는 복구 우선 결정이다. T2·T3이면 PR을 열고 CODEOWNERS 승인을 기다린다. 원인 PR에 마이그레이션이 있으면 앱 코드 되돌리기는 허용하되 마이그레이션 파일은 되돌리지 않는다. 그런 PR은 T2이므로 어차피 사람이 승인한다.
+조건을 충족하면 코드가 `git revert`로 되돌리기 PR을 만든다. 이 PR에는 팩토리 표식(`role: "revert"`, `issue`: 장애 이슈 번호)을 붙이고, `implementEngine`·`implementModel`에는 1차 분석을 한 엔진과 모델을 적는다. 병합 커밋 메시지는 `Factory-Issue` 대신 `Factory-Revert: #<장애 이슈>` trailer를 쓴다(구현 계획에서 확정). `Factory-Issue` trailer가 없어야 deploy가 상태 전이 대상으로 삼지 않는다. 원인 PR의 요청 이슈는 이미 `deployed`로 닫혀 있으므로 연결 대상이 아니다. gate는 `revert` 역할에 대해 `in-review` 상태 검사를 건너뛰는 분기를 둔다. deploy 단계는 `revert` 역할 커밋의 이슈를 상태 머신으로 옮기지 않고, 장애 이슈에 배포 결과만 코멘트로 남긴다. 이렇게 해야 다시 연 요청 이슈를 deploy가 곧바로 닫지 않는다(설계자 판단). 병합은 기존 gate가 위험 등급에 따라 처리한다. T0·T1은 체크가 통과하면 자동 병합된다. 되돌리기 PR에는 교차 리뷰 승인을 요구하지 않는다. 이것은 설계자의 판단이며, 이유는 복구 우선 결정이다. T2·T3이면 PR을 열고 CODEOWNERS 승인을 기다린다. 원인 PR에 마이그레이션이 있으면 앱 코드 되돌리기는 허용하되 마이그레이션 파일은 되돌리지 않는다. 그런 PR은 T2이므로 어차피 사람이 승인한다.
 
 조건을 하나라도 충족하지 못하면 되돌리지 않는다. 진단을 장애 이슈에 남기고, 장애 이슈를 사람에게 넘긴다.
 
@@ -161,7 +161,7 @@ agent:
 
 ### 4.7 개선 PR
 
-사후 분석이 끝나면 즉시 개선 PR을 연다. 기존 자기개선 단계(`improve`)를 재사용하고, 입력만 주간 리포트 후보 대신 포스트모템 기록으로 바꾼다. 개선 PR은 기존처럼 평가 케이스(`factory/evals/`)를 포함하고, T3이므로 사람이 승인한다.
+사후 분석이 끝나면 즉시 개선 PR을 연다. 기존 자기개선 단계(`improve`)를 재사용하고, 입력만 주간 리포트 후보 대신 포스트모템 기록으로 바꾼다. 별도 워크플로를 만들지 않고 `factory-weekly.yml`에 `workflow_dispatch` 입력 `issue`를 더한다. 이 입력이 있으면 report job을 건너뛰고 그 장애 이슈로 improve를 실행한다(구현 계획에서 확정). 후보는 장애 이슈에 `factory:postmortem` 라벨과 후보 표식 코멘트(`factory:postmortem-candidate`)로 남긴다. 개선 PR은 기존처럼 평가 케이스(`factory/evals/`)를 포함하고, T3이므로 사람이 승인한다.
 
 개선 PR의 입력에는 [사실]로 표시된 원인과 막지 못한 방어선만 넣는다. [추정]만 있는 장애에서는 개선 PR을 열지 않고, 기록에 "근거 부족으로 개선 제안 보류"라고 남긴다.
 
