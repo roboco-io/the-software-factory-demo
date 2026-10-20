@@ -14,6 +14,10 @@
 
 - 웹 홈 화면에 표시되는 사이트 이름을 `conduit`에서 `conveyor`로 변경했습니다. 이름 변경 후 프로덕션 스모크·배포 확인·PR 프리뷰 확인이 옛 이름을 찾아 실패하던 문제도 새 이름 기준으로 고쳤습니다. [PR #65](https://github.com/roboco-io/the-software-factory-demo/pull/65), [PR #64](https://github.com/roboco-io/the-software-factory-demo/pull/64)
 
+### 수정
+
+- 프로덕션 스모크가 실패하면 `source:smoke` 이슈 본문과 반복 실패 코멘트에 실패한 Hurl·Playwright 출력의 끝부분(각 40줄 이내)을 코드 블록으로 싣습니다. 같은 원문을 런 기록에도 남겨 주간 자기개선 리포트의 smoke 후보가 "(원문 없음)" 대신 실제 실패 원문을 대표 원문으로 보여 줍니다. 이전에는 run 링크만 있어서, 개선 에이전트가 이름 변경 후 옛 기대값(`conduit`)이 남은 원인([이슈 #66](https://github.com/roboco-io/the-software-factory-demo/issues/66))을 잘못 추정한 개선 PR을 만들었습니다.
+
 ## 2026-10-14
 
 ### 변경

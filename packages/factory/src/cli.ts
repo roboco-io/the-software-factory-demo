@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { buildDeps } from "./main";
@@ -57,6 +58,7 @@ const OPTIONS = {
   check: { type: "boolean" },
   base: { type: "string" },
   result: { type: "string" },
+  "excerpt-file": { type: "string" },
 } as const;
 
 const PHASES: readonly Phase[] = ["prepare", "agent", "publish", "all"];
@@ -286,7 +288,12 @@ export const COMMANDS: Record<string, Handler> = {
   "smoke-report": async (ctx, v) => {
     const result = normalizeSmokeResult(reqStr(v, "result"));
     if (result === null) throw new UsageError("--result <checks job 결과>가 필요하다");
-    ctx.stdout(JSON.stringify(await runSmokeReport(ctx.buildDeps(ctx.env, "all"), { result })));
+    // --excerpt-file은 실패 원문 발췌다. checks가 시간 초과 등으로 발췌를 못 남겼으면 파일이 없다. 그래도 보고는 한다.
+    const file = str(v, "excerpt-file");
+    const excerpt = file && existsSync(file) ? readFileSync(file, "utf8").slice(0, 64_000) : null;
+    ctx.stdout(
+      JSON.stringify(await runSmokeReport(ctx.buildDeps(ctx.env, "all"), { result, excerpt })),
+    );
     return 0;
   },
 };
