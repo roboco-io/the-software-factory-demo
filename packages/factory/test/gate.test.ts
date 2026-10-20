@@ -48,6 +48,84 @@ describe("checkState", () => {
   });
 });
 
+describe("revert PR", () => {
+  async function openRevert(files: string[] = ["apps/api/src/routes/tags.ts"], meta = {}) {
+    const h = makeTestDeps();
+    const incident = h.gh.addIssue({ title: "스모크 실패", labels: ["factory:needs-human"] });
+    const { pr } = await openBotPr(h, { role: "revert", issue: incident.number, ...meta }, files);
+    return { h, pr, incident: incident.number };
+  }
+  const bodies = async (h: TestHarness, n: number) =>
+    (await h.gh.listComments(n)).map((c) => c.body);
+
+  it("merges a green T1 revert PR without a review verdict or an in-review issue", async () => {
+    const { h, pr, incident } = await openRevert();
+    h.gh.setChecks("sha-a", GREEN);
+    expect(await runGate(h.deps, { pr })).toBe("merged");
+    expect(h.gh.merges).toHaveLength(1);
+    expect(h.gh.merges[0]!.message).toContain(`Refs #${incident}`);
+    expect(h.gh.merges[0]!.message).toContain(`Factory-Revert: #${incident}`);
+    expect(h.gh.merges[0]!.message).not.toContain("Factory-Issue");
+    expect((await h.gh.getIssue(incident)).labels).toEqual(["factory:needs-human"]);
+  });
+
+  it("asks CODEOWNERS on the incident issue for a T2 revert PR", async () => {
+    const { h, pr, incident } = await openRevert(["apps/api/package.json"]);
+    h.gh.setChecks("sha-a", GREEN);
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
+    expect(h.gh.merges).toEqual([]);
+    expect((await bodies(h, incident))[0]).toContain("CODEOWNERS");
+    expect((await h.gh.getIssue(incident)).labels).toEqual(["factory:needs-human"]);
+    // 같은 head로 다시 실행해도 코멘트를 반복하지 않는다.
+    await runGate(h.deps, { pr });
+    expect(await bodies(h, incident)).toHaveLength(1);
+  });
+
+  it("comments on the incident instead of moving state when a revert PR fails checks", async () => {
+    const { h, pr, incident } = await openRevert();
+    h.gh.setChecks("sha-a", { ...GREEN, unit: "failure" });
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
+    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.merges).toEqual([]);
+    const after = await h.gh.getIssue(incident);
+    expect(after.labels).toEqual(["factory:needs-human"]);
+    expect((await bodies(h, incident))[0]).toContain("unit");
+    const recs = await h.deps.runs.since(new Date(0));
+    expect(recs.at(-1)).toMatchObject({ role: "gate", issue: incident, pr, ok: false });
+    await runGate(h.deps, { pr });
+    expect(await bodies(h, incident)).toHaveLength(1);
+  });
+
+  it("still refuses a revert PR that touches T3 paths through risk-tier", async () => {
+    const { h, pr, incident } = await openRevert(["factory/risk-policy.yml"]);
+    h.gh.setChecks("sha-a", { ...GREEN, "risk-tier": "failure" });
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
+    expect(h.gh.merges).toEqual([]);
+    expect((await bodies(h, incident))[0]).toContain("risk-tier");
+  });
+
+  it("waits while checks are pending", async () => {
+    const { h, pr } = await openRevert();
+    expect(await runGate(h.deps, { pr })).toBe("pending");
+    expect(h.gh.merges).toEqual([]);
+  });
+
+  it("comments only when a revert PR was closed without merging", async () => {
+    const { h, pr, incident } = await openRevert();
+    h.gh.pulls.get(pr)!.state = "closed";
+    expect(await runOnClosed(h.deps, { pr })).toBe(false);
+    expect((await h.gh.getIssue(incident)).labels).toEqual(["factory:needs-human"]);
+    expect((await bodies(h, incident))[0]).toContain("병합 없이");
+  });
+
+  it("does not move the incident when a revert PR merges", async () => {
+    const { h, pr, incident } = await openRevert();
+    h.gh.humanMerge(pr, "m");
+    expect(await runOnClosed(h.deps, { pr })).toBe(false);
+    expect((await h.gh.getIssue(incident)).labels).toEqual(["factory:needs-human"]);
+  });
+});
+
 describe("runGate", () => {
   it("waits for evidence and dispatches a ci fix when evidence fails", async () => {
     const h = makeTestDeps();

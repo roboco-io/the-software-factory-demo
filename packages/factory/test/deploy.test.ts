@@ -81,6 +81,33 @@ describe("deploy result", () => {
   });
 });
 
+describe("revert deploy", () => {
+  it("comments on the incident, dispatches one full smoke and leaves the incident open", async () => {
+    const h = makeTestDeps();
+    const incident = h.gh.addIssue({ title: "스모크 실패", labels: ["factory:needs-human"] });
+    h.gh.commitMessages.set(
+      "rev1234",
+      `Revert "feat: x" (#9)\n\nFactory-Revert: #${incident.number}`,
+    );
+    expect(await runDeployed(h.deps, { sha: "rev1234" })).toEqual([]);
+    expect(h.gh.dispatches).toEqual([{ file: "factory-smoke.yml", inputs: {} }]);
+    const after = await h.gh.getIssue(incident.number);
+    expect(after.state).toBe("open");
+    expect(after.labels).toEqual(["factory:needs-human"]);
+    expect((await h.gh.listComments(incident.number)).map((c) => c.body)).toEqual([
+      expect.stringContaining("되돌리기"),
+    ]);
+  });
+
+  it("does not dispatch a smoke for an ordinary deploy", async () => {
+    const h = makeTestDeps();
+    const issue = h.gh.addIssue({ title: "a", labels: ["factory:merged"] });
+    h.gh.commitMessages.set("abc1234", `x\n\nFactory-Issue: #${issue.number}`);
+    await runDeployed(h.deps, { sha: "abc1234" });
+    expect(h.gh.dispatches).toEqual([]);
+  });
+});
+
 describe("deploy failure postmortem trigger", () => {
   it("requests a deploy postmortem for each moved issue", async () => {
     const h = makeTestDeps();

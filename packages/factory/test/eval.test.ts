@@ -205,7 +205,7 @@ describe("renderEvalText", () => {
 describe("runEvalPlan", () => {
   const HEAD = "a".repeat(40);
   const BASE = "b".repeat(40);
-  async function open(role: "implement" | "improve", author?: string) {
+  async function open(role: "implement" | "improve" | "revert", author?: string) {
     const h = makeTestDeps();
     const { pr, branch } = await openBotPr(h, { role });
     h.gh.setBranch(branch, HEAD, []);
@@ -223,6 +223,14 @@ describe("runEvalPlan", () => {
 
   it("requires nothing but forbids deletion for a bot implement PR", async () => {
     const { h, pr } = await open("implement");
+    expect(await runEvalPlan(h.deps, { pr, baseSha: BASE, headSha: HEAD })).toMatchObject({
+      requireNewCase: false,
+      allowDeletion: false,
+    });
+  });
+
+  it("treats a bot revert PR like an implement PR", async () => {
+    const { h, pr } = await open("revert");
     expect(await runEvalPlan(h.deps, { pr, baseSha: BASE, headSha: HEAD })).toMatchObject({
       requireNewCase: false,
       allowDeletion: false,
