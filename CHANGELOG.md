@@ -21,6 +21,7 @@
 
 ### 변경
 
+- 사람이 연 PR의 승인 절차를 정했습니다. 1인 조직이라 작성자가 자기 PR을 병합해야 하는데, GitHub은 자기 PR 승인을 막습니다. 그래서 CODEOWNER가 로컬 세션에서 승인을 요청하면 독립 리뷰 에이전트가 PR diff를 한 번 리뷰하고, 통과하면 리뷰 결과를 PR 코멘트로 남긴 뒤 병합합니다. 절차는 [AGENTS.md](AGENTS.md)에 있습니다. [PR #80](https://github.com/roboco-io/the-software-factory-demo/pull/80)
 - 웹 홈 화면에 표시되는 사이트 이름을 `conduit`에서 `conveyor`로 변경했습니다. 이름 변경 후 프로덕션 스모크·배포 확인·PR 프리뷰 확인이 옛 이름을 찾아 실패하던 문제도 새 이름 기준으로 고쳤습니다. [PR #65](https://github.com/roboco-io/the-software-factory-demo/pull/65), [PR #64](https://github.com/roboco-io/the-software-factory-demo/pull/64)
 
 ## 2026-10-14
