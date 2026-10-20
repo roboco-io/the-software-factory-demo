@@ -1,6 +1,7 @@
 import { parseFactoryIssues } from "../report/commit";
 import { moveTo, record, runLink, stepRecord } from "./common";
 import type { StageDeps } from "./deps";
+import { requestPostmortem } from "./postmortem-trigger";
 
 export const SUPERSEDED_SCAN = { days: 14, maxCommits: 50 } as const;
 
@@ -63,6 +64,7 @@ export async function runDeployFailed(
     if (!moved) continue;
     await deps.gh.addLabels(issue, ["source:deploy"]);
     await record(deps, stepRecord("deploy", issue, null, false, "deploy_failed"));
+    await requestPostmortem(deps, { issue, kind: "deploy", event: "detected" });
     done.push(issue);
   }
   return done;

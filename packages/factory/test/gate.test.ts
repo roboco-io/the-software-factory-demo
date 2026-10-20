@@ -96,7 +96,7 @@ describe("runGate", () => {
     await verdict(h, pr, "sha-a", "APPROVE");
     h.gh.setChecks("sha-a", { ...GREEN, "smoke-preview": "failure" });
     expect(await runGate(h.deps, { pr })).toBe("needs-human");
-    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.dispatches.filter((d) => d.file !== "factory-postmortem.yml")).toEqual([]);
     expect(h.gh.merges).toEqual([]);
     expect((await h.gh.getIssue(issue)).labels).toEqual(["factory:needs-human"]);
     expect((await h.gh.listComments(issue))[0]?.body).toContain("스모크");
@@ -118,7 +118,7 @@ describe("runGate", () => {
       "smoke-preview": "skipped",
     });
     expect(await runGate(h.deps, { pr })).toBe("needs-human");
-    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.dispatches.filter((d) => d.file !== "factory-postmortem.yml")).toEqual([]);
     expect((await h.deps.runs.since(new Date(0)))[0]).toMatchObject({
       failureReason: "preview_deploy",
     });
@@ -159,7 +159,7 @@ describe("runGate", () => {
     h.gh.setChecks("sha-a", { ...GREEN, "Analyze (actions)": "failure" });
     expect(await runGate(h.deps, { pr })).toBe("needs-human");
     expect(h.gh.merges).toEqual([]);
-    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.dispatches.filter((d) => d.file !== "factory-postmortem.yml")).toEqual([]);
     expect((await h.gh.listComments(issue))[0]?.body).toContain("Analyze (actions)");
     expect((await h.deps.runs.since(new Date(0)))[0]).toMatchObject({
       failureReason: "unlisted_check",

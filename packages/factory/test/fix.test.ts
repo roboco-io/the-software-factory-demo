@@ -219,7 +219,7 @@ describe("fix stage", () => {
     await h.gh.addLabels(pr, ["factory:round-2"]);
     await runPhase(fixStage, "all", h.deps, { pr, sha: "sha-a", reason: "ci" }, null);
     expect((await h.gh.getIssue(issue)).labels).toEqual(["factory:needs-human"]);
-    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.dispatches.filter((d) => d.file !== "factory-postmortem.yml")).toEqual([]);
   });
 
   it("a crash spends the round and retries, then escalates at round 3", async () => {
@@ -238,7 +238,7 @@ describe("fix stage", () => {
     await fixStage.crashed(h3.deps, plan3);
     expect((await h3.gh.getPull(b.pr)).labels).toContain("factory:round-3");
     expect((await h3.gh.getIssue(b.issue)).labels).toEqual(["factory:needs-human"]);
-    expect(h3.gh.dispatches).toEqual([]);
+    expect(h3.gh.dispatches.filter((d) => d.file !== "factory-postmortem.yml")).toEqual([]);
   });
 
   it("a crash after the push sends the new head to review instead of retrying fix", async () => {

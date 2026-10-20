@@ -113,7 +113,7 @@ describe("review stage", () => {
     const { pr, issue } = await openBotPr(h);
     await runPhase(reviewStage, "all", h.deps, { pr }, null);
     expect((await h.gh.getIssue(issue)).labels).toContain("factory:needs-human");
-    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.dispatches.filter((d) => d.file !== "factory-postmortem.yml")).toEqual([]);
   });
 
   it("truncates very large diffs", () => {
@@ -241,7 +241,7 @@ describe("review stage", () => {
     expect(codex.calls).toHaveLength(0);
     expect(await h.gh.listReviews(pr)).toHaveLength(0);
     expect((await h.gh.getIssue(issue)).labels).toContain("factory:needs-human");
-    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.dispatches.filter((d) => d.file !== "factory-postmortem.yml")).toEqual([]);
   });
 
   it("does not approve an empty diff", async () => {
@@ -253,7 +253,7 @@ describe("review stage", () => {
     expect((await h.gh.getIssue(issue)).labels).toContain("factory:needs-human");
     expect(codex.calls).toHaveLength(0);
     expect(await h.gh.listReviews(pr)).toHaveLength(0);
-    expect(h.gh.dispatches).toEqual([]);
+    expect(h.gh.dispatches.filter((d) => d.file !== "factory-postmortem.yml")).toEqual([]);
   });
 
   it("ignores a PR whose branch is not the factory branch of its issue", async () => {
