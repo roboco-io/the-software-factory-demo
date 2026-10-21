@@ -16,6 +16,8 @@
 
 ### 추가
 
+- 포럼 API에 답글 추천을 추가했습니다. 로그인한 사용자는 남의 답글을 한 번 추천하고 취소할 수 있으며(반복해도 결과가 같음), 답글 목록을 `sort=top`으로 추천순 정렬할 수 있습니다. 답글 응답의 `score`와 `voted`가 실제 값을 돌려줍니다. D1 마이그레이션 `0007_reply_votes.sql`이 추가됩니다. [#89](https://github.com/roboco-io/the-software-factory-demo/issues/89)
+- 포럼 API에 답글과 답글의 답글(스레드)을 추가했습니다(`/api/topics/:id/replies`, `/api/replies/:id`). 하위 답글이 있는 답글을 지우면 빈 본문의 삭제 표시로 자리만 남고, 답글이 달리면 토론 목록의 최근 활동순 정렬에 반영됩니다. D1 마이그레이션 `0006_replies.sql`이 추가됩니다. [PR #92](https://github.com/roboco-io/the-software-factory-demo/pull/92)
 - 포럼 API에 책 목차와 토론을 추가했습니다. API Worker의 `scheduled` 핸들러와 Cron Trigger가 `BOOK_SOURCE_URL`의 매니페스트를 동기화하고(revision이 바뀐 문서만 원고를 다시 읽음, 실패하면 기존 데이터 유지), `GET /api/book`·`/api/book/:docId`와 장·절에 연결하는 토론 CRUD(`/api/topics`)를 제공합니다. 책이 개정되었거나 절이 사라지면 토론의 `book.status`가 `revised`·`removed`로 표시됩니다. D1 마이그레이션 `0005_book_forum.sql`이 추가됩니다.
 - 책 토론 포럼으로 전환하기 위한 포럼 API 계약 스위트(`tests/forum/vendor/`)와 필수 체크 `forum-api`를 추가했습니다. 계약은 책 목차 동기화, 토론·답글·추천, 신고를 다루며 [계약 설명](tests/forum/vendor/CONTRACT.md)에 정리했습니다. 처음에는 모든 계약 파일이 건너뜀 목록(`tests/forum/skip.txt`)에 있고, 팩토리가 기능을 구현할 때마다 목록에서 지웁니다. 봇 구현 PR이 건너뜀 목록에 줄을 추가하는 것은 RealWorld와 같이 금지합니다. 프로덕션 웹 스모크는 "Global Feed" 문구 대신 홈 목록의 로딩 완료 표식을 확인하도록 바꿔, 홈 화면이 바뀌어도 스모크가 깨지지 않게 했습니다. 설계는 [책 토론 포럼 전환 설계](docs/superpowers/specs/2026-10-21-book-forum-design.md)에 있습니다.
 - 프로필 이미지 업로드를 추가했습니다. 로그인한 사용자가 PNG·JPEG·GIF·WebP(최대 1MB)를 올리면 아바타가 갱신됩니다. 이미지는 새 `images` 테이블(D1 마이그레이션)에 저장되고, 본문 크기는 스트림을 읽는 동안 제한해 Content-Length가 없는 초과 요청도 거부합니다(PR #69, 이슈 #67).
