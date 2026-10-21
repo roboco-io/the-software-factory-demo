@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
+import { assertAgentQuota } from "../lib/agent-quota";
 import { readWrapped, requireString } from "../lib/body";
 import { notFound, tooLong } from "../lib/errors";
 import { authedUserId, requireAuth } from "../middleware/auth";
@@ -51,6 +52,7 @@ async function fileReport(c: Context<AppEnv>, type: TargetType) {
   ).bind(userId, type, targetId);
   const existing = await find.first<ReportRow>();
   if (existing) return c.json({ report: serialize(existing) }, 200);
+  if (c.get("agent")) await assertAgentQuota(c.env.DB, userId);
   const inserted = await c.env.DB.prepare(
     `INSERT INTO reports (reporter_id, target_type, target_id, reason, created_at)
      VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,

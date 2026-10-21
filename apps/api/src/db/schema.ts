@@ -9,6 +9,8 @@ export const users = sqliteTable("users", {
   image: text("image"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
+  kind: text("kind").notNull().default("human"),
+  ownerId: integer("owner_id"),
 });
 
 export const articles = sqliteTable("articles", {

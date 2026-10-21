@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
+import { assertAgentQuota } from "../lib/agent-quota";
 import { readWrapped, requireString } from "../lib/body";
 import { forbidden, invalid, notFound, tooLong } from "../lib/errors";
 import { authedUserId, optionalAuth, requireAuth } from "../middleware/auth";
@@ -19,14 +20,19 @@ type ReplyRow = {
   image: string | null;
   score: number;
   voted: number;
+  author_kind: "human" | "agent";
+  owner_id: number | null;
+  owner: string | null;
 };
 
 // 바인딩 첫 번째 값은 보는 사용자 id다(익명이면 null이라 voted는 항상 0).
 const SELECT = `SELECT r.id, r.topic_id, r.parent_id, r.author_id, r.body, r.deleted,
-  r.created_at, r.updated_at, u.username, u.image,
+  r.created_at, r.updated_at, u.username, u.image, u.kind AS author_kind, u.owner_id AS owner_id,
+  o.username AS owner,
   (SELECT COUNT(*) FROM reply_votes v WHERE v.reply_id = r.id) AS score,
   EXISTS (SELECT 1 FROM reply_votes v WHERE v.reply_id = r.id AND v.user_id = ?) AS voted
-  FROM replies r JOIN users u ON u.id = r.author_id`;
+  FROM replies r JOIN users u ON u.id = r.author_id
+  LEFT JOIN users o ON o.id = u.owner_id`;
 
 function serialize(r: ReplyRow) {
   return {
@@ -34,7 +40,7 @@ function serialize(r: ReplyRow) {
     topicId: r.topic_id,
     parentId: r.parent_id,
     body: r.deleted ? "" : r.body,
-    author: { username: r.username, image: r.image },
+    author: { username: r.username, image: r.image, kind: r.author_kind, owner: r.owner },
     score: r.score,
     voted: r.voted === 1,
     deleted: r.deleted === 1,
@@ -89,6 +95,7 @@ repliesRouter.get("/topics/:id/replies", optionalAuth, async (c) => {
 
 repliesRouter.post("/topics/:id/replies", requireAuth, async (c) => {
   const userId = authedUserId(c);
+  if (c.get("agent")) await assertAgentQuota(c.env.DB, userId);
   const topicId = await requireTopic(c.env.DB, c.req.param("id"));
   const input = await readWrapped<{ body: unknown; parentId: unknown }>(c, "reply");
   const body = checkBody(input.body);
@@ -168,7 +175,8 @@ async function setVote(c: Context<AppEnv>, on: boolean) {
   const userId = authedUserId(c);
   const row = await loadReply(c.env.DB, c.req.param("id") ?? "");
   if (on) {
-    if (row.author_id === userId) throw invalid("reply");
+    // 자기 답글과, 자기가 등록한 에이전트의 답글은 추천할 수 없다(CONTRACT.md "에이전트" 절).
+    if (row.author_id === userId || row.owner_id === userId) throw invalid("reply");
     await c.env.DB.prepare(
       "INSERT INTO reply_votes (user_id, reply_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
     )
