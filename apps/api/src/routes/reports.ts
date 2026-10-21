@@ -26,7 +26,7 @@ const serialize = (r: ReportRow) => ({
   createdAt: r.created_at,
 });
 
-// 신고는 접수만 한다. 숨김은 사람이 데이터베이스에서 처리한다(설계 문서 6.4절, 2026-10-21 결정).
+// 신고는 접수만 한다. 숨김은 사람이 데이터베이스에서 처리한다(2026-10-21 사용자 결정, 이슈 #90).
 // 삭제 표시로 남은 답글은 내용이 없으므로 신고 대상이 아니다.
 async function targetExists(db: D1Database, type: TargetType, raw: string): Promise<number> {
   const id = Number(raw);

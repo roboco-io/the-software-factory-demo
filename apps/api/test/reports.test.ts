@@ -53,6 +53,7 @@ describe("reports", () => {
     expect(blank.status).toBe(422);
     expect(await blank.json()).toEqual({ errors: { reason: ["can't be blank"] } });
     const long = await report(`/replies/${replyId}/report`, a.token, "가".repeat(501));
+    expect(long.status).toBe(422);
     expect(await long.json()).toEqual({
       errors: { reason: ["is too long (maximum is 500 characters)"] },
     });
@@ -62,5 +63,15 @@ describe("reports", () => {
     expect(await noTopic.json()).toEqual({ errors: { topic: ["not found"] } });
     const noReply = await report("/replies/999999999/report", b.token, "x");
     expect(await noReply.json()).toEqual({ errors: { reply: ["not found"] } });
+
+    // 하위 답글이 있어 삭제 표시로 남은 답글은 내용이 없으므로 신고할 수 없다.
+    await api(`/topics/${topicId}/replies`, {
+      method: "POST",
+      token: b.token,
+      body: { reply: { body: "child", parentId: replyId } },
+    });
+    await api(`/replies/${replyId}`, { method: "DELETE", token: a.token });
+    const placeholder = await report(`/replies/${replyId}/report`, b.token, "x");
+    expect(placeholder.status).toBe(404);
   });
 });
