@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { api, register } from "./helpers";
 
@@ -30,6 +31,13 @@ const vote = async (id: number, token: string, method = "POST") => {
   const res = await api(`/replies/${id}/vote`, { method, token });
   return { status: res.status, json: (await res.json()) as { reply: Reply } };
 };
+
+const voteRows = async (replyId: number) =>
+  (
+    await env.DB.prepare("SELECT COUNT(*) AS n FROM reply_votes WHERE reply_id = ?")
+      .bind(replyId)
+      .first<{ n: number }>()
+  )?.n;
 
 const list = async (topicId: number, sort: string, token?: string) =>
   (
@@ -82,5 +90,23 @@ describe("reply votes", () => {
       204,
     );
     expect((await list(topicId, "top")).map((r) => r.id)).not.toContain(late.id);
+    expect(await voteRows(late.id)).toBe(0);
+  });
+
+  it("clears the votes of a reply that stays as a deleted placeholder", async () => {
+    const { a, b, c, topicId, early, late } = await setup();
+    await vote(early.id, b.token);
+    await vote(early.id, c.token);
+    await vote(late.id, b.token);
+    await api(`/topics/${topicId}/replies`, {
+      method: "POST",
+      token: b.token,
+      body: { reply: { body: "child", parentId: early.id } },
+    });
+    await api(`/replies/${early.id}`, { method: "DELETE", token: a.token });
+    const top = await list(topicId, "top");
+    expect(top[0]?.id).toBe(late.id);
+    expect(top.find((r) => r.id === early.id)?.score).toBe(0);
+    expect(await voteRows(early.id)).toBe(0);
   });
 });
