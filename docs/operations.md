@@ -49,7 +49,7 @@
 
 ## 운영자 안내: 자동 포스트모템
 
-프로덕션 장애와 요청 정체가 생기면 팩토리가 자동으로 원인을 분석하고 포스트모템 기록을 남긴다. 프로덕션 장애는 `source:smoke`, `source:deploy`, `source:error` 이슈이고, 정체는 요청 이슈가 `factory:needs-human`으로 옮겨진 경우다. 사람이 `@factory stop`으로 옮긴 `needs-human`은 정체로 보지 않는다. 분석은 각 단계가 장애 이슈를 처음 만들거나 상태를 옮기는 시점에 `factory-postmortem` 워크플로를 dispatch해 시작하며, 복구가 확인되면 사후 분석을 한 번 더 실행한다. 정기 스모크 주기를 기다리지 않는다. 분석 결과는 장애 이슈에 고정된 코멘트 하나로 쓰고 갱신한다. 닫힌 이슈 이벤트(`source:error` 또는 `factory:` 상태 라벨이 있는 이슈)도 사후 분석 후보로 같은 워크플로를 시작한다.
+프로덕션 장애와 요청 정체가 생기면 팩토리가 자동으로 원인을 분석하고 포스트모템 기록을 남긴다. 프로덕션 장애는 `source:smoke`, `source:deploy`, `source:error` 이슈이고, 정체는 요청 이슈가 `factory:needs-human`으로 옮겨진 경우다. 사람이 `@factory stop`으로 옮긴 `needs-human`은 정체로 보지 않는다. 분석은 각 단계가 장애 이슈를 처음 만들거나 상태를 옮기는 시점에 `factory-postmortem` 워크플로를 dispatch해 시작하며, 복구가 확인되면 사후 분석을 한 번 더 실행한다. 정기 스모크 주기를 기다리지 않는다. 분석 결과는 장애 이슈에 고정된 코멘트 하나로 쓰고 갱신한다. 닫힌 이슈 이벤트(`source:smoke`·`source:deploy`·`source:error` 또는 `factory:` 상태 라벨이 있는 이슈)도 사후 분석 후보로 같은 워크플로를 시작한다. 이때 장애 종류는 이슈 라벨로 정한다. `source:smoke`·`source:deploy`·`source:error`이면 각각 스모크·배포·에러 장애로, 어느 것도 없으면 정체로 본다.
 
 어떤 사건을 분석할지, 비용과 보고서 길이는 `factory/postmortem-policy.yml` 한 파일이 정한다. 기본값은 장애당 분석 2회(1차와 사후 각 1회), 분석 1회당 2 USD와 15분, 하루 합계 10 USD, 보고서 6000자이다. 예산을 바꾸려면 이 파일의 `budget` 값을 고치는 PR을 연다. 이 파일은 `factory/` 아래라 T3이므로 CODEOWNERS 승인 뒤에만 병합된다. 일일 상한에 도달하면 이후 장애는 분석 없이 사실 수집 결과만 장애 이슈에 남긴다. 분석이 시간 초과나 출력 형식 오류로 실패하면 재시도하지 않고 사유만 남긴다. 분석 에이전트의 엔진은 `factory/agents.yml`의 `postmortem` 역할이, 모델은 그 엔진의 환경 변수(예: `CLAUDE_MODEL`)가 정한다.
 

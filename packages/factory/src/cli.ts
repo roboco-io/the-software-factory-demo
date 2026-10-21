@@ -133,8 +133,14 @@ export const COMMANDS: Record<string, Handler> = {
   },
   postmortem: (ctx, v) => {
     const kind = reqStr(v, "kind");
-    if (kind !== "smoke" && kind !== "deploy" && kind !== "error" && kind !== "stall") {
-      throw new UsageError("--kind는 smoke|deploy|error|stall 중 하나다");
+    if (
+      kind !== "smoke" &&
+      kind !== "deploy" &&
+      kind !== "error" &&
+      kind !== "stall" &&
+      kind !== "auto"
+    ) {
+      throw new UsageError("--kind는 smoke|deploy|error|stall|auto 중 하나다");
     }
     const event = reqStr(v, "event");
     if (event !== "detected" && event !== "recovered") {

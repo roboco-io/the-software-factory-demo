@@ -224,6 +224,26 @@ describe("postmortem stage", () => {
     expect(await bodyOf(h, i.number)).toHaveLength(1);
   });
 
+  it("takes the incident kind from the issue label when the closed event passes auto (#66)", async () => {
+    const { h, claude } = setup();
+    await smokeIssue(h);
+    await run(h, args({ kind: "auto", event: "recovered" }));
+    expect(claude.calls).toHaveLength(1);
+    expect((await pmRecords(h)).at(-1)?.incident?.kind).toBe("smoke");
+  });
+
+  it("treats auto as a stall when the closed issue has no production label", async () => {
+    const { h, claude } = setup([step({ ...ANALYSIS, classification: "stall", causePr: null })]);
+    const i = h.gh.addIssue({ title: "req", labels: ["factory:needs-human"] });
+    await h.deps.runs.append({
+      ...stepRecord("gate", i.number, 9, false, "skip_txt"),
+      ts: "2026-10-12T10:00:00.000Z",
+    });
+    await run(h, { issue: i.number, kind: "auto", event: "recovered" });
+    expect(claude.calls).toHaveLength(1);
+    expect((await pmRecords(h)).at(-1)?.incident?.kind).toBe("stall");
+  });
+
   it("ignores a production incident whose issue lacks the trigger label", async () => {
     const { h, claude } = setup();
     h.gh.addIssue({ title: "x", labels: [] });

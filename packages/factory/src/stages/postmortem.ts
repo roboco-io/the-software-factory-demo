@@ -29,12 +29,13 @@ import type { StageDeps } from "./deps";
 import { IMPROVE_MARKER, type Candidate } from "./collect";
 import { POSTMORTEM_CANDIDATE_MARKER } from "./improve";
 import type { PhasedStage } from "./phased";
-import type { IncidentKind, PostmortemEvent } from "./postmortem-trigger";
+import { kindFromLabels, type IncidentKind, type PostmortemEvent } from "./postmortem-trigger";
 import { clampResult } from "./protect";
 
 export interface PostmortemArgs {
   issue: number;
-  kind: IncidentKind;
+  // auto는 이슈 라벨로 종류를 정한다(닫힌 이슈 이벤트).
+  kind: IncidentKind | "auto";
   event: PostmortemEvent;
   dryRun?: boolean;
   excerptOverride?: string;
@@ -88,7 +89,7 @@ const PRODUCTION_LABEL: Record<Exclude<IncidentKind, "stall">, string> = {
 // 트리거 필터(spec 4.2). 정체는 가장 최근 실패 사유가 정책 목록에 있고 제외 목록에 없을 때만 본다.
 async function triggered(
   deps: StageDeps,
-  args: PostmortemArgs,
+  args: PostmortemArgs & { kind: IncidentKind },
   labels: string[],
 ): Promise<boolean> {
   const { triggers } = deps.postmortem;
@@ -140,8 +141,9 @@ export const postmortemStage: PhasedStage<PostmortemArgs, PostmortemPlan, Postmo
 
   async prepare(deps, args) {
     const issue = await deps.gh.getIssue(args.issue);
-    if (!(await triggered(deps, args, issue.labels))) return null;
-    const incident = await resolveIncident(deps, args.issue, args.kind);
+    const kind = args.kind === "auto" ? kindFromLabels(issue.labels) : args.kind;
+    if (!(await triggered(deps, { ...args, kind }, issue.labels))) return null;
+    const incident = await resolveIncident(deps, args.issue, kind);
     const phase = args.event === "recovered" ? "followup" : "initial";
     const key = incidentKey(incident);
     const mine = (await deps.runs.since(new Date(0))).filter((r) => r.role === "postmortem");
@@ -174,7 +176,7 @@ export const postmortemStage: PhasedStage<PostmortemArgs, PostmortemPlan, Postmo
     });
     const model = resolveModel(deps.agents, role.engine, deps.settings.env);
     return {
-      args,
+      args: { ...args, kind },
       incident,
       timeline,
       phase,
