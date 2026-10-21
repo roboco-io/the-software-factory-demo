@@ -126,11 +126,21 @@ export async function syncBook(env: Env, opts: { ref?: string } = {}): Promise<n
     JSON.parse(await getText(`${base}/website/content-manifest.json`)),
   );
   // 절 해시가 비어 있는 문서(해시 도입 이전 동기화)는 revision이 같아도 다시 읽는다.
-  const existing = await env.DB.prepare(
-    `SELECT d.doc_id, d.revision,
-       EXISTS (SELECT 1 FROM book_sections s WHERE s.doc_id = d.doc_id AND s.hash IS NULL) AS missing_hash
-     FROM book_documents d`,
-  ).all<{ doc_id: string; revision: number; missing_hash: number }>();
+  // 패턴이 빠지거나 바뀌어도 revision 합이 같을 수 있으므로 저장된 패턴 목록도 함께 읽는다.
+  // 하위 요청 50회 한도 때문에 두 조회를 batch 한 번으로 보낸다.
+  const [existing, storedPatterns] = (await env.DB.batch([
+    env.DB.prepare(
+      `SELECT d.doc_id, d.revision,
+         EXISTS (SELECT 1 FROM book_sections s WHERE s.doc_id = d.doc_id AND s.hash IS NULL) AS missing_hash
+       FROM book_documents d`,
+    ),
+    env.DB.prepare("SELECT anchor FROM book_sections WHERE doc_id = ? ORDER BY position").bind(
+      PATTERNS_DOC,
+    ),
+  ])) as [
+    D1Result<{ doc_id: string; revision: number; missing_hash: number }>,
+    D1Result<{ anchor: string }>,
+  ];
   const known = new Map(existing.results.map((r) => [r.doc_id, r.revision]));
   const missingHash = new Set(existing.results.filter((r) => r.missing_hash).map((r) => r.doc_id));
 
@@ -152,12 +162,6 @@ export async function syncBook(env: Env, opts: { ref?: string } = {}): Promise<n
     patternsRevision += revision;
   }
 
-  // 패턴이 빠지거나 바뀌어도 revision 합이 같을 수 있으므로 저장된 패턴 목록과도 비교한다.
-  const storedPatterns = await env.DB.prepare(
-    "SELECT anchor FROM book_sections WHERE doc_id = ? ORDER BY position",
-  )
-    .bind(PATTERNS_DOC)
-    .all<{ anchor: string }>();
   const samePatterns = storedPatterns.results.map((r) => r.anchor).join(",") === patterns.join(",");
 
   const stmts: D1PreparedStatement[] = [];
