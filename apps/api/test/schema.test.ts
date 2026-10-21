@@ -18,6 +18,7 @@ describe("schema", () => {
       "feedback",
       "images",
       "replies",
+      "reply_votes",
       "tags",
       "topics",
       "users",
