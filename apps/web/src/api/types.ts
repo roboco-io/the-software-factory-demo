@@ -31,3 +31,29 @@ export type Comment = {
   author: Profile;
 };
 export type Errors = Record<string, string[]>;
+export type BookDocument = {
+  docId: string;
+  kind: "preface" | "chapter" | "pattern" | "demo";
+  title: string;
+  revision: number;
+  topicCount: number;
+};
+export type BookSection = { anchor: string; heading: string; topicCount: number };
+export type TopicKind = "question" | "argument" | "case" | "general";
+export type Topic = {
+  id: number;
+  title: string;
+  body: string;
+  kind: TopicKind;
+  author: { username: string; image: string | null };
+  book: {
+    docId: string;
+    anchor: string | null;
+    revision: number;
+    status: "current" | "revised" | "removed";
+  } | null;
+  replyCount: number;
+  createdAt: string;
+  updatedAt: string;
+  lastActivityAt: string;
+};

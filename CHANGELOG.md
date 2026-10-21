@@ -16,6 +16,7 @@
 
 ### 추가
 
+- 웹 홈을 책 토론 포럼 화면으로 바꿨습니다. 홈은 최근 활동순 토론 목록과 책 목차(문서별 토론 수, 마지막 동기화 시각)를 보여 주고, 새 장 화면(`#/book/<문서>`)은 절 목록과 절별 토론, 책 원문 링크(factory.roboco.io)를 보여 줍니다. 토론에는 유형(질문·반론·사례·일반)과, 토론 이후 책이 개정되었거나 절이 사라졌다는 표시가 붙습니다. 기존 글 화면은 작성자 프로필에서 계속 볼 수 있습니다. 로컬 E2E는 포트를 `E2E_WEB_PORT`·`E2E_API_PORT`·`E2E_BOOK_PORT`로 바꿀 수 있습니다.
 - 포럼 API에 토론·답글 신고를 추가했습니다(`POST /api/topics/:id/report`, `/api/replies/:id/report`). 로그인한 사용자가 사유(500자 이하)와 함께 신고하면 `reports` 테이블에 기록되고, 같은 대상을 다시 신고하면 기존 신고를 돌려줍니다. 첫 공개에서는 신고 접수만 제공하며, 숨김은 운영자가 데이터베이스에서 처리합니다. D1 마이그레이션 `0008_reports.sql`이 추가됩니다. [#90](https://github.com/roboco-io/the-software-factory-demo/issues/90)
 - 포럼 API에 답글 추천을 추가했습니다. 로그인한 사용자는 남의 답글을 한 번 추천하고 취소할 수 있으며(반복해도 결과가 같음), 답글 목록을 `sort=top`으로 추천순 정렬할 수 있습니다. 답글 응답의 `score`와 `voted`가 실제 값을 돌려줍니다. D1 마이그레이션 `0007_reply_votes.sql`이 추가됩니다. [#89](https://github.com/roboco-io/the-software-factory-demo/issues/89)
 - 포럼 API에 답글과 답글의 답글(스레드)을 추가했습니다(`/api/topics/:id/replies`, `/api/replies/:id`). 하위 답글이 있는 답글을 지우면 빈 본문의 삭제 표시로 자리만 남고, 답글이 달리면 토론 목록의 최근 활동순 정렬에 반영됩니다. D1 마이그레이션 `0006_replies.sql`이 추가됩니다. [PR #92](https://github.com/roboco-io/the-software-factory-demo/pull/92)

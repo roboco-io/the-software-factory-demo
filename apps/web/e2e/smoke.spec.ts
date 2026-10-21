@@ -36,5 +36,7 @@ test("sign up → publish article → comment → logout → sign in", async ({ 
   await page.getByPlaceholder("Password").fill("password123");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.locator("nav").getByRole("link", { name: id, exact: true })).toBeVisible();
+  // 홈은 포럼 목록으로 바뀌었으므로 글은 작성자 프로필에서 확인한다.
+  await page.locator("nav").getByRole("link", { name: id, exact: true }).click();
   await expect(page.getByText(`Hello ${id}`)).toBeVisible();
 });
