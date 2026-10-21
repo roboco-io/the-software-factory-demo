@@ -93,7 +93,7 @@ factory/
   evals/               자기개선 평가 케이스(P4)
 .github/
   workflows/           단계별 워크플로(5장)
-  ISSUE_TEMPLATE/      feature, bug, feedback 템플릿
+  ISSUE_TEMPLATE/      bug, feature, ops, docs 템플릿과 선택 화면(config.yml)
   CODEOWNERS           T2·T3 경로 사람 승인
 AGENTS.md              모든 엔진 공통 지침(자기개선 루프의 규칙 반영 대상)
 CLAUDE.md              AGENTS.md 참조

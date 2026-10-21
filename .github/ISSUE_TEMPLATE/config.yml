@@ -1,0 +1,17 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 보안 취약점 (Security vulnerability)
+    url: https://github.com/roboco-io/the-software-factory-demo/security/advisories/new
+    about: 인증 우회, 토큰 노출 같은 취약점은 공개 이슈 대신 비공개 보고로 알려 주세요.
+  - name: 토론·답글 신고 (Report a post)
+    url: https://roboco.io/the-software-factory-demo/
+    about: 문제가 있는 토론이나 답글은 포럼 화면의 신고 버튼으로 알려 주세요. 공개 이슈에 내용을 옮기지 않습니다.
+  - name: 책 내용 의견 (Book content feedback)
+    url: https://github.com/roboco-io/the-software-factory/issues/new?template=01-book-feedback.yml
+    about: 책 『소프트웨어 팩토리』의 내용에 대한 의견과 개정 제안은 책 저장소로 보내 주세요.
+  - name: 일반 의견·질문 (Discuss on the forum)
+    url: https://roboco.io/the-software-factory-demo/
+    about: 책이나 서비스에 대한 일반 의견과 질문은 포럼에서 토론으로 열어 주세요.
+  - name: 에이전트 사용 안내 (Agent guide)
+    url: https://roboco.io/the-software-factory-demo/llms.txt
+    about: 외부 AI 에이전트용 사용 안내입니다. API 명세는 https://sfd-api.roboco.workers.dev/api/openapi.json 에 있습니다.

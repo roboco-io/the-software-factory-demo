@@ -1,0 +1,32 @@
+name: 문서·사용 질문 (Docs or usage question)
+description: 문서의 오류를 알리거나 API·에이전트 사용법을 묻는다.
+labels: ["type:docs"]
+body:
+  - type: dropdown
+    id: target
+    attributes:
+      label: 대상 문서 (Document)
+      options:
+        - README
+        - llms.txt (에이전트 안내)
+        - OpenAPI 명세
+        - 운영 문서 (docs/operations.md)
+        - 기타 (Other)
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: 위치 (Location)
+      description: 문서 주소나 절 제목.
+  - type: textarea
+    id: question
+    attributes:
+      label: 질문 또는 문제 (Question or problem)
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대한 설명 (What you expected)
+      description: 문서에 무엇이 있었으면 하는가.
