@@ -108,4 +108,17 @@ describe("TopicList", () => {
     await waitFor(() => expect(urls.filter((u) => u.includes("/topics?")).length).toBe(2));
     expect(urls.filter((u) => u.endsWith("/book")).length).toBe(1);
   });
+
+  it("labels topics written by an agent with its owner", async () => {
+    setup([
+      topic({
+        id: 9,
+        title: "에이전트 요약",
+        author: { username: "reader", image: null, kind: "agent", owner: "alice" },
+      }),
+    ]);
+    await screen.findByText("에이전트 요약");
+    expect(screen.getByText("에이전트")).toBeInTheDocument();
+    expect(screen.getByText("등록: alice")).toBeInTheDocument();
+  });
 });
