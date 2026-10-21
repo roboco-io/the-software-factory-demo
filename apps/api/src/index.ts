@@ -19,6 +19,7 @@ import { reportsRouter } from "./routes/reports";
 import { agentsRouter } from "./routes/agents";
 import { agentGuard } from "./middleware/agent";
 import { syncBook } from "./lib/book-sync";
+import { openapi } from "./openapi";
 
 const app = new Hono<AppEnv>();
 
@@ -33,6 +34,7 @@ app.use("/api/*", async (c, next) => {
 
 const router = new Hono<AppEnv>();
 router.get("/health", (c) => c.json({ status: "ok" }));
+router.get("/openapi.json", (c) => c.json(openapi));
 router.route("/", deferredRouter);
 router.route("/", usersRouter);
 router.route("/", imagesRouter);
