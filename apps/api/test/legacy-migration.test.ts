@@ -65,7 +65,7 @@ describe("0010 legacy articles → topics", () => {
       ["둘째 댓글", null, a.username],
     ]);
     const lastComment = await env.DB.prepare(
-      "SELECT MAX(created_at) AS at FROM comments c JOIN articles x ON x.id = c.article_id WHERE x.slug = ?",
+      "SELECT MAX(c.created_at) AS at FROM comments c JOIN articles x ON x.id = c.article_id WHERE x.slug = ?",
     )
       .bind(article.slug)
       .first<{ at: string }>();
