@@ -78,14 +78,64 @@ describe("triage stage", () => {
     ]);
   });
 
-  it("skips issues that are not new, pull requests and issues opened by the bot", async () => {
+  it("skips issues past triage, pull requests and issues opened by the bot", async () => {
     const pi = createFakeAdapter([], "pi");
     const h = makeTestDeps({ adapters: { pi } });
-    const triaged = h.gh.addIssue({ title: "t", labels: ["factory:triaged"] });
+    const approved = h.gh.addIssue({ title: "t", labels: ["factory:approved"] });
+    const stuck = h.gh.addIssue({ title: "s", labels: ["factory:needs-human"] });
     const alert = h.gh.addIssue({ title: "차단기", author: BOT, labels: ["factory:alert"] });
-    for (const n of [triaged.number, alert.number])
+    for (const n of [approved.number, stuck.number, alert.number])
       await runPhase(triageStage, "all", h.deps, { issue: n }, null);
     expect(pi.calls).toHaveLength(0);
+  });
+
+  it("re-triages an already triaged issue without moving its state", async () => {
+    const pi = createFakeAdapter(loadFakeScript("triage-feature"), "pi");
+    const h = makeTestDeps({ adapters: { pi } });
+    const issue = h.gh.addIssue({
+      title: "t",
+      body: "수정한 본문",
+      labels: ["factory:triaged", "type:bug"],
+    });
+    await runPhase(triageStage, "all", h.deps, { issue: issue.number }, null);
+    expect(pi.calls[0]?.prompt).toContain("수정한 본문");
+    expect((await h.gh.getIssue(issue.number)).labels.sort()).toEqual([
+      "factory:triaged",
+      "type:feature",
+    ]);
+    const comments = await h.gh.listComments(issue.number);
+    expect(comments).toHaveLength(1);
+    expect(comments[0]?.body).toContain("### 트리아지 결과 (본문 수정 후 다시 판정)");
+    expect((await h.deps.runs.since(new Date(0)))[0]).toMatchObject({ role: "triage", ok: true });
+  });
+
+  it("stops re-triaging after two re-triages of the same issue", async () => {
+    const pi = createFakeAdapter([], "pi");
+    const h = makeTestDeps({ adapters: { pi } });
+    const issue = h.gh.addIssue({ title: "t", labels: ["factory:triaged"] });
+    h.gh.addComment(issue.number, BOT, "### 트리아지 결과\n\n- 분류: x");
+    h.gh.addComment(issue.number, BOT, "### 트리아지 결과 (본문 수정 후 다시 판정)\n");
+    h.gh.addComment(issue.number, BOT, "본문 수정 후 다시 판정하던 트리아지 에이전트가 실패했다.");
+    h.gh.addComment(issue.number, "outsider", "### 트리아지 결과 (흉내)");
+    expect(await triageStage.prepare(h.deps, { issue: issue.number })).toBeNull();
+    expect(pi.calls).toHaveLength(0);
+  });
+
+  it("keeps the earlier triage when a re-triage fails", async () => {
+    const pi = createFakeAdapter(
+      [{ result: { summary: "nope" } }, { result: { summary: "{}" } }],
+      "pi",
+    );
+    const h = makeTestDeps({ adapters: { pi } });
+    const issue = h.gh.addIssue({ title: "t", labels: ["factory:triaged", "type:feature"] });
+    await runPhase(triageStage, "all", h.deps, { issue: issue.number }, null);
+    expect((await h.gh.getIssue(issue.number)).labels.sort()).toEqual([
+      "factory:triaged",
+      "type:feature",
+    ]);
+    const body = (await h.gh.listComments(issue.number))[0]?.body ?? "";
+    expect(body).toContain("출력 형식 오류");
+    expect(body).toContain("이전 트리아지 결과를 유지한다");
   });
 
   it("moves to needs-human with the reason when the output stays invalid", async () => {
@@ -110,6 +160,18 @@ describe("triage stage", () => {
       "factory:triaged",
       "type:feature",
     ]);
+  });
+
+  it("keeps the triaged state when a re-triage crashes", async () => {
+    const pi = createFakeAdapter(loadFakeScript("triage-feature"), "pi");
+    const h = makeTestDeps({ adapters: { pi } });
+    const issue = h.gh.addIssue({ title: "t", labels: ["factory:triaged"] });
+    const plan = (await triageStage.prepare(h.deps, { issue: issue.number }))!;
+    await triageStage.crashed(h.deps, plan);
+    expect((await h.gh.getIssue(issue.number)).labels).toEqual(["factory:triaged"]);
+    expect((await h.gh.listComments(issue.number))[0]?.body).toContain(
+      "이전 트리아지 결과를 유지한다",
+    );
   });
 
   it("does nothing in publish when the state changed after prepare", async () => {
