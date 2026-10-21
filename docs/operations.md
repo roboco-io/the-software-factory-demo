@@ -73,7 +73,7 @@
 
 사람이 일부러 넣은 버그를 버그 이슈로 접수하고, 팩토리가 재현 테스트를 먼저 쓴 뒤 고쳐 배포하는 과정을 보여 준다. 필수 체크 `evidence`가 재현 테스트가 수정 전 코드에서 실패하고 수정 후 코드에서 통과하는지 확인하는 장면이 핵심이다.
 
-- 버그: `apps/web/src/components/BookToc.tsx`에서 목차를 `data.documents.map(...)` 대신 `data.documents.slice(0, 20).map(...)`으로 그린다. 홈의 "책 목차"가 앞의 20개 문서(머리말과 1-19장)만 보여 주고 20장·패턴 15개·데모 해설 9개가 사라진다.
+- 버그: `apps/web/src/components/BookToc.tsx`에서 목차를 `data.documents.map(...)` 대신 `data.documents.slice(0, 20).map(...)`으로 그린다. 홈의 "책 목차"가 앞의 20개 문서(서문과 1-19장)만 보여 주고 20장·패턴 15개·데모 해설 9개가 사라진다.
 - 2026-10-21 로컬 확인: 이 버그를 심어도 웹 단위 테스트 134개와 웹 E2E 5개가 통과했다(E2E 고정 데이터의 문서는 4개라 잘리지 않는다). 그래서 팩토리는 새 재현 테스트를 써야 하고, `evidence`가 그 테스트를 수정 전 코드에서 실행해 실패를 확인할 수 있다.
 - 프로덕션 조건: 책 문서가 21개 이상이어야 보인다. 2026-10-21 기준 45개다.
 - 리허설 순서:
@@ -84,7 +84,7 @@
   5. 수정 PR의 `ci` run에서 `evidence` job 로그의 "evidence 통과"와 "base 종료 코드 1, head 종료 코드 0" 줄을 보여 준다. 재현 테스트는 Vitest(`apps/web/src/**/*.test.tsx`)여야 한다.
   6. 이슈 라벨이 `factory:deployed`가 되고 닫히면 홈 목차에 45개 문서가 모두 보이는 것을 보여 준다.
 - 되돌리기: 팩토리가 고치지 못하거나 리허설을 중단하면, 2번 PR을 되돌리는 사람 PR을 병합한다.
-- evidence 음성 대조: `evidence`는 봇이 연 PR만 판정하므로 사람 PR로는 음성 대조를 만들 수 없다. main에서 갈라진 브랜치에 base에서도 통과하는 테스트만 커밋한 뒤 로컬에서 판정 CLI를 직접 실행해 "재현 테스트가 수정 전 코드에서 실패하지 않는다"는 거절을 확인한다.
+- evidence 음성 대조: `evidence`는 봇이 연 PR만 판정하므로 사람 PR로는 음성 대조를 만들 수 없다. 대신 로컬에서 판정 CLI를 직접 실행한다. main에서 갈라진 브랜치에 base에서도 통과하는 테스트(예: `expect(1 + 1).toBe(2)`)만 커밋한 뒤, `EVIDENCE_PLAN='{"pr":1,"required":true,"reason":"local","reasonCode":"evaluated","baseSha":"<main SHA>","headSha":"<HEAD SHA>","testFiles":["<테스트 경로>"]}' pnpm -s factory evidence-run`을 실행하면 "evidence 실패 … 수정 전(base) 코드에서도 통과했다"와 종료 코드 1이 나온다.
 
 ## 데모 리허설: 실패 패턴 심기
 
