@@ -6,6 +6,8 @@
 
 ## 미출시 (Unreleased)
 
+## 2026-10-21
+
 ### 수정
 
 - 스모크·배포 장애 이슈를 닫으면 자동 포스트모템이 사후 분석을 실행합니다. 닫힌 이슈 이벤트는 장애 종류를 이슈 라벨(`source:smoke`·`source:deploy`·`source:error`)로 정하고, 어느 라벨도 없을 때만 정체로 봅니다. 이전에는 `source:error`가 아닌 이슈를 모두 정체로 넘겨, 스모크 장애 [#66](https://github.com/roboco-io/the-software-factory-demo/issues/66)을 닫았을 때 분석 없이 건너뛰었습니다.
@@ -24,9 +26,10 @@
 - 포럼 API에 답글 추천을 추가했습니다. 로그인한 사용자는 남의 답글을 한 번 추천하고 취소할 수 있으며(반복해도 결과가 같음), 답글 목록을 `sort=top`으로 추천순 정렬할 수 있습니다. 답글 응답의 `score`와 `voted`가 실제 값을 돌려줍니다. D1 마이그레이션 `0007_reply_votes.sql`이 추가됩니다. [#89](https://github.com/roboco-io/the-software-factory-demo/issues/89)
 - 포럼 API에 답글과 답글의 답글(스레드)을 추가했습니다(`/api/topics/:id/replies`, `/api/replies/:id`). 하위 답글이 있는 답글을 지우면 빈 본문의 삭제 표시로 자리만 남고, 답글이 달리면 토론 목록의 최근 활동순 정렬에 반영됩니다. D1 마이그레이션 `0006_replies.sql`이 추가됩니다. [PR #92](https://github.com/roboco-io/the-software-factory-demo/pull/92)
 - 포럼 API에 책 목차와 토론을 추가했습니다. API Worker의 `scheduled` 핸들러와 Cron Trigger가 `BOOK_SOURCE_URL`의 매니페스트를 동기화하고(revision이 바뀐 문서만 원고를 다시 읽음, 실패하면 기존 데이터 유지), `GET /api/book`·`/api/book/:docId`와 장·절에 연결하는 토론 CRUD(`/api/topics`)를 제공합니다. 책이 개정되었거나 절이 사라지면 토론의 `book.status`가 `revised`·`removed`로 표시됩니다. D1 마이그레이션 `0005_book_forum.sql`이 추가됩니다.
-- 책 토론 포럼으로 전환하기 위한 포럼 API 계약 스위트(`tests/forum/vendor/`)와 필수 체크 `forum-api`를 추가했습니다. 계약은 책 목차 동기화, 토론·답글·추천, 신고를 다루며 [계약 설명](tests/forum/vendor/CONTRACT.md)에 정리했습니다. 처음에는 모든 계약 파일이 건너뜀 목록(`tests/forum/skip.txt`)에 있고, 팩토리가 기능을 구현할 때마다 목록에서 지웁니다. 봇 구현 PR이 건너뜀 목록에 줄을 추가하는 것은 RealWorld와 같이 금지합니다. 프로덕션 웹 스모크는 "Global Feed" 문구 대신 홈 목록의 로딩 완료 표식을 확인하도록 바꿔, 홈 화면이 바뀌어도 스모크가 깨지지 않게 했습니다. 설계는 [책 토론 포럼 전환 설계](docs/superpowers/specs/2026-10-21-book-forum-design.md)에 있습니다.
+- 책 토론 포럼으로 전환하기 위한 포럼 API 계약 스위트(`tests/forum/vendor/`)와 필수 체크 `forum-api`를 추가했습니다. 계약은 책 목차 동기화, 토론·답글·추천, 신고를 다루며 [계약 설명](tests/forum/vendor/CONTRACT.md)에 정리했습니다. 처음에는 모든 계약 파일을 건너뜀 목록(`tests/forum/skip.txt`)에 두고 기능을 구현할 때마다 지웠으며, 2026-10-21 기준 12개 모두 활성화되었습니다. 봇 구현 PR이 건너뜀 목록에 줄을 추가하는 것은 RealWorld와 같이 금지합니다. 프로덕션 웹 스모크는 "Global Feed" 문구 대신 홈 목록의 로딩 완료 표식을 확인하도록 바꿔, 홈 화면이 바뀌어도 스모크가 깨지지 않게 했습니다. 설계는 [책 토론 포럼 전환 설계](docs/superpowers/specs/2026-10-21-book-forum-design.md)에 있습니다.
 - 프로필 이미지 업로드를 추가했습니다. 로그인한 사용자가 PNG·JPEG·GIF·WebP(최대 1MB)를 올리면 아바타가 갱신됩니다. 이미지는 새 `images` 테이블(D1 마이그레이션)에 저장되고, 본문 크기는 스트림을 읽는 동안 제한해 Content-Length가 없는 초과 요청도 거부합니다(PR #69, 이슈 #67).
 - 데모 앱과 팩토리 대시보드에 Google Analytics 4를 추가했습니다. `roboco.io`에서 방문자가 동의 배너에서 동의한 뒤에만 GA를 불러오고, "통계 설정"에서 동의를 철회하면 수집을 끄고 데모 전용 GA 쿠키를 지웁니다. 로컬 실행과 PR 프리뷰에서는 배너와 GA를 불러오지 않습니다. [PR #68](https://github.com/roboco-io/the-software-factory-demo/pull/68)
+- 프로덕션 장애와 요청 정체를 자동으로 분석하는 포스트모템을 추가했습니다. 장애가 감지되거나 복구되면 팩토리가 타임라인을 모아 원인을 분석하고, 비난 없는 형식의 기록을 장애 이슈에 남깁니다. 실패 원문이 있고 인용이 원인 PR의 변경과 겹치는 등 확신 조건을 모두 충족하면 원인 PR을 되돌리는 PR을 열어 T0·T1은 자동 병합하고 T2·T3는 사람 승인을 기다립니다. 복구가 확인되면 원인 PR의 요청 이슈를 다시 열고, 사실로 확인된 원인이 있으면 개선 PR을 위임합니다. 정책과 예산은 `factory/postmortem-policy.yml`에서 바꾸며(장애당 분석 2회, 회당 2 USD, 하루 10 USD), 운영 방법은 [운영 문서](docs/operations.md)에 있습니다. [PR #78](https://github.com/roboco-io/the-software-factory-demo/pull/78)
 
 ### 변경
 
@@ -35,16 +38,7 @@
 - RealWorld 공식 Hurl 계약 스위트를 은퇴시켰습니다. 필수 체크 `realworld-api`와 CI job, `tests/realworld/`, `scripts/realworld-api.sh`·`vendor-realworld.sh`, 관련 보호 경로(T3)·CODEOWNERS 항목을 제거했고, 봇 구현 PR이 건너뜀 목록에 줄을 추가하지 못하게 하는 규칙(F21)은 이제 포럼 건너뜀 목록에만 적용됩니다. 구현 요청의 수용 기준과 에이전트 프롬프트도 포럼 계약 기준으로 바꿨습니다. RealWorld 기준 데모 리허설 문서에는 그대로 재현할 수 없다는 안내를 붙였습니다. 이전 Hurl 테스트의 MIT 고지는 git 이력에 남습니다.
 - 프로덕션 스모크(`tests/smoke/readonly.hurl`)와 배포 직후 검사가 RealWorld 글·태그 목록 대신 포럼의 책 목차(`/api/book`)와 토론 목록(`/api/topics`)을 확인합니다. RealWorld 경로를 지우기 전에 스모크의 의존을 먼저 옮긴 것입니다(설계 6.3절).
 - 기존 RealWorld 글을 책과 연결하지 않은 일반 토론으로, 댓글을 최상위 답글로 옮겼습니다(D1 마이그레이션 `0010_legacy_articles_to_topics.sql`). 글의 요약은 토론 본문 첫 문단이 되고, 태그와 즐겨찾기는 옮기지 않습니다. 원본 테이블은 남겨 두며, 이전 결과를 프로덕션에서 확인한 뒤 별도로 지웁니다. 배포 전 프로덕션 데이터 사본(글 12개, 댓글 0개)으로 로컬에서 적용해 12개가 모두 옮겨지는 것을 확인했습니다.
-- 웹 홈 화면에 표시되는 사이트 이름을 `conduit`에서 `conveyor`로 변경했습니다. 이름 변경 후 프로덕션 스모크·배포 확인·PR 프리뷰 확인이 옛 이름을 찾아 실패하던 문제도 새 이름 기준으로 고쳤습니다. [PR #65](https://github.com/roboco-io/the-software-factory-demo/pull/65), [PR #64](https://github.com/roboco-io/the-software-factory-demo/pull/64)
-
-## 2026-10-21
-
-### 추가
-
-- 프로덕션 장애와 요청 정체를 자동으로 분석하는 포스트모템을 추가했습니다. 장애가 감지되거나 복구되면 팩토리가 타임라인을 모아 원인을 분석하고, 비난 없는 형식의 기록을 장애 이슈에 남깁니다. 실패 원문이 있고 인용이 원인 PR의 변경과 겹치는 등 확신 조건을 모두 충족하면 원인 PR을 되돌리는 PR을 열어 T0·T1은 자동 병합하고 T2·T3는 사람 승인을 기다립니다. 복구가 확인되면 원인 PR의 요청 이슈를 다시 열고, 사실로 확인된 원인이 있으면 개선 PR을 위임합니다. 정책과 예산은 `factory/postmortem-policy.yml`에서 바꾸며(장애당 분석 2회, 회당 2 USD, 하루 10 USD), 운영 방법은 [운영 문서](docs/operations.md)에 있습니다. [PR #78](https://github.com/roboco-io/the-software-factory-demo/pull/78)
-
-### 변경
-
+- 웹 홈 화면에 표시되는 사이트 이름을 `conduit`에서 `conveyor`로 변경했습니다(이름 변경 PR #65는 2026-10-14 병합, 스모크 기대값 갱신 PR #64는 2026-10-21 병합). 이름 변경 후 프로덕션 스모크·배포 확인·PR 프리뷰 확인이 옛 이름을 찾아 실패하던 문제도 새 이름 기준으로 고쳤습니다. [PR #65](https://github.com/roboco-io/the-software-factory-demo/pull/65), [PR #64](https://github.com/roboco-io/the-software-factory-demo/pull/64)
 - 사람이 연 PR의 승인 절차를 정했습니다. 1인 조직이라 작성자가 자기 PR을 병합해야 하는데, GitHub은 자기 PR 승인을 막습니다. 그래서 CODEOWNER가 로컬 세션에서 승인을 요청하면 독립 리뷰 에이전트가 PR diff를 한 번 리뷰하고, 통과하면 리뷰 결과를 PR 코멘트로 남긴 뒤 병합합니다. 절차는 [AGENTS.md](AGENTS.md)에 있습니다. [PR #80](https://github.com/roboco-io/the-software-factory-demo/pull/80)
 
 ## 2026-10-14
