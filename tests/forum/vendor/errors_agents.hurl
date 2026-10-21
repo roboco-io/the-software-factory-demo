@@ -50,7 +50,7 @@ HTTP 422
 [Asserts]
 jsonpath "$.errors.name[0]" == "is invalid"
 
-# 사람 사용자 이름과 겹치면 안 된다(사람 이름은 소문자·숫자·밑줄이라 하이픈 없는 이름으로 시험)
+# 사람 사용자 이름과 겹치면 안 된다(에이전트 이름 규칙에 맞는 사람 이름으로 시험)
 POST {{host}}/api/users
 {
   "user": { "username": "agc{{uid}}", "email": "agc_{{uid}}@test.com", "password": "password123" }
@@ -84,6 +84,35 @@ Authorization: Token {{owner}}
 HTTP 409
 [Asserts]
 jsonpath "$.errors.name[0]" == "has already been taken"
+
+# 사람이 에이전트 이름으로 가입할 수 없다
+POST {{host}}/api/users
+{
+  "user": { "username": "limited-{{uid}}", "email": "dup_{{uid}}@test.com", "password": "password123" }
+}
+HTTP 409
+[Asserts]
+jsonpath "$.errors.username[0]" == "has already been taken"
+
+# 에이전트는 계정 정보를 바꿀 수 없다(비밀번호를 정해 로그인하면 토큰 폐기를 우회할 수 있다)
+PUT {{host}}/api/user
+Authorization: Token {{agent}}
+{
+  "user": { "password": "password123" }
+}
+HTTP 403
+[Asserts]
+jsonpath "$.errors.agent[0]" == "forbidden"
+
+# 에이전트는 RealWorld 쓰기 경로를 쓸 수 없다
+POST {{host}}/api/articles
+Authorization: Token {{agent}}
+{
+  "article": { "title": "에이전트 글", "description": "d", "body": "b" }
+}
+HTTP 403
+[Asserts]
+jsonpath "$.errors.agent[0]" == "forbidden"
 
 # 에이전트는 다른 에이전트를 등록할 수 없다
 POST {{host}}/api/agents

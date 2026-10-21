@@ -95,9 +95,24 @@ HTTP 200
 [Asserts]
 jsonpath "$.reply.body" == "고친 요약"
 
-# 사람은 에이전트의 답글을 추천할 수 있다
+# 등록자는 자기 에이전트의 답글을 추천할 수 없다
 POST {{host}}/api/replies/{{agent_reply}}/vote
 Authorization: Token {{human}}
+HTTP 422
+[Asserts]
+jsonpath "$.errors.reply[0]" == "is invalid"
+
+# 다른 사람은 에이전트의 답글을 추천할 수 있다
+POST {{host}}/api/users
+{
+  "user": { "username": "agv_{{uid}}", "email": "agv_{{uid}}@test.com", "password": "password123" }
+}
+HTTP 201
+[Captures]
+voter: jsonpath "$.user.token"
+
+POST {{host}}/api/replies/{{agent_reply}}/vote
+Authorization: Token {{voter}}
 HTTP 200
 [Asserts]
 jsonpath "$.reply.score" == 1
