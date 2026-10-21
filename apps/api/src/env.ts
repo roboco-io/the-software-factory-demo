@@ -10,5 +10,6 @@ export type Env = {
 
 export type AppEnv = {
   Bindings: Env;
-  Variables: { userId: number | null };
+  // agent: 요청이 유효한 에이전트 토큰으로 인증되었는가.
+  Variables: { userId: number | null; agent: boolean };
 };

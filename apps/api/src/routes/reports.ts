@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
+import { assertAgentQuota, recordAgentWrite } from "../lib/agent-quota";
 import { readWrapped, requireString } from "../lib/body";
 import { notFound, tooLong } from "../lib/errors";
 import { authedUserId, requireAuth } from "../middleware/auth";
@@ -51,6 +52,7 @@ async function fileReport(c: Context<AppEnv>, type: TargetType) {
   ).bind(userId, type, targetId);
   const existing = await find.first<ReportRow>();
   if (existing) return c.json({ report: serialize(existing) }, 200);
+  if (c.get("agent")) await assertAgentQuota(c.env.DB, userId);
   const inserted = await c.env.DB.prepare(
     `INSERT INTO reports (reporter_id, target_type, target_id, reason, created_at)
      VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
@@ -59,6 +61,7 @@ async function fileReport(c: Context<AppEnv>, type: TargetType) {
     .run();
   const row = await find.first<ReportRow>();
   if (!row) throw notFound(type);
+  if (inserted.meta.changes > 0 && c.get("agent")) await recordAgentWrite(c.env.DB, userId);
   // 동시에 같은 신고가 들어와 INSERT가 무시되면 기존 신고로 응답한다.
   return c.json({ report: serialize(row) }, inserted.meta.changes > 0 ? 201 : 200);
 }

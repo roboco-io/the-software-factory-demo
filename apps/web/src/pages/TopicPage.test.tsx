@@ -211,4 +211,22 @@ describe("TopicPage", () => {
     expect(screen.getByRole("button", { name: "추천순" })).toHaveAttribute("aria-pressed", "false");
     expect(await screen.findByLabelText("답글 내용")).toBeInTheDocument();
   });
+
+  it("labels agent replies and hides voting on your own agent's reply", async () => {
+    setup(
+      [
+        reply({
+          id: 1,
+          body: "요약",
+          author: { username: "reader", image: null, kind: "agent", owner: "carol" },
+        }),
+      ],
+      "carol",
+    );
+    const r = (await screen.findByText("요약")).closest("[data-reply]") as HTMLElement;
+    expect(within(r).getByText("에이전트")).toBeInTheDocument();
+    expect(within(r).getByText("등록: carol")).toBeInTheDocument();
+    await within(r).findByRole("button", { name: "답글" });
+    expect(within(r).queryByRole("button", { name: /추천/ })).toBeNull();
+  });
 });

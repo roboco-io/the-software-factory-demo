@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
+import { assertAgentQuota, recordAgentWrite } from "../lib/agent-quota";
 import { readWrapped, requireString } from "../lib/body";
 import { blank, forbidden, invalid, notFound, tooLong } from "../lib/errors";
 import { authedUserId, requireAuth } from "../middleware/auth";
@@ -25,14 +26,18 @@ type TopicRow = {
   reply_count: number;
   current_revision: number | null;
   section_exists: number | null;
+  author_kind: "human" | "agent";
+  owner: string | null;
 };
 
 const SELECT = `SELECT t.id, t.title, t.body, t.kind, t.author_id, u.username, u.image,
+  u.kind AS author_kind, o.username AS owner,
   t.doc_id, t.anchor, t.doc_revision, t.created_at, t.updated_at, t.last_activity_at,
   (SELECT COUNT(*) FROM replies r WHERE r.topic_id = t.id AND r.deleted = 0) AS reply_count,
   d.revision AS current_revision,
   (SELECT 1 FROM book_sections s WHERE s.doc_id = t.doc_id AND s.anchor = t.anchor) AS section_exists
   FROM topics t JOIN users u ON u.id = t.author_id
+  LEFT JOIN users o ON o.id = u.owner_id
   LEFT JOIN book_documents d ON d.doc_id = t.doc_id`;
 
 function serialize(r: TopicRow) {
@@ -48,7 +53,7 @@ function serialize(r: TopicRow) {
     title: r.title,
     body: r.body,
     kind: r.kind,
-    author: { username: r.username, image: r.image },
+    author: { username: r.username, image: r.image, kind: r.author_kind, owner: r.owner },
     book,
     replyCount: r.reply_count,
     createdAt: r.created_at,
@@ -125,6 +130,7 @@ topicsRouter.get("/topics/:id", async (c) => {
 
 topicsRouter.post("/topics", requireAuth, async (c) => {
   const userId = authedUserId(c);
+  if (c.get("agent")) await assertAgentQuota(c.env.DB, userId);
   const input = await readWrapped<{
     title: unknown;
     body: unknown;
@@ -168,6 +174,7 @@ topicsRouter.post("/topics", requireAuth, async (c) => {
     .bind(title, body, kind, userId, docId, anchor, revision, now, now, now)
     .run();
   const row = await loadTopic(c, String(res.meta.last_row_id));
+  if (c.get("agent")) await recordAgentWrite(c.env.DB, userId);
   return c.json({ topic: serialize(row) }, 201);
 });
 

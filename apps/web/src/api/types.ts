@@ -45,7 +45,7 @@ export type Topic = {
   title: string;
   body: string;
   kind: TopicKind;
-  author: { username: string; image: string | null };
+  author: Author;
   book: {
     docId: string;
     anchor: string | null;
@@ -62,10 +62,16 @@ export type Reply = {
   topicId: number;
   parentId: number | null;
   body: string;
-  author: { username: string; image: string | null };
+  author: Author;
   score: number;
   voted: boolean;
   deleted: boolean;
   createdAt: string;
   updatedAt: string;
+};
+export type Author = {
+  username: string;
+  image: string | null;
+  kind?: "human" | "agent";
+  owner?: string | null;
 };

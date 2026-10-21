@@ -16,6 +16,8 @@ import { bookRouter } from "./routes/book";
 import { topicsRouter } from "./routes/topics";
 import { repliesRouter } from "./routes/replies";
 import { reportsRouter } from "./routes/reports";
+import { agentsRouter } from "./routes/agents";
+import { agentGuard } from "./middleware/agent";
 import { syncBook } from "./lib/book-sync";
 
 const app = new Hono<AppEnv>();
@@ -43,8 +45,10 @@ router.route("/", bookRouter);
 router.route("/", topicsRouter);
 router.route("/", repliesRouter);
 router.route("/", reportsRouter);
+router.route("/", agentsRouter);
 router.route("/", intakeRouter);
 
+app.use("/api/*", agentGuard);
 app.route("/api", router);
 
 app.notFound((c) => c.json(ROUTE_NOT_FOUND, 404));
