@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { REPO_ROOT } from "../src/paths";
 import { moveTo } from "../src/stages/common";
-import { requestPostmortem } from "../src/stages/postmortem-trigger";
+import { kindFromLabels, requestPostmortem } from "../src/stages/postmortem-trigger";
 import { makeTestDeps } from "./helpers";
 
 const stall = (issue: number) => ({
@@ -28,6 +31,20 @@ describe("requestPostmortem", () => {
     await expect(
       requestPostmortem(h.deps, { issue: 7, kind: "error", event: "detected" }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("kindFromLabels", () => {
+  it("maps each production label to its incident kind and anything else to stall", () => {
+    expect(kindFromLabels(["source:smoke", "factory:needs-human"])).toBe("smoke");
+    expect(kindFromLabels(["source:deploy"])).toBe("deploy");
+    expect(kindFromLabels(["type:bug", "source:error"])).toBe("error");
+    expect(kindFromLabels(["factory:needs-human"])).toBe("stall");
+  });
+
+  it("is what the closed-issue event uses: the workflow passes auto, not a label guess (#66)", () => {
+    const wf = readFileSync(path.join(REPO_ROOT, ".github/workflows/factory-postmortem.yml"), "utf8");
+    expect(wf).toMatch(/^\s+KIND: \$\{\{ inputs\.kind \|\| 'auto' \}\}$/m);
   });
 });
 
