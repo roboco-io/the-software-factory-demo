@@ -30,6 +30,7 @@
 
 ### 변경
 
+- RealWorld 전용 D1 테이블(`articles`, `comments`, `tags`, `article_tags`, `favorites`)을 삭제했습니다(마이그레이션 `0011_drop_realworld_tables.sql`, 되돌릴 수 없음). 삭제 전에 프로덕션에서 옮기지 않은 행이 없음을 확인했고(글 12개·댓글 0개 모두 이전), D1 Time Travel 북마크와 전체 내보내기 백업을 남겼습니다.
 - RealWorld API 경로(글·댓글·태그·즐겨찾기·팔로우·피드)와 글 화면(글 보기·글 편집기·글 목록)을 제거했습니다. 이 경로는 이제 404 `route: not found`를 돌려줍니다. 계정(`/users`, `/user`)과 프로필(`/profiles/:username`) 경로는 남고, 프로필 화면은 그 사용자가 작성한 토론을 보여 줍니다. 헤더의 "New Article" 링크도 없앴습니다. 옛 글과 댓글은 이미 토론과 답글로 옮겨져 있고(마이그레이션 0010), 원본 테이블은 아직 남아 있습니다.
 - RealWorld 공식 Hurl 계약 스위트를 은퇴시켰습니다. 필수 체크 `realworld-api`와 CI job, `tests/realworld/`, `scripts/realworld-api.sh`·`vendor-realworld.sh`, 관련 보호 경로(T3)·CODEOWNERS 항목을 제거했고, 봇 구현 PR이 건너뜀 목록에 줄을 추가하지 못하게 하는 규칙(F21)은 이제 포럼 건너뜀 목록에만 적용됩니다. 구현 요청의 수용 기준과 에이전트 프롬프트도 포럼 계약 기준으로 바꿨습니다. RealWorld 기준 데모 리허설 문서에는 그대로 재현할 수 없다는 안내를 붙였습니다. 이전 Hurl 테스트의 MIT 고지는 git 이력에 남습니다.
 - 프로덕션 스모크(`tests/smoke/readonly.hurl`)와 배포 직후 검사가 RealWorld 글·태그 목록 대신 포럼의 책 목차(`/api/book`)와 토론 목록(`/api/topics`)을 확인합니다. RealWorld 경로를 지우기 전에 스모크의 의존을 먼저 옮긴 것입니다(설계 6.3절).
