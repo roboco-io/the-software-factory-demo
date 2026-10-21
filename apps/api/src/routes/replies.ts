@@ -135,10 +135,13 @@ repliesRouter.delete("/replies/:id", requireAuth, async (c) => {
     .bind(row.id)
     .first();
   if (hasChildren) {
-    await db
-      .prepare("UPDATE replies SET deleted = 1, body = '', updated_at = ? WHERE id = ?")
-      .bind(new Date().toISOString(), row.id)
-      .run();
+    // 삭제 표시는 내용이 없으므로 추천도 지운다. 남기면 빈 자리가 추천순 위에 올라간다.
+    await db.batch([
+      db
+        .prepare("UPDATE replies SET deleted = 1, body = '', updated_at = ? WHERE id = ?")
+        .bind(new Date().toISOString(), row.id),
+      db.prepare("DELETE FROM reply_votes WHERE reply_id = ?").bind(row.id),
+    ]);
     return c.body(null, 204);
   }
   // 잎 답글은 지우고, 더는 하위 답글이 없는 삭제 표시 조상도 함께 지운다.
