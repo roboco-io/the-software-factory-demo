@@ -57,6 +57,27 @@ describe("book sync", () => {
     expect(after.documents.length).toBeGreaterThan(0);
   });
 
+  it("rereads a manuscript whose section hashes are missing even if the revision is unchanged", async () => {
+    const calls: string[] = [];
+    mockSource(
+      {
+        "website/content-manifest.json": JSON.stringify(manifest),
+        "manuscript/chapters/ch01.md": md,
+      },
+      calls,
+    );
+    await syncBook(testEnv());
+    // 해시 도입 이전에 동기화된 상태를 흉내 낸다.
+    await env.DB.prepare("UPDATE book_sections SET hash = NULL WHERE doc_id = 'ch01'").run();
+    calls.length = 0;
+    await syncBook(testEnv());
+    expect(calls).toContain(`${BASE}/manuscript/chapters/ch01.md`);
+    const { results } = await env.DB.prepare(
+      "SELECT hash FROM book_sections WHERE doc_id = 'ch01' ORDER BY position",
+    ).all<{ hash: string | null }>();
+    expect(results.every((r) => /^[0-9a-f]{64}$/.test(r.hash ?? ""))).toBe(true);
+  });
+
   it("keeps existing data when the manifest has an invalid structure", async () => {
     mockSource({
       "website/content-manifest.json": JSON.stringify(manifest),
