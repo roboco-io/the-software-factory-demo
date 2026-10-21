@@ -145,3 +145,4 @@
 {"ts":"2026-10-20T21:42:32.529Z","issue":66,"pr":null,"role":"smoke","engine":null,"model":null,"ok":true,"turns":0,"costUsd":null,"durationMs":0,"failureReason":null,"round":0}
 {"ts":"2026-10-20T22:46:20.758Z","issue":79,"pr":null,"role":"triage","engine":"pi","model":"deepseek/deepseek-flash","ok":true,"turns":14,"costUsd":0.013969151999999999,"durationMs":43147,"failureReason":null,"round":0}
 {"ts":"2026-10-21T00:37:53.313Z","issue":83,"pr":null,"role":"triage","engine":"pi","model":"deepseek/deepseek-flash","ok":true,"turns":13,"costUsd":0.015230292,"durationMs":40865,"failureReason":null,"round":0}
+{"ts":"2026-10-21T04:09:37.480Z","issue":89,"pr":null,"role":"triage","engine":"pi","model":"deepseek/deepseek-flash","ok":true,"turns":8,"costUsd":0.007400148,"durationMs":17004,"failureReason":null,"round":0}
