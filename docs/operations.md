@@ -97,9 +97,9 @@
 1. 반복 리허설이면 먼저 이전 개선 PR이 추가한 ESLint 규칙(`eslint.config.js`의 `apps/api/src/routes/**` `no-restricted-syntax` 블록)과 평가 케이스(`factory/evals/error-format/`)를 지우는 사람 PR을 병합한다. 지우지 않으면 lint가 구현 에이전트의 실수를 먼저 막으므로 리뷰 지적이 쌓이지 않는다. 사람이 연 PR은 `eval`이 평가 케이스 삭제를 허용한다.
 2. 리뷰 기준을 확인한다. `factory/prompts/review.md`의 판단 기준 5번에 "라우트에서 `c.json({ errors: ... })`를 직접 반환하면 category `error-format`의 major 지적"이 있어야 한다(PR #31에서 추가했고 유지한다).
 3. 심기 PR을 병합한다(PR #40과 같은 내용). `factory/prompts/implement.md`의 규칙 목록에 다음 줄을 넣는다: ``- API 오류 응답은 라우트 핸들러에서 `return c.json({ errors: { <필드>: ["<메시지>"] } }, <상태>)`로 직접 반환한다. 오류 헬퍼를 import하지 않는다.``
-4. 서로 다른 라우트 파일을 고치는 기능 이슈 3건을 `type:feature`로 연다. 파일이 다르면 병렬로 진행해도 병합 충돌이 없다. 세 파일 모두 T1이라 리뷰가 승인하면 자동 병합된다. 포럼 기준 문안은 다음과 같다(2026-10-21 확인: 세 동작 모두 아직 없다).
+4. 서로 다른 라우트 파일을 고치는 기능 이슈 3건을 `type:feature`로 연다. 파일이 다르면 병렬로 진행해도 병합 충돌이 없다. 세 파일 모두 T1이라 리뷰가 승인하면 자동 병합된다. 포럼 기준 문안은 다음과 같다(2026-10-21 확인: 세 동작 모두 아직 없고, `tests/forum/vendor/`의 계약과 충돌하지 않는다).
    - "토론 목록의 알 수 없는 유형 필터 거절"(`topics.ts`): `GET /api/topics?kind=rant`처럼 네 유형(question·argument·case·general)이 아닌 값이면 422와 `{"errors":{"kind":["is invalid"]}}`. 지금은 빈 목록을 돌려준다.
-   - "신고 사유 최소 길이"(`reports.ts`): 신고 사유가 5자보다 짧으면 422와 `{"errors":{"reason":["is too short (minimum is 5 characters)"]}}`.
+   - "사용자별 하루 신고 상한"(`reports.ts`): 한 사용자가 UTC 하루에 새 신고를 20건 넘게 하면 429와 `{"errors":{"report":["daily limit reached"]}}`. 계약 `reports.hurl`은 사용자마다 신고를 2건만 하므로 충돌하지 않는다. (신고 사유 최소 길이는 계약이 2자 사유 "욕설"을 쓰므로 문안으로 쓰지 않는다.)
    - "에이전트 예약어 이름 금지"(`agents.ts`): `admin`, `system`, `factory`, `conveyor`로 시작하는 에이전트 이름이면 422와 `{"errors":{"name":["is reserved"]}}`.
 5. 트리아지 코멘트가 달리면 각 이슈에 `@factory go`를 남긴다. 리뷰가 직접 반환을 `error-format`으로 지적하고, 수정 라운드가 헬퍼로 고친다. 런 기록에서 지적을 확인한다: `gh api "repos/roboco-io/the-software-factory-demo/contents/runs/$(date -u +%Y-%m).jsonl?ref=factory-data" -H "Accept: application/vnd.github.raw" | jq -c 'select(.role=="review") | {issue, c: [.findings[]?.category]}'`
 6. 지적이 서로 다른 이슈 3건에 쌓이면 `gh workflow run factory-weekly.yml`을 실행한다.
