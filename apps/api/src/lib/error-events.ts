@@ -11,7 +11,7 @@ export const PATH_MAX = 200;
 export const ERROR_EVENTS_CAP = 500;
 
 const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
-// slugify()(src/lib/slug.ts)가 만드는 형식: 하이픈으로 이은 소문자·숫자 단어 + 6자 접미사.
+// 슬러그 형식(하이픈으로 이은 소문자·숫자 단어 + 6자 접미사). 옛 RealWorld 글 주소가 메시지에 섞여도 가린다.
 const SLUG = /\b[a-z0-9]+(?:-[a-z0-9]+)*-[a-z0-9]{6}\b/g;
 const NUMBER = /\d+/g;
 // 요청 본문 조각(JSON 파싱 오류 등)이 메시지에 섞일 수 있으므로 개별 값을 가린다.

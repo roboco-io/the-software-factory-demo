@@ -46,7 +46,6 @@
 
 - main에 병합하면 deploy 워크플로가 `apps/api/migrations/`의 새 마이그레이션을 프로덕션 D1(`sfd-prod`)에 자동으로 적용한다. 자동 롤백은 없으므로 되돌릴 수 없는 변경(컬럼 삭제 등)은 병합 전에 사람이 확인한다.
 - 로컬 적용: `cd apps/api && pnpm exec wrangler d1 migrations apply sfd-prod --local`
-- 피드(`/articles/feed`)는 팔로우에 의존한다. `feed.hurl`이 팔로우 엔드포인트를 호출하므로 피드를 구현하려면 팔로우를 먼저 또는 함께 구현한다.
 
 ## 규칙
 

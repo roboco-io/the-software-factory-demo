@@ -21,7 +21,6 @@ export function Header() {
           {user ? (
             <>
               {item("/new", "새 토론")}
-              {item("/editor", "New Article")}
               {item("/settings", "Settings")}
               {item(`/profile/${encodeURIComponent(user.username)}`, user.username)}
             </>

@@ -11,11 +11,11 @@ describe("createClient", () => {
   it("sends Token header and JSON body", async () => {
     const f = vi.fn(async () => json(200, { ok: true }));
     const c = createClient("https://api.test/api", () => "tkn", f);
-    await c.post("/articles", { article: { title: "x" } });
+    await c.post("/topics", { topic: { title: "x" } });
     const [url, init] = f.mock.calls[0]! as unknown as [string, RequestInit];
-    expect(url).toBe("https://api.test/api/articles");
+    expect(url).toBe("https://api.test/api/topics");
     expect((init.headers as Record<string, string>).authorization).toBe("Token tkn");
-    expect(init.body).toBe(JSON.stringify({ article: { title: "x" } }));
+    expect(init.body).toBe(JSON.stringify({ topic: { title: "x" } }));
   });
 
   it("omits Authorization when there is no token", async () => {

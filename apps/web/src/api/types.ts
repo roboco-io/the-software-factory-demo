@@ -11,25 +11,6 @@ export type Profile = {
   image: string | null;
   following: boolean;
 };
-export type Article = {
-  slug: string;
-  title: string;
-  description: string;
-  body?: string;
-  tagList: string[];
-  createdAt: string;
-  updatedAt: string;
-  favorited: boolean;
-  favoritesCount: number;
-  author: Profile;
-};
-export type Comment = {
-  id: number;
-  body: string;
-  createdAt: string;
-  updatedAt: string;
-  author: Profile;
-};
 export type Errors = Record<string, string[]>;
 export type BookDocument = {
   docId: string;
