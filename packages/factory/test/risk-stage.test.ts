@@ -113,6 +113,31 @@ describe("runRisk", () => {
     ]);
   });
 
+  it("applies the same F21 rule to the forum contract skip list", async () => {
+    const h = makeTestDeps();
+    const add = await openBotPr(h, {}, [
+      { filename: "tests/forum/skip.txt", additions: ["topics.hurl"] },
+    ]);
+    const del = await openBotPr(h, {}, [{ filename: "tests/forum/skip.txt", additions: [] }]);
+    expect((await runRisk(h.deps, { pr: add.pr, check: false })).forbidden).toEqual([
+      "tests/forum/skip.txt",
+    ]);
+    expect(await runRisk(h.deps, { pr: del.pr, check: false })).toMatchObject({
+      tier: "T1",
+      forbidden: [],
+    });
+  });
+
+  it("forbids the forum contract files themselves (T3)", async () => {
+    const h = makeTestDeps();
+    const { pr } = await openBotPr(h, {}, [
+      { filename: "tests/forum/vendor/topics.hurl", additions: [] },
+    ]);
+    expect((await runRisk(h.deps, { pr, check: false })).forbidden).toEqual([
+      "tests/forum/vendor/topics.hurl",
+    ]);
+  });
+
   it("treats a PR with too many files as T3 and forbidden for bot implement PRs", async () => {
     const h = makeTestDeps();
     const { pr } = await openBotPr(h);

@@ -17,6 +17,7 @@ const GREEN = {
   lint: "success",
   unit: "success",
   "realworld-api": "success",
+  "forum-api": "success",
   e2e: "success",
   "risk-tier": "success",
   evidence: "success",
