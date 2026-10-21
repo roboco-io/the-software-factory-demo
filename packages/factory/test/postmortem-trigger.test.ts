@@ -43,7 +43,10 @@ describe("kindFromLabels", () => {
   });
 
   it("is what the closed-issue event uses: the workflow passes auto, not a label guess (#66)", () => {
-    const wf = readFileSync(path.join(REPO_ROOT, ".github/workflows/factory-postmortem.yml"), "utf8");
+    const wf = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/factory-postmortem.yml"),
+      "utf8",
+    );
     expect(wf).toMatch(/^\s+KIND: \$\{\{ inputs\.kind \|\| 'auto' \}\}$/m);
   });
 });

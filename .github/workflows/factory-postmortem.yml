@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: false
 env:
   ISSUE: ${{ inputs.issue || github.event.issue.number }}
-  KIND: ${{ inputs.kind || (contains(github.event.issue.labels.*.name, 'source:error') && 'error' || 'stall') }}
+  KIND: ${{ inputs.kind || 'auto' }}
   EVENT: ${{ inputs.event || 'recovered' }}
   DRY_RUN: ${{ inputs.dry_run }}
   EXCERPT: ${{ inputs.excerpt }}
