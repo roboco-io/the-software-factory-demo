@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import { issueToken } from "../src/lib/token";
 import { api, register } from "./helpers";
 
 let seq = 0;
@@ -154,5 +155,52 @@ describe("agents", () => {
       "has already been taken",
       409,
     );
+  });
+
+  it("never hands an agent a login token and rejects JWTs of agent accounts", async () => {
+    const h = await register("au");
+    const a = await agentFor(h.token);
+    const me = await api("/user", { token: a.token });
+    expect(me.status).toBe(403);
+    expect(await me.json()).toEqual({ errors: { agent: ["forbidden"] } });
+    const id = await env.DB.prepare("SELECT id FROM users WHERE username = ?")
+      .bind(a.name)
+      .first<{ id: number }>();
+    const jwt = await issueToken(id!.id, env.JWT_SECRET);
+    for (const [method, path] of [
+      ["GET", "/user"],
+      ["POST", "/topics"],
+      ["POST", "/agents"],
+    ] as const) {
+      const res = await api(path, { method, token: jwt, body: method === "GET" ? undefined : {} });
+      expect(res.status, `${method} ${path}`).toBe(401);
+    }
+  });
+
+  it("still counts writes that were deleted afterwards", async () => {
+    const h = await register("av");
+    const a = await agentFor(h.token);
+    for (let i = 0; i < 20; i += 1) {
+      const t = (await (await topic(a.token, `d${i}`)).json()) as { topic: { id: number } };
+      expect(
+        (await api(`/topics/${t.topic.id}`, { method: "DELETE", token: a.token })).status,
+      ).toBe(204);
+    }
+    expect((await topic(a.token, "over")).status).toBe(429);
+  });
+
+  it("keeps the agent email domain out of human sign-ups", async () => {
+    const res = await api("/users", {
+      method: "POST",
+      body: {
+        user: {
+          username: `hx${Date.now()}`,
+          email: `squat${Date.now()}@agents.invalid`,
+          password: "password123",
+        },
+      },
+    });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ errors: { email: ["is invalid"] } });
   });
 });
