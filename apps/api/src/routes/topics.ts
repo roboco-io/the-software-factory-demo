@@ -26,6 +26,8 @@ type TopicRow = {
   reply_count: number;
   current_revision: number | null;
   section_exists: number | null;
+  current_hash: string | null;
+  section_hash: string | null;
   author_kind: "human" | "agent";
   owner: string | null;
 };
@@ -35,7 +37,9 @@ const SELECT = `SELECT t.id, t.title, t.body, t.kind, t.author_id, u.username, u
   t.doc_id, t.anchor, t.doc_revision, t.created_at, t.updated_at, t.last_activity_at,
   (SELECT COUNT(*) FROM replies r WHERE r.topic_id = t.id AND r.deleted = 0) AS reply_count,
   d.revision AS current_revision,
-  (SELECT 1 FROM book_sections s WHERE s.doc_id = t.doc_id AND s.anchor = t.anchor) AS section_exists
+  (SELECT 1 FROM book_sections s WHERE s.doc_id = t.doc_id AND s.anchor = t.anchor) AS section_exists,
+  (SELECT s.hash FROM book_sections s WHERE s.doc_id = t.doc_id AND s.anchor = t.anchor) AS current_hash,
+  t.section_hash
   FROM topics t JOIN users u ON u.id = t.author_id
   LEFT JOIN users o ON o.id = u.owner_id
   LEFT JOIN book_documents d ON d.doc_id = t.doc_id`;
@@ -45,6 +49,9 @@ function serialize(r: TopicRow) {
   if (r.doc_id !== null) {
     let status = "current";
     if (r.current_revision === null || (r.anchor !== null && !r.section_exists)) status = "removed";
+    // 절 토론은 연 시점의 절 본문 해시로 판정한다. 해시 기록이 없으면(장 전체·이전 토론) 문서 revision으로 판정한다.
+    else if (r.anchor !== null && r.section_hash !== null && r.current_hash !== null)
+      status = r.current_hash === r.section_hash ? "current" : "revised";
     else if (r.current_revision > (r.doc_revision ?? 0)) status = "revised";
     book = { docId: r.doc_id, anchor: r.anchor, revision: r.doc_revision, status };
   }
@@ -145,6 +152,7 @@ topicsRouter.post("/topics", requireAuth, async (c) => {
   const hasAnchor = input.anchor !== undefined && input.anchor !== null;
   let docId: string | null = null;
   let anchor: string | null = null;
+  let sectionHash: string | null = null;
   let revision: number | null = null;
   if (hasAnchor && !hasDoc) throw blank("docId");
   if (hasDoc) {
@@ -158,20 +166,21 @@ topicsRouter.post("/topics", requireAuth, async (c) => {
     if (hasAnchor) {
       if (typeof input.anchor !== "string") throw invalid("anchor");
       const s = await c.env.DB.prepare(
-        "SELECT 1 AS ok FROM book_sections WHERE doc_id = ? AND anchor = ?",
+        "SELECT hash FROM book_sections WHERE doc_id = ? AND anchor = ?",
       )
         .bind(docId, input.anchor)
-        .first();
+        .first<{ hash: string | null }>();
       if (!s) throw invalid("anchor");
       anchor = input.anchor;
+      sectionHash = s.hash;
     }
   }
   const now = new Date().toISOString();
   const res = await c.env.DB.prepare(
-    `INSERT INTO topics (title, body, kind, author_id, doc_id, anchor, doc_revision, created_at, updated_at, last_activity_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO topics (title, body, kind, author_id, doc_id, anchor, doc_revision, section_hash, created_at, updated_at, last_activity_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(title, body, kind, userId, docId, anchor, revision, now, now, now)
+    .bind(title, body, kind, userId, docId, anchor, revision, sectionHash, now, now, now)
     .run();
   const row = await loadTopic(c, String(res.meta.last_row_id));
   if (c.get("agent")) await recordAgentWrite(c.env.DB, userId);
