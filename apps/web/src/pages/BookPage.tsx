@@ -64,6 +64,14 @@ export function BookPage() {
         <div className="row">
           <div className="col-md-9">
             <h2>{section ? section.heading : anchor ? `${anchor} 절` : "이 장의 토론"}</h2>
+            <p>
+              <Link
+                className="btn btn-sm btn-outline-primary"
+                to={`/new?docId=${encodeURIComponent(doc.docId)}${anchor ? `&anchor=${encodeURIComponent(anchor)}` : ""}`}
+              >
+                {anchor ? "이 절에서 토론 열기" : "이 장에서 토론 열기"}
+              </Link>
+            </p>
             <TopicList query={filter} />
           </div>
           <div className="col-md-3">
@@ -77,7 +85,7 @@ export function BookPage() {
                 </li>
                 {doc.sections.map((s) => (
                   <li key={s.anchor}>
-                    <Link to={`/book/${doc.docId}?anchor=${s.anchor}`}>
+                    <Link to={`/book/${doc.docId}?anchor=${encodeURIComponent(s.anchor)}`}>
                       {s.heading} <span className="counter">({s.topicCount})</span>
                     </Link>
                   </li>

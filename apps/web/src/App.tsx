@@ -8,6 +8,8 @@ import { BookPage } from "./pages/BookPage";
 import { Editor } from "./pages/Editor";
 import { Home } from "./pages/Home";
 import { Profile } from "./pages/Profile";
+import { TopicEditor } from "./pages/TopicEditor";
+import { TopicPage } from "./pages/TopicPage";
 import { Settings } from "./pages/Settings";
 
 export function App() {
@@ -25,6 +27,9 @@ export function App() {
           <Route path="/article/:slug" element={<ArticlePage />} />
           <Route path="/profile/:username" element={<Profile />} />
           <Route path="/book/:docId" element={<BookPage />} />
+          <Route path="/new" element={<TopicEditor />} />
+          <Route path="/topic/:id" element={<TopicPage />} />
+          <Route path="/topic/:id/edit" element={<TopicEditor />} />
           <Route path="*" element={<Home />} />
         </Routes>
         <Footer />
