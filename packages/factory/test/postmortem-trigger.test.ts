@@ -49,6 +49,17 @@ describe("kindFromLabels", () => {
     );
     expect(wf).toMatch(/^\s+KIND: \$\{\{ inputs\.kind \|\| 'auto' \}\}$/m);
   });
+
+  it("lets a closed issue with only a production label reach prepare", () => {
+    const wf = readFileSync(
+      path.join(REPO_ROOT, ".github/workflows/factory-postmortem.yml"),
+      "utf8",
+    );
+    const cond = /^ {2}prepare:\n {4}if: (.+)$/m.exec(wf)?.[1] ?? "";
+    for (const label of ["source:smoke", "source:deploy", "source:error"]) {
+      expect(cond, label).toContain(`contains(github.event.issue.labels.*.name, '${label}')`);
+    }
+  });
 });
 
 describe("moveTo stall trigger", () => {
