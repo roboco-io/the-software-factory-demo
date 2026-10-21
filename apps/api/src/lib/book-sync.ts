@@ -152,13 +152,25 @@ export async function syncBook(env: Env, opts: { ref?: string } = {}): Promise<n
     patternsRevision += revision;
   }
 
+  // 패턴이 빠지거나 바뀌어도 revision 합이 같을 수 있으므로 저장된 패턴 목록과도 비교한다.
+  const storedPatterns = await env.DB.prepare(
+    "SELECT anchor FROM book_sections WHERE doc_id = ? ORDER BY position",
+  )
+    .bind(PATTERNS_DOC)
+    .all<{ anchor: string }>();
+  const samePatterns = storedPatterns.results.map((r) => r.anchor).join(",") === patterns.join(",");
+
   const stmts: D1PreparedStatement[] = [];
   const ids = plan.map((p) => p.docId);
   for (const [i, doc] of plan.entries()) {
     const position = i + 1;
     const { docId, entry } = doc;
     const revision = docId === PATTERNS_DOC ? patternsRevision : doc.revision;
-    if (known.get(docId) === revision && !missingHash.has(docId)) {
+    if (
+      known.get(docId) === revision &&
+      !missingHash.has(docId) &&
+      (docId !== PATTERNS_DOC || samePatterns)
+    ) {
       stmts.push(
         env.DB.prepare("UPDATE book_documents SET position = ? WHERE doc_id = ?").bind(
           position,

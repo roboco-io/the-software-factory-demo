@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, Navigate, useParams, useSearchParams } from "react-router";
 import { ApiFailure } from "../api/client";
 import type { BookDocument, BookSection, Errors } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
@@ -9,8 +9,15 @@ import { bookUrl } from "../lib/book";
 
 type Doc = BookDocument & { sections: BookSection[] };
 
+// 패턴은 문서 patterns 하나의 절(앵커 pNN)이다(2026-10-21). 이전 패턴별 문서 링크는 그 절로 보낸다.
 export function BookPage() {
   const { docId = "" } = useParams();
+  if (/^p\d+$/.test(docId))
+    return <Navigate replace to={`/book/patterns?anchor=${encodeURIComponent(docId)}`} />;
+  return <BookDocumentPage docId={docId} />;
+}
+
+function BookDocumentPage({ docId }: { docId: string }) {
   const [params] = useSearchParams();
   const anchor = params.get("anchor");
   const { client } = useAuth();
