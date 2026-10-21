@@ -189,4 +189,25 @@ describe("TopicPage", () => {
     fireEvent.click(within(parent).getByRole("button", { name: "신고하기" }));
     expect(await screen.findByText("신고를 접수했습니다.")).toBeInTheDocument();
   });
+
+  it("asks before deleting a reply and does nothing when cancelled", async () => {
+    const calls = setup(
+      [reply({ id: 1, body: "내 답글", author: { username: "carol", image: null } })],
+      "carol",
+    );
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirm);
+    const mine = (await screen.findByText("내 답글")).closest("[data-reply]") as HTMLElement;
+    fireEvent.click(await within(mine).findByRole("button", { name: "삭제" }));
+    expect(confirm).toHaveBeenCalled();
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+  });
+
+  it("marks the active sort and labels the reply box", async () => {
+    setup([], "carol");
+    await screen.findByRole("heading", { name: "계약은 누가 쓰는가" });
+    expect(screen.getByRole("button", { name: "작성순" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "추천순" })).toHaveAttribute("aria-pressed", "false");
+    expect(await screen.findByLabelText("답글 내용")).toBeInTheDocument();
+  });
 });

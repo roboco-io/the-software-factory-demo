@@ -87,4 +87,25 @@ describe("TopicList", () => {
     await waitFor(() => expect(document.querySelector(".error-messages")).not.toBeNull());
     expect(screen.queryByTestId("smoke-ready")).toBeNull();
   });
+
+  it("reads the book titles once for several lists sharing a client", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        urls.push(String(input));
+        return new Response(JSON.stringify({ topics: [], topicsCount: 0 }), { status: 200 });
+      }),
+    );
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <TopicList query="docId=ch01" />
+          <TopicList query="docId=ch02" />
+        </AuthProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(urls.filter((u) => u.includes("/topics?")).length).toBe(2));
+    expect(urls.filter((u) => u.endsWith("/book")).length).toBe(1);
+  });
 });
