@@ -7,6 +7,7 @@ declare namespace Cloudflare {
     JWT_SECRET: string;
     ALLOWED_ORIGINS: string;
     INTAKE_TOKEN: string;
+    BOOK_SOURCE_URL?: string;
     TEST_MIGRATIONS: import("cloudflare:test").D1Migration[];
   }
 }

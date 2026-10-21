@@ -4,6 +4,8 @@ export type Env = {
   ALLOWED_ORIGINS: string;
   // 프로덕션 Worker secret. deploy.yml이 GitHub production environment secret에서 넣는다. 프리뷰·로컬에는 없다.
   INTAKE_TOKEN?: string;
+  // 책 저장소 raw 파일의 기준 URL. 없으면 동기화하지 않는다.
+  BOOK_SOURCE_URL?: string;
 };
 
 export type AppEnv = {
