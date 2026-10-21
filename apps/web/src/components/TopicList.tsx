@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { ApiFailure } from "../api/client";
-import type { BookDocument, Errors, Topic } from "../api/types";
+import type { Errors, Topic } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { kindLabel } from "../lib/book";
+import { bookTitles } from "../lib/bookTitles";
 import { avatar } from "./ArticlePreview";
 import { ErrorList } from "./ErrorList";
 
@@ -58,13 +59,7 @@ export function TopicList({ query }: { query: string }) {
   // 미리보기에 문서 ID 대신 문서 제목을 보이기 위해 목차를 한 번 읽는다. 실패해도 목록은 보인다.
   useEffect(() => {
     let live = true;
-    client
-      .get<{ documents?: BookDocument[] }>("/book")
-      .then(
-        (r) =>
-          live && setTitles(Object.fromEntries((r.documents ?? []).map((d) => [d.docId, d.title]))),
-      )
-      .catch(() => undefined);
+    void bookTitles(client).then((t) => live && setTitles(t));
     return () => {
       live = false;
     };
