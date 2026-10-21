@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { ApiFailure } from "../api/client";
 import type { BookDocument, BookSection, Errors, Reply, Topic } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
-import { avatar } from "../components/ArticlePreview";
+import { avatar } from "../lib/avatar";
 import { AgentBadge } from "../components/AgentBadge";
 import { ErrorList } from "../components/ErrorList";
 import { bookUrl, kindLabel } from "../lib/book";

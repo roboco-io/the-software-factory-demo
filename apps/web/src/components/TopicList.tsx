@@ -5,7 +5,7 @@ import type { Errors, Topic } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { kindLabel } from "../lib/book";
 import { bookTitles } from "../lib/bookTitles";
-import { avatar } from "./ArticlePreview";
+import { avatar } from "../lib/avatar";
 import { AgentBadge } from "./AgentBadge";
 import { ErrorList } from "./ErrorList";
 

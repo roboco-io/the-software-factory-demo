@@ -3,9 +3,9 @@ import { useParams } from "react-router";
 import { ApiFailure } from "../api/client";
 import type { Errors, Profile as ProfileT } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
-import { ArticleList } from "../components/ArticleList";
-import { avatar } from "../components/ArticlePreview";
 import { ErrorList } from "../components/ErrorList";
+import { TopicList } from "../components/TopicList";
+import { avatar } from "../lib/avatar";
 
 export function Profile() {
   const { username = "" } = useParams();
@@ -45,11 +45,11 @@ export function Profile() {
             <div className="articles-toggle">
               <ul className="nav nav-pills outline-active">
                 <li className="nav-item">
-                  <span className="nav-link active">My Articles</span>
+                  <span className="nav-link active">작성한 토론</span>
                 </li>
               </ul>
             </div>
-            <ArticleList query={`author=${encodeURIComponent(profile.username)}`} />
+            <TopicList query={`author=${encodeURIComponent(profile.username)}`} />
           </div>
         </div>
       </div>

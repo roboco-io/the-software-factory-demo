@@ -3,7 +3,7 @@ import { Link, MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { API_BASE } from "../api/client";
 import { AuthProvider } from "../auth/AuthContext";
-import { ArticlePreview } from "../components/ArticlePreview";
+import { TopicPreview } from "../components/TopicList";
 import { Profile } from "./Profile";
 import { Settings } from "./Settings";
 
@@ -48,19 +48,19 @@ describe("Settings image upload", () => {
     expect((post.init!.headers as Record<string, string>)["content-type"]).toBe("image/png");
   });
 
-  it("reflects the uploaded image on the profile page and article list", async () => {
+  it("reflects the uploaded image on the profile page and topic list", async () => {
     localStorage.setItem(`jwt:${API_BASE}`, "jwt-1");
-    const article = {
-      slug: "a",
+    const topic = {
+      id: 1,
       title: "T",
-      description: "d",
       body: "b",
-      tagList: [],
+      kind: "general" as const,
+      author: { username: "u", image: URL1 },
+      book: null,
+      replyCount: 0,
       createdAt: "2024-01-01T00:00:00.000Z",
       updatedAt: "2024-01-01T00:00:00.000Z",
-      favorited: false,
-      favoritesCount: 0,
-      author: { username: "u", bio: null, image: URL1, following: false },
+      lastActivityAt: "2024-01-01T00:00:00.000Z",
     };
     let uploaded = false;
     vi.stubGlobal(
@@ -75,8 +75,8 @@ describe("Settings image upload", () => {
           body = {
             profile: { username: "u", bio: null, image: uploaded ? URL1 : null, following: false },
           };
-        } else if (path.startsWith("/articles")) {
-          body = { articles: uploaded ? [article] : [], articlesCount: uploaded ? 1 : 0 };
+        } else if (path.startsWith("/topics")) {
+          body = { topics: uploaded ? [topic] : [], topicsCount: uploaded ? 1 : 0 };
         } else {
           body = { user: { ...base, image: uploaded ? URL1 : null } };
         }
@@ -144,22 +144,22 @@ describe("Settings image upload", () => {
     expect(screen.getByPlaceholderText("URL of profile picture")).toHaveValue(URL1);
   });
 
-  it("renders the uploaded image as the article avatar", () => {
-    const article = {
-      slug: "a",
+  it("renders the uploaded image as the topic avatar", () => {
+    const topic = {
+      id: 1,
       title: "T",
-      description: "d",
       body: "b",
-      tagList: [],
+      kind: "general" as const,
+      author: { username: "u", image: URL1 },
+      book: null,
+      replyCount: 0,
       createdAt: "2024-01-01T00:00:00.000Z",
       updatedAt: "2024-01-01T00:00:00.000Z",
-      favorited: false,
-      favoritesCount: 0,
-      author: { username: "u", bio: null, image: URL1, following: false },
+      lastActivityAt: "2024-01-01T00:00:00.000Z",
     };
     const { container } = render(
       <MemoryRouter>
-        <ArticlePreview article={article} />
+        <TopicPreview topic={topic} />
       </MemoryRouter>,
     );
     expect(container.querySelector("img")).toHaveAttribute("src", URL1);
