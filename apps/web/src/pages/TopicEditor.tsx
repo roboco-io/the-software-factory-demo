@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router";
 import { ApiFailure } from "../api/client";
 import type { BookDocument, BookSection, Errors, Topic, TopicKind } from "../api/types";
@@ -24,6 +24,8 @@ export function TopicEditor() {
   const [docs, setDocs] = useState<BookDocument[]>([]);
   const [sections, setSections] = useState<BookSection[]>([]);
   const [errors, setErrors] = useState<Errors | null>(null);
+  // 수정할 토론을 불러오기 전에 사용자가 입력을 시작했으면 늦게 온 응답으로 덮어쓰지 않는다.
+  const touched = useRef(false);
   const editing = id !== undefined;
 
   const fail = (e: unknown) => setErrors(e instanceof ApiFailure ? e.errors : { app: ["failed"] });
@@ -39,15 +41,16 @@ export function TopicEditor() {
     if (!editing) return;
     client
       .get<{ topic: Topic }>(`/topics/${id}`)
-      .then(({ topic: t }) =>
+      .then(({ topic: t }) => {
+        if (touched.current) return;
         setForm({
           title: t.title,
           body: t.body,
           kind: t.kind,
           docId: t.book?.docId ?? "",
           anchor: t.book?.anchor ?? "",
-        }),
-      )
+        });
+      })
       .catch(fail);
   }, [client, editing, id]);
 
@@ -150,8 +153,12 @@ export function TopicEditor() {
                 <input
                   className="form-control form-control-lg"
                   placeholder="토론 제목"
+                  aria-label="토론 제목"
                   value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  onChange={(e) => {
+                    touched.current = true;
+                    setForm({ ...form, title: e.target.value });
+                  }}
                 />
               </fieldset>
               <fieldset className="form-group">
@@ -159,8 +166,12 @@ export function TopicEditor() {
                   className="form-control"
                   rows={8}
                   placeholder="무엇을 이야기하고 싶은가요? (마크다운)"
+                  aria-label="토론 본문"
                   value={form.body}
-                  onChange={(e) => setForm({ ...form, body: e.target.value })}
+                  onChange={(e) => {
+                    touched.current = true;
+                    setForm({ ...form, body: e.target.value });
+                  }}
                 />
               </fieldset>
               <button className="btn btn-lg pull-xs-right btn-primary" type="submit">

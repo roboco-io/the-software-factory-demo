@@ -18,11 +18,13 @@ const STATUS_TEXT = {
 } as const;
 
 function ReplyForm({
+  label = "답글 내용",
   submitLabel,
   initial = "",
   onSubmit,
   onCancel,
 }: {
+  label?: string;
   submitLabel: string;
   initial?: string;
   onSubmit: (body: string) => Promise<void>;
@@ -44,6 +46,7 @@ function ReplyForm({
         <textarea
           className="form-control"
           placeholder="답글을 쓰세요"
+          aria-label={label}
           rows={3}
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -227,7 +230,10 @@ export function TopicPage() {
                 <button
                   type="button"
                   className="btn btn-sm btn-outline-danger"
-                  onClick={() => run(() => client.del(`/replies/${r.id}`))}
+                  onClick={() => {
+                    if (window.confirm("이 답글을 삭제할까요?"))
+                      run(() => client.del(`/replies/${r.id}`));
+                  }}
                 >
                   삭제
                 </button>
@@ -261,6 +267,7 @@ export function TopicPage() {
         )}
         {open?.id === r.id && open.mode === "report" && (
           <ReplyForm
+            label="신고 사유"
             submitLabel="신고하기"
             onSubmit={(reason) =>
               act(() => client.post(`/replies/${r.id}/report`, { report: { reason } })).then(() =>
@@ -270,6 +277,7 @@ export function TopicPage() {
             onCancel={() => setOpen(null)}
           />
         )}
+        {open?.id === r.id && <ErrorList errors={errors} />}
         {n.children.length > 0 && (
           <div className={`reply-children${n.indent >= MAX_INDENT ? " flat" : ""}`}>
             {n.children.map(renderNode)}
@@ -303,6 +311,7 @@ export function TopicPage() {
                   className="btn btn-outline-danger btn-sm"
                   type="button"
                   onClick={() =>
+                    window.confirm("토론과 모든 답글을 삭제할까요?") &&
                     client
                       .del(`/topics/${topic.id}`)
                       .then(() => navigate("/"))
@@ -361,6 +370,7 @@ export function TopicPage() {
         </div>
         {open?.id === 0 && open.mode === "report" && (
           <ReplyForm
+            label="신고 사유"
             submitLabel="신고하기"
             onSubmit={(reason) =>
               act(() => client.post(`/topics/${topic.id}/report`, { report: { reason } })).then(
@@ -382,6 +392,7 @@ export function TopicPage() {
                     <button
                       type="button"
                       className={`nav-link btn btn-link${sort === s ? " active" : ""}`}
+                      aria-pressed={sort === s}
                       onClick={() => setSort(s)}
                     >
                       {s === "old" ? "작성순" : "추천순"}

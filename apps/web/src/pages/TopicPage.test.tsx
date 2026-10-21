@@ -172,7 +172,8 @@ describe("TopicPage", () => {
     const box = within(parent).getByPlaceholderText("답글을 쓰세요");
     fireEvent.change(box, { target: { value: "  " } });
     fireEvent.click(within(parent).getByRole("button", { name: "신고하기" }));
-    expect(await screen.findByText("reason can't be blank")).toBeInTheDocument();
+    // 오류는 화면 상단과 열린 폼 옆에 함께 보인다.
+    expect(await within(parent).findByText("reason can't be blank")).toBeInTheDocument();
     expect(screen.queryByText("신고를 접수했습니다.")).toBeNull();
     expect(
       (within(parent).getByPlaceholderText("답글을 쓰세요") as HTMLTextAreaElement).value,
