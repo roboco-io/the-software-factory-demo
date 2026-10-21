@@ -151,7 +151,7 @@ T3을 두는 이유: 에이전트가 팩토리 자신의 규칙·게이트를 �
 
 | 워크플로 | 트리거 | 역할 | 주요 동작 |
 |---|---|---|---|
-| `factory-triage.yml` | `issues: opened, reopened` | triage | 분류·중복 검사·등급 추정·수용 기준 코멘트, `factory:triaged` |
+| `factory-triage.yml` | `issues: opened, reopened, edited` | triage | 분류·중복 검사·등급 추정·수용 기준 코멘트, `factory:triaged` |
 | `factory-command.yml` | `issue_comment: created` | — | `@factory go|stop|retry` 파싱, 쓰기 권한 검증, 상태 전이. 봇이 쓴 코멘트는 무시한다 |
 | `factory-implement.yml` | `issues: labeled(factory:approved)`, `workflow_dispatch` | implement | 브랜치 `factory/issue-N` 생성, 에이전트 실행, 테스트 실행, PR 생성, review dispatch |
 | `factory-review.yml` | implement·fix publish job의 `workflow_dispatch` | review | 읽기 전용 리뷰. 판정은 `COMMENT` 리뷰 + `factory:verdict` 표식으로 남긴다(App은 자기가 연 PR을 승인할 수 없다) |

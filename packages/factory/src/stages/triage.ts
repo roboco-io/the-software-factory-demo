@@ -32,6 +32,11 @@ export interface TriageOutcome {
   triage: Triage | null;
 }
 
+// 외부 사용자도 자기 이슈의 본문은 고칠 수 있다. 수정을 반복해 에이전트 비용을 늘리지 못하도록 이슈당 재판정 횟수를 제한한다.
+export const RETRIAGE_LIMIT = 2;
+const TRIAGE_HEADING = "### 트리아지 결과";
+const RETRIAGE_FAILED = "본문 수정 후 다시 판정하던 트리아지";
+
 const OutcomeSchema = z.object({ result: TimedResultSchema, triage: TriageSchema.nullable() });
 
 export const triageStage: PhasedStage<{ issue: number }, TriagePlan, TriageOutcome> = {
@@ -47,7 +52,20 @@ export const triageStage: PhasedStage<{ issue: number }, TriagePlan, TriageOutco
     ) {
       return null;
     }
-    if (!canTransition(state, "triaged", "triage")) return null;
+    // triaged 이슈는 본문·제목 수정 이벤트로 다시 판정한다. 상태는 그대로 두고 결과만 새로 남긴다.
+    if (state !== "triaged" && !canTransition(state, "triaged", "triage")) return null;
+    if (state === "triaged") {
+      const runs = (await deps.gh.listComments(issue)).filter(
+        (c) =>
+          isBot(deps.settings, c.author) &&
+          (c.body.startsWith(TRIAGE_HEADING) || c.body.startsWith(RETRIAGE_FAILED)),
+      ).length;
+      // 첫 판정 1회와 재판정 RETRIAGE_LIMIT회까지만 실행한다.
+      if (runs > RETRIAGE_LIMIT) {
+        deps.log(`triage: #${issue} reached the re-triage limit (${RETRIAGE_LIMIT}); skipping`);
+        return null;
+      }
+    }
     const role = assignEngines(deps.agents, info.labels).triage;
     const model = resolveModel(deps.agents, role.engine, deps.settings.env);
     const open = (await deps.gh.listOpenIssues())
@@ -84,11 +102,19 @@ export const triageStage: PhasedStage<{ issue: number }, TriagePlan, TriageOutco
   async publish(deps, plan, { result, triage }) {
     // prepare 이후 상태가 바뀌었으면(사람이 라벨을 바꾼 경우 등) 아무것도 하지 않는다.
     const { state } = await readState(deps.gh, plan.issue);
-    if (!canTransition(state, triage ? "triaged" : "needs-human", "triage")) {
+    const retriage = state === "triaged";
+    if (!retriage && !canTransition(state, triage ? "triaged" : "needs-human", "triage")) {
       deps.log(`triage: #${plan.issue} is ${state}; skipping publish`);
       return;
     }
     await record(deps, agentRecord("triage", plan.engine, plan.model, result, plan.issue, null, 0));
+    if (!triage && retriage) {
+      await deps.gh.comment(
+        plan.issue,
+        `${RETRIAGE_FAILED} 에이전트가 실패했다(사유: ${failureText(result.failureReason)}). 이전 트리아지 결과를 유지한다.${runLink(deps.settings)}`,
+      );
+      return;
+    }
     if (!triage) {
       await moveTo(
         deps,
@@ -101,7 +127,7 @@ export const triageStage: PhasedStage<{ issue: number }, TriagePlan, TriageOutco
     }
     await deps.gh.comment(
       plan.issue,
-      renderTriageComment(triage, { engine: plan.engine, model: plan.model }),
+      renderTriageComment(triage, { engine: plan.engine, model: plan.model }, { retriage }),
     );
     // type 라벨은 정확히 하나만 남긴다(이슈 템플릿이 붙인 type:*가 있을 수 있다).
     const typeLabel = `type:${triage.type}`;
@@ -110,10 +136,17 @@ export const triageStage: PhasedStage<{ issue: number }, TriagePlan, TriageOutco
       if (l.startsWith("type:") && l !== typeLabel) await deps.gh.removeLabel(plan.issue, l);
     }
     if (!current.labels.includes(typeLabel)) await deps.gh.addLabels(plan.issue, [typeLabel]);
-    await moveTo(deps, plan.issue, "triaged", "triage");
+    if (!retriage) await moveTo(deps, plan.issue, "triaged", "triage");
   },
   async crashed(deps, plan) {
     await record(deps, crashRecord("triage", plan));
+    if ((await readState(deps.gh, plan.issue)).state === "triaged") {
+      await deps.gh.comment(
+        plan.issue,
+        `${RETRIAGE_FAILED} 단계가 비정상 종료했다. 이전 트리아지 결과를 유지한다.${runLink(deps.settings)}`,
+      );
+      return;
+    }
     await moveTo(
       deps,
       plan.issue,

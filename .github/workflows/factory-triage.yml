@@ -2,7 +2,7 @@ name: factory-triage
 run-name: factory-triage [factory/issue-${{ github.event.issue.number }}]
 on:
   issues:
-    types: [opened, reopened]
+    types: [opened, reopened, edited]
 permissions:
   contents: read
 concurrency:
@@ -17,6 +17,11 @@ env:
 jobs:
   # 읽기 전용 단계다. work 체크아웃과 bundle이 없고, 에이전트는 runtime(main)을 읽는다.
   prepare:
+    # edited는 사람이 제목이나 본문을 바꾼 경우에만 다시 판정한다(라벨·담당자 변경 등은 제외).
+    if: >-
+      github.event.action != 'edited' ||
+      (github.event.sender.type != 'Bot' &&
+      (github.event.changes.body != null || github.event.changes.title != null))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
