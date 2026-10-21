@@ -40,7 +40,7 @@ const reply = (over: Partial<Reply>): Reply => ({
 
 type Call = { url: string; method: string; body?: unknown };
 
-function setup(replies: Reply[], loggedInAs?: string) {
+function setup(replies: Reply[], loggedInAs?: string, failReport = false) {
   const calls: Call[] = [];
   if (loggedInAs) localStorage.setItem(`jwt:${API_BASE}`, "tok");
   vi.stubGlobal(
@@ -67,6 +67,10 @@ function setup(replies: Reply[], loggedInAs?: string) {
         });
       if (url.includes("/replies?")) return json({ replies });
       if (url.endsWith("/topics/7")) return json({ topic });
+      if (url.includes("/report"))
+        return failReport
+          ? json({ errors: { reason: ["can't be blank"] } }, 422)
+          : json({ report: { id: 1 } }, 201);
       if (url.includes("/vote")) return json({ reply: { ...replies[0]!, score: 1, voted: true } });
       if (url.endsWith("/replies") && method === "POST")
         return json(
@@ -159,5 +163,30 @@ describe("TopicPage", () => {
       expect(within(mine).getByRole("button", { name: "삭제" })).toBeInTheDocument(),
     );
     expect(within(mine).queryByRole("button", { name: /추천/ })).toBeNull();
+  });
+
+  it("keeps the reason and shows no success notice when a report fails", async () => {
+    setup([reply({ id: 1, body: "부모" })], "carol", true);
+    const parent = (await screen.findByText("부모")).closest("[data-reply]") as HTMLElement;
+    fireEvent.click(within(parent).getByRole("button", { name: "신고" }));
+    const box = within(parent).getByPlaceholderText("답글을 쓰세요");
+    fireEvent.change(box, { target: { value: "  " } });
+    fireEvent.click(within(parent).getByRole("button", { name: "신고하기" }));
+    expect(await screen.findByText("reason can't be blank")).toBeInTheDocument();
+    expect(screen.queryByText("신고를 접수했습니다.")).toBeNull();
+    expect(
+      (within(parent).getByPlaceholderText("답글을 쓰세요") as HTMLTextAreaElement).value,
+    ).toBe("  ");
+  });
+
+  it("shows the notice only after a successful report", async () => {
+    setup([reply({ id: 1, body: "부모" })], "carol");
+    const parent = (await screen.findByText("부모")).closest("[data-reply]") as HTMLElement;
+    fireEvent.click(within(parent).getByRole("button", { name: "신고" }));
+    fireEvent.change(within(parent).getByPlaceholderText("답글을 쓰세요"), {
+      target: { value: "광고" },
+    });
+    fireEvent.click(within(parent).getByRole("button", { name: "신고하기" }));
+    expect(await screen.findByText("신고를 접수했습니다.")).toBeInTheDocument();
   });
 });
