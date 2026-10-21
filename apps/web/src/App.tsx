@@ -4,6 +4,7 @@ import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { ArticlePage } from "./pages/ArticlePage";
 import { Auth } from "./pages/Auth";
+import { BookPage } from "./pages/BookPage";
 import { Editor } from "./pages/Editor";
 import { Home } from "./pages/Home";
 import { Profile } from "./pages/Profile";
@@ -23,6 +24,7 @@ export function App() {
           <Route path="/editor/:slug" element={<Editor />} />
           <Route path="/article/:slug" element={<ArticlePage />} />
           <Route path="/profile/:username" element={<Profile />} />
+          <Route path="/book/:docId" element={<BookPage />} />
           <Route path="*" element={<Home />} />
         </Routes>
         <Footer />

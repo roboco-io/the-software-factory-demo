@@ -17,7 +17,11 @@ function renderAll() {
   vi.stubGlobal(
     "fetch",
     vi.fn(
-      async () => new Response(JSON.stringify({ articles: [], articlesCount: 0 }), { status: 200 }),
+      async () =>
+        new Response(
+          JSON.stringify({ topics: [], topicsCount: 0, documents: [], syncedAt: null }),
+          { status: 200 },
+        ),
     ),
   );
   return render(
