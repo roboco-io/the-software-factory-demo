@@ -33,6 +33,6 @@
 {"type": "feature|bug|docs|feedback", "duplicateOf": 중복 이슈 번호 또는 null, "riskTier": "T0|T1|T2|T3", "acceptanceCriteria": ["검증 가능한 기준"], "summary": "한 문장 요약", "contractChanges": ["경로: 깨지는 기대값"]}
 
 - riskTier는 구현에 필요할 것으로 예상되는 파일 경로를 factory/risk-policy.yml 규칙에 대응시켜 정한다. DB 마이그레이션(apps/api/migrations/)이 필요하면 T2다.
-- acceptanceCriteria에는 테스트로 확인할 수 있는 기준만 쓴다. RealWorld 기능이면 tests/realworld/skip.txt에서, 포럼 기능이면 tests/forum/skip.txt에서 해당 .hurl 줄을 지우는 기준을 넣는다. 포럼 계약은 tests/forum/vendor/CONTRACT.md에 있다.
+- acceptanceCriteria에는 테스트로 확인할 수 있는 기준만 쓴다. 포럼 API 기능이면 tests/forum/skip.txt에서 해당 .hurl 줄을 지우는 기준을 넣는다. 포럼 계약은 tests/forum/vendor/CONTRACT.md에 있다.
 - duplicateOf는 열린 이슈 목록에 같은 요청이 있을 때만 쓴다.
-- contractChanges에는 이 요청을 구현하면 기대값이 깨지는 보호 경로(tests/smoke/, apps/web/e2e-smoke/, .github/, scripts/, tests/realworld/vendor/, tests/forum/vendor/)의 파일과 깨지는 기대값을 쓴다. 바꾸려는 이름·문구·응답 형식을 리포 전체에서 검색해 확인한다. 없으면 빈 배열이다.
+- contractChanges에는 이 요청을 구현하면 기대값이 깨지는 보호 경로(tests/smoke/, apps/web/e2e-smoke/, .github/, scripts/, tests/forum/vendor/)의 파일과 깨지는 기대값을 쓴다. 바꾸려는 이름·문구·응답 형식을 리포 전체에서 검색해 확인한다. 없으면 빈 배열이다.

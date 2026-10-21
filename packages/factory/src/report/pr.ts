@@ -83,7 +83,7 @@ export function renderPrBody(r: PrReport): string {
     "|---|---|",
     ...r.checks.map((c) => `| \`${codeCell(c.name)}\` | ${c.ok ? "통과" : "실패"} |`),
     "",
-    "필수 CI 체크(typecheck, lint, unit, realworld-api, e2e, risk-tier, evidence, eval)는 이 PR에서 다시 실행된다. evidence는 연결 이슈가 type:bug일 때 재현 테스트가 수정 전 코드에서 실패하고 이 PR에서 통과하는지 검사한다.",
+    "필수 CI 체크(typecheck, lint, unit, forum-api, e2e, risk-tier, evidence, eval)는 이 PR에서 다시 실행된다. evidence는 연결 이슈가 type:bug일 때 재현 테스트가 수정 전 코드에서 실패하고 이 PR에서 통과하는지 검사한다.",
     `프리뷰: ${inline(r.preview)}`,
     "",
     ...(r.meta.humanActions?.length

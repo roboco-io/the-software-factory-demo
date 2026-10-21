@@ -16,9 +16,9 @@ export interface RiskReport {
   previewAllowed: boolean;
 }
 
-export const SKIP_FILES = ["tests/realworld/skip.txt", "tests/forum/skip.txt"] as const;
+export const SKIP_FILES = ["tests/forum/skip.txt"] as const;
 
-// F21: 봇 implement PR이 skip.txt에 줄을 더하면 계약 실패(RealWorld·포럼)를 숨길 수 있다. 줄 삭제는 허용한다.
+// F21: 봇 implement PR이 skip.txt에 줄을 더하면 포럼 계약 실패를 숨길 수 있다. 줄 삭제는 허용한다.
 // 이름 변경으로 skip.txt를 만드는 경우와, patch가 없거나 잘려 줄 단위로 확인할 수 없는
 // 추가(바이너리·큰 diff)도 내용을 알 수 없으므로 금지한다. 줄을 더한 skip 파일 경로를 돌려준다.
 export function skipEntryFiles(files: ChangedFile[]): string[] {

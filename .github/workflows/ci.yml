@@ -36,16 +36,6 @@ jobs:
         with: { node-version-file: .nvmrc, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
-  realworld-api:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with: { node-version-file: .nvmrc, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - uses: gacts/install-hurl@v1
-      - run: scripts/realworld-api.sh
   forum-api:
     runs-on: ubuntu-latest
     steps:

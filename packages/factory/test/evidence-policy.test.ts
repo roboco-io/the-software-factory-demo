@@ -11,7 +11,7 @@ describe("isTestFile", () => {
     ["packages/factory/test/gate.test.ts", true],
     ["apps/api/src/routes/tags.ts", false],
     ["apps/web/e2e-smoke/home.spec.ts", false],
-    ["tests/realworld/skip.txt", false],
+    ["tests/forum/skip.txt", false],
     ["apps/api/test/../../../etc/passwd", false],
     ["apps/api/test/./a.test.ts", false],
     ["/etc/a.test.ts", false],
