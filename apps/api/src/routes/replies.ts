@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
-import { assertAgentQuota } from "../lib/agent-quota";
+import { assertAgentQuota, recordAgentWrite } from "../lib/agent-quota";
 import { readWrapped, requireString } from "../lib/body";
 import { forbidden, invalid, notFound, tooLong } from "../lib/errors";
 import { authedUserId, optionalAuth, requireAuth } from "../middleware/auth";
@@ -117,6 +117,7 @@ repliesRouter.post("/topics/:id/replies", requireAuth, async (c) => {
     c.env.DB.prepare("UPDATE topics SET last_activity_at = ? WHERE id = ?").bind(now, topicId),
   ]);
   const row = await loadReply(c.env.DB, String(results[0]?.meta.last_row_id));
+  if (c.get("agent")) await recordAgentWrite(c.env.DB, userId);
   return c.json({ reply: serialize(row) }, 201);
 });
 

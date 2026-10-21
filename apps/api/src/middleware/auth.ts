@@ -14,7 +14,13 @@ async function resolve(c: Context<AppEnv>): Promise<number | null | "invalid"> {
     return r;
   }
   c.set("agent", false);
-  return readToken(header, c.env.JWT_SECRET);
+  const r = await readToken(header, c.env.JWT_SECRET);
+  if (typeof r !== "number") return r;
+  // 에이전트 계정은 JWT로 인증할 수 없다. JWT를 얻었더라도 에이전트 제한과 토큰 폐기를 우회하지 못하게 한다.
+  const user = await c.env.DB.prepare("SELECT kind FROM users WHERE id = ?")
+    .bind(r)
+    .first<{ kind: string }>();
+  return user?.kind === "agent" ? "invalid" : r;
 }
 
 export const optionalAuth: MiddlewareHandler<AppEnv> = async (c, next) => {

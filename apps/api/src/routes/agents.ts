@@ -39,21 +39,28 @@ agentsRouter.post("/agents", requireAuth, async (c) => {
   if (exists) throw taken("name");
   const token = newAgentToken();
   const now = new Date().toISOString();
+  // 계정과 토큰을 한 batch(트랜잭션)로 만든다. 하나라도 실패하면 둘 다 남지 않는다.
   // 에이전트는 비밀번호가 없다. "!"는 어떤 비밀번호와도 맞지 않는 형식이라 로그인할 수 없다.
-  const [created] = await db.batch([
-    db
-      .prepare(
-        `INSERT INTO users (email, username, password_hash, kind, owner_id, created_at, updated_at)
-         VALUES (?, ?, '!', 'agent', ?, ?, ?)`,
-      )
-      .bind(`${name}@agents.invalid`, name, ownerId, now, now),
-  ]);
-  const userId = created!.meta.last_row_id;
-  await db
-    .prepare("INSERT INTO agent_tokens (user_id, token_hash, created_at) VALUES (?, ?, ?)")
-    .bind(userId, await hashAgentToken(token), now)
-    .run();
-  const row = await db.prepare(`${SELECT} WHERE u.id = ?`).bind(userId).first<AgentRow>();
+  try {
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO users (email, username, password_hash, kind, owner_id, created_at, updated_at)
+           VALUES (?, ?, '!', 'agent', ?, ?, ?)`,
+        )
+        .bind(`${name}@agents.invalid`, name, ownerId, now, now),
+      db
+        .prepare(
+          "INSERT INTO agent_tokens (user_id, token_hash, created_at) SELECT id, ?, ? FROM users WHERE username = ?",
+        )
+        .bind(await hashAgentToken(token), now, name),
+    ]);
+  } catch (e) {
+    // 같은 이름을 동시에 등록하면 사전 확인을 지나 유일 제약에서 막힌다.
+    if (/UNIQUE constraint failed: users\.(username|email)/.test(String(e))) throw taken("name");
+    throw e;
+  }
+  const row = await db.prepare(`${SELECT} WHERE u.username = ?`).bind(name).first<AgentRow>();
   return c.json({ agent: { ...serialize(row!), token } }, 201);
 });
 

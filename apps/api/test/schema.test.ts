@@ -8,6 +8,7 @@ describe("schema", () => {
     ).all<{ name: string }>();
     expect(results.map((r) => r.name)).toEqual([
       "agent_tokens",
+      "agent_writes",
       "article_tags",
       "articles",
       "book_documents",

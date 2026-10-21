@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
-import { assertAgentQuota } from "../lib/agent-quota";
+import { assertAgentQuota, recordAgentWrite } from "../lib/agent-quota";
 import { readWrapped, requireString } from "../lib/body";
 import { blank, forbidden, invalid, notFound, tooLong } from "../lib/errors";
 import { authedUserId, requireAuth } from "../middleware/auth";
@@ -174,6 +174,7 @@ topicsRouter.post("/topics", requireAuth, async (c) => {
     .bind(title, body, kind, userId, docId, anchor, revision, now, now, now)
     .run();
   const row = await loadTopic(c, String(res.meta.last_row_id));
+  if (c.get("agent")) await recordAgentWrite(c.env.DB, userId);
   return c.json({ topic: serialize(row) }, 201);
 });
 

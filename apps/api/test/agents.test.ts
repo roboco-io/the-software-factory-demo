@@ -109,7 +109,7 @@ describe("agents", () => {
     expect((await topic(h.token)).status).toBe(201);
     // 10분이 지난 쓰기는 세지 않는다.
     await env.DB.prepare(
-      "UPDATE topics SET created_at = '2000-01-01T00:00:00.000Z' WHERE author_id = (SELECT id FROM users WHERE username = ?)",
+      "UPDATE agent_writes SET created_at = '2000-01-01T00:00:00.000Z' WHERE user_id = (SELECT id FROM users WHERE username = ?)",
     )
       .bind(a.name)
       .run();

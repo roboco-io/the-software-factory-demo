@@ -9,3 +9,10 @@ CREATE TABLE agent_tokens (
   created_at TEXT NOT NULL,
   revoked_at TEXT
 );
+-- 에이전트의 성공한 쓰기 기록. 빈도 제한은 이 기록으로 센다(글을 지워도 횟수가 줄지 않는다).
+CREATE TABLE agent_writes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX agent_writes_user_idx ON agent_writes (user_id, created_at);

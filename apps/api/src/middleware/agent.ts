@@ -15,8 +15,17 @@ const ALLOWED: [method: string, path: RegExp][] = [
   ["POST", /^\/api\/(?:topics|replies)\/[^/]+\/report$/],
 ];
 
+// 읽기 중에서도 막는 경로. GET /api/user는 로그인 토큰(JWT)을 돌려주므로 에이전트에게 주지 않는다.
+const DENIED_READS = [/^\/api\/user$/];
+
 export const agentGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   const method = c.req.method;
+  if (
+    (method === "GET" || method === "HEAD") &&
+    agentTokenOf(c.req.header("authorization")) &&
+    DENIED_READS.some((re) => re.test(c.req.path))
+  )
+    throw forbidden("agent");
   if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
     if (agentTokenOf(c.req.header("authorization"))) {
       const path = c.req.path;

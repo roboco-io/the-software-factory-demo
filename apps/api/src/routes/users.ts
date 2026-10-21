@@ -4,7 +4,15 @@ import { db } from "../db/client";
 import { users } from "../db/schema";
 import type { AppEnv } from "../env";
 import { readWrapped, requireString } from "../lib/body";
-import { ApiError, blank, credentialsInvalid, taken, tokenInvalid, tooShort } from "../lib/errors";
+import {
+  ApiError,
+  blank,
+  credentialsInvalid,
+  invalid,
+  taken,
+  tokenInvalid,
+  tooShort,
+} from "../lib/errors";
 import { hashPassword, verifyPassword } from "../lib/password";
 import { issueToken } from "../lib/token";
 import { authedUserId, requireAuth } from "../middleware/auth";
@@ -34,12 +42,18 @@ async function assertUnique(
   if (row && row.id !== selfId) throw taken(field);
 }
 
+// 에이전트 계정은 <이름>@agents.invalid 이메일을 쓴다. 사람이 이 도메인을 선점해 에이전트 등록을 막지 못하게 한다.
+function assertHumanEmail(email: string) {
+  if (email.endsWith("@agents.invalid")) throw invalid("email");
+}
+
 export const usersRouter = new Hono<AppEnv>();
 
 usersRouter.post("/users", async (c) => {
   const input = await readWrapped<RegisterInput>(c, "user");
   const username = requireString(input.username, "username").trim();
   const email = normEmail(requireString(input.email, "email"));
+  assertHumanEmail(email);
   const password = requireString(input.password, "password");
   if (password.length < MIN_PASSWORD) throw tooShort("password", MIN_PASSWORD);
   const d = db(c.env);
@@ -92,6 +106,7 @@ usersRouter.put("/user", requireAuth, async (c) => {
   }
   if ("email" in input) {
     patch.email = normEmail(requireString(input.email, "email"));
+    assertHumanEmail(patch.email);
     await assertUnique(d, "email", patch.email, id);
   }
   if ("password" in input) {
