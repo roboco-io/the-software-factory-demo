@@ -8,7 +8,7 @@ export const serializeUser = (u: UserRow, token: string) => ({
   image: u.image,
 });
 
-// 팩토리 데모용으로 남긴 기능: 즐겨찾기(팔로우) 구현 시 함께 바꾼다 (routes/deferred.ts 참고)
+// following은 RealWorld 응답 형식의 흔적이다. 팔로우 기능이 없으므로 항상 false다.
 export const serializeProfile = (
   u: Pick<UserRow, "username" | "bio" | "image">,
   following: boolean,
@@ -17,44 +17,4 @@ export const serializeProfile = (
   bio: u.bio,
   image: u.image,
   following,
-});
-
-type ArticleRow = {
-  slug: string;
-  title: string;
-  description: string;
-  body: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export const serializeArticle = (
-  a: ArticleRow,
-  tagList: string[],
-  author: Pick<UserRow, "username" | "bio" | "image">,
-  opts: { body: boolean; favorited?: boolean; favoritesCount?: number },
-) => ({
-  slug: a.slug,
-  title: a.title,
-  description: a.description,
-  ...(opts.body ? { body: a.body } : {}),
-  tagList,
-  createdAt: a.createdAt,
-  updatedAt: a.updatedAt,
-  favorited: opts.favorited ?? false,
-  favoritesCount: opts.favoritesCount ?? 0,
-  author: serializeProfile(author, false),
-});
-
-type CommentRow = { id: number; body: string; createdAt: string; updatedAt: string };
-
-export const serializeComment = (
-  c: CommentRow,
-  author: Pick<UserRow, "username" | "bio" | "image">,
-) => ({
-  id: c.id,
-  createdAt: c.createdAt,
-  updatedAt: c.updatedAt,
-  body: c.body,
-  author: serializeProfile(author, false),
 });

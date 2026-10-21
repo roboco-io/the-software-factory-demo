@@ -30,21 +30,27 @@ describe("0010 legacy articles → topics", () => {
   it("moves articles to general topics and comments to top-level replies, once", async () => {
     const a = await register("lm");
     const b = await register("ln");
-    const art = await api("/articles", {
-      method: "POST",
-      token: a.token,
-      body: { article: { title: "옛 글", description: "요약", body: "**본문**" } },
-    });
-    const { article } = (await art.json()) as { article: { slug: string } };
-    for (const [t, body] of [
-      [b.token, "첫 댓글"],
-      [a.token, "둘째 댓글"],
+    // RealWorld 경로는 제거되었으므로 원본 행을 직접 넣는다.
+    const uid = async (username: string) =>
+      (await env.DB.prepare("SELECT id FROM users WHERE username = ?")
+        .bind(username)
+        .first<{ id: number }>())!.id;
+    const slug = `old-${Date.now()}`;
+    const art = await env.DB.prepare(
+      "INSERT INTO articles (slug, title, description, body, author_id, created_at, updated_at) VALUES (?, '옛 글', '요약', '**본문**', ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')",
+    )
+      .bind(slug, await uid(a.username))
+      .run();
+    const articleId = art.meta.last_row_id;
+    for (const [who, body, at] of [
+      [b.username, "첫 댓글", "2026-01-02T00:00:00.000Z"],
+      [a.username, "둘째 댓글", "2026-01-03T00:00:00.000Z"],
     ] as const)
-      await api(`/articles/${article.slug}/comments`, {
-        method: "POST",
-        token: t,
-        body: { comment: { body } },
-      });
+      await env.DB.prepare(
+        "INSERT INTO comments (body, article_id, author_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      )
+        .bind(body, articleId, await uid(who), at, at)
+        .run();
 
     await runInserts();
     await runInserts();
@@ -67,7 +73,7 @@ describe("0010 legacy articles → topics", () => {
     const lastComment = await env.DB.prepare(
       "SELECT MAX(c.created_at) AS at FROM comments c JOIN articles x ON x.id = c.article_id WHERE x.slug = ?",
     )
-      .bind(article.slug)
+      .bind(slug)
       .first<{ at: string }>();
     expect(t.lastActivityAt).toBe(lastComment!.at);
   });
