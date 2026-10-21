@@ -69,22 +69,26 @@
 
 ## 데모 리허설: 심은 버그
 
-> 이 리허설은 RealWorld 앱 기준으로 2026-10-11에 검증한 기록이다. 서비스가 책 토론 포럼으로 바뀌었고(2026-10-21), RealWorld 계약 스위트·화면·경로·테이블도 모두 제거되었다. 그래서 아래 절차는 그대로 재현할 수 없다. 포럼 기준 리허설은 아직 정하지 않았다.
+> 상태: 포럼 기준 절차(2026-10-21 작성). 심을 버그가 기존 검사를 통과하고 프로덕션 화면에서 보인다는 것은 로컬에서 확인했지만, 이 절차 전체를 팩토리로 실행해 검증하지는 않았다. RealWorld 기준의 이전 리허설(2026-10-11, 버그 PR #16·이슈 #18·수정 PR #19)은 git 이력에 있다.
 
-- 버그: `apps/web/src/components/ArticleList.tsx`의 페이지 수 계산을 `Math.ceil`에서 `Math.floor`로 바꾼다. 글이 11-19개면 페이지 버튼이 사라지고 11번째 이후 글에 갈 수 없다. RealWorld Hurl(API만 검사)과 기존 E2E(페이지를 넘기지 않음)는 이 버그를 잡지 못하고, 데이터는 바뀌지 않는다.
-- 2026-10-11 검증 기록: 버그를 심은 사람 PR #16, 버그 이슈 #18, 팩토리 수정 PR #19(봇이 병합, 재현 테스트 `apps/web/src/components/ArticleList.test.tsx` 추가), evidence 음성 대조는 로컬 실행(아래)과 단위 테스트로 확인했다. `@factory go`(17:08 UTC)부터 이슈 종료(17:16 UTC)까지 사람 개입은 없었다.
-- 프로덕션 데모 데이터: 글이 11개 이상이어야 버그가 보인다. 2026-10-11에 데모 계정 `sfd-demo-1791737870`과 그 계정의 글 11개(제목 "데모 글 1"-"데모 글 11", 태그 `sfd-demo`)를 만들었다.
+사람이 일부러 넣은 버그를 버그 이슈로 접수하고, 팩토리가 재현 테스트를 먼저 쓴 뒤 고쳐 배포하는 과정을 보여 준다. 필수 체크 `evidence`가 재현 테스트가 수정 전 코드에서 실패하고 수정 후 코드에서 통과하는지 확인하는 장면이 핵심이다.
+
+- 버그: `apps/web/src/components/BookToc.tsx`에서 목차를 `data.documents.map(...)` 대신 `data.documents.slice(0, 20).map(...)`으로 그린다. 홈의 "책 목차"가 앞의 20개 문서(머리말과 1-19장)만 보여 주고 20장·패턴 15개·데모 해설 9개가 사라진다.
+- 2026-10-21 로컬 확인: 이 버그를 심어도 웹 단위 테스트 134개와 웹 E2E 5개가 통과했다(E2E 고정 데이터의 문서는 4개라 잘리지 않는다). 그래서 팩토리는 새 재현 테스트를 써야 하고, `evidence`가 그 테스트를 수정 전 코드에서 실행해 실패를 확인할 수 있다.
+- 프로덕션 조건: 책 문서가 21개 이상이어야 보인다. 2026-10-21 기준 45개다.
 - 리허설 순서:
-  1. 프로덕션 글이 11개 이상인지 확인한다: `curl -fsS 'https://sfd-api.roboco.workers.dev/api/articles?limit=1' | jq .articlesCount`
-  2. 버그를 심는 사람 PR을 병합한다. PR #19가 더한 `ArticleList.test.tsx`가 이 버그를 잡으므로, 같은 PR에서 그 테스트 파일도 지워야 `unit` 체크가 통과한다(또는 다른 버그를 고른다).
-  3. 배포 뒤 홈의 페이지 버튼이 사라진 것을 보여 준다.
-  4. 버그 템플릿으로 이슈를 연다(`type:bug`). 트리아지 코멘트가 달리면 `@factory go`를 남긴다.
-  5. 수정 PR의 `ci` run에서 `evidence` job 로그의 "evidence 통과"와 "base 종료 코드 1, head 종료 코드 0" 줄을 보여 준다. 이슈 라벨이 `factory:deployed`가 되고 닫히면 홈의 페이지 버튼이 돌아온 것을 보여 준다.
-- evidence 음성 대조: `evidence`는 봇이 연 PR만 판정하므로 사람 PR로는 음성 대조를 만들 수 없다. 대신 로컬에서 판정 CLI를 직접 실행한다. main에서 갈라진 브랜치에 base에서도 통과하는 테스트(예: `expect(1 + 1).toBe(2)`)만 커밋한 뒤, `EVIDENCE_PLAN='{"pr":1,"required":true,"reason":"local","reasonCode":"evaluated","baseSha":"<main SHA>","headSha":"<HEAD SHA>","testFiles":["<테스트 경로>"]}' pnpm -s factory evidence-run`을 실행하면 "evidence 실패 … 수정 전(base) 코드에서도 통과했다"와 종료 코드 1이 나온다.
+  1. 문서 수를 확인한다: `curl -fsS https://sfd-api.roboco.workers.dev/api/book | jq '.documents | length'`(21 이상).
+  2. 버그를 심는 사람 PR을 만든다(T1). AGENTS.md "사람이 연 PR의 자체 승인" 절차로 병합한다. 병합 뒤 배포를 확인한다.
+  3. 홈의 책 목차에 "P01"·"데모" 문서와 20장이 없는 것을 보여 준다.
+  4. 버그 템플릿으로 이슈를 연다(`type:bug`). 예: 제목 "홈 책 목차에 20장과 패턴·데모 해설이 보이지 않는다", 내용 "홈의 책 목차가 20개 문서까지만 보인다. `GET /api/book`은 45개를 돌려준다. 목차는 동기화된 모든 문서를 보여야 한다." 트리아지 코멘트가 달리면 `@factory go`를 남긴다.
+  5. 수정 PR의 `ci` run에서 `evidence` job 로그의 "evidence 통과"와 "base 종료 코드 1, head 종료 코드 0" 줄을 보여 준다. 재현 테스트는 Vitest(`apps/web/src/**/*.test.tsx`)여야 한다.
+  6. 이슈 라벨이 `factory:deployed`가 되고 닫히면 홈 목차에 45개 문서가 모두 보이는 것을 보여 준다.
+- 되돌리기: 팩토리가 고치지 못하거나 리허설을 중단하면, 2번 PR을 되돌리는 사람 PR을 병합한다.
+- evidence 음성 대조: `evidence`는 봇이 연 PR만 판정하므로 사람 PR로는 음성 대조를 만들 수 없다. main에서 갈라진 브랜치에 base에서도 통과하는 테스트만 커밋한 뒤 로컬에서 판정 CLI를 직접 실행해 "재현 테스트가 수정 전 코드에서 실패하지 않는다"는 거절을 확인한다.
 
 ## 데모 리허설: 실패 패턴 심기
 
-> 아래의 기능 이슈 문안(#41-#43)은 RealWorld 경로 기준이다. 포럼 전환 뒤 재현하려면 포럼 경로의 기능 요청으로 바꿔야 한다.
+> 상태: 절차의 구조는 2026-10-12에 RealWorld 경로로 검증했다(PR #40-#51). 아래 4번의 기능 요청 문안은 2026-10-21에 포럼 경로로 바꿨으며, 포럼 문안으로는 아직 실행하지 않았다.
 
 자기개선 루프를 보여 주는 리허설이다. 팩토리 규칙에 잘못된 지시를 심어 같은 실수를 반복하게 만들고, 주간 실행이 이를 ESLint 규칙과 평가 케이스로 막는 과정을 보여 준다. 2026-10-12에 이 절차로 검증했다(spec 7.2.7, 9장 P4).
 
@@ -93,10 +97,10 @@
 1. 반복 리허설이면 먼저 이전 개선 PR이 추가한 ESLint 규칙(`eslint.config.js`의 `apps/api/src/routes/**` `no-restricted-syntax` 블록)과 평가 케이스(`factory/evals/error-format/`)를 지우는 사람 PR을 병합한다. 지우지 않으면 lint가 구현 에이전트의 실수를 먼저 막으므로 리뷰 지적이 쌓이지 않는다. 사람이 연 PR은 `eval`이 평가 케이스 삭제를 허용한다.
 2. 리뷰 기준을 확인한다. `factory/prompts/review.md`의 판단 기준 5번에 "라우트에서 `c.json({ errors: ... })`를 직접 반환하면 category `error-format`의 major 지적"이 있어야 한다(PR #31에서 추가했고 유지한다).
 3. 심기 PR을 병합한다(PR #40과 같은 내용). `factory/prompts/implement.md`의 규칙 목록에 다음 줄을 넣는다: ``- API 오류 응답은 라우트 핸들러에서 `return c.json({ errors: { <필드>: ["<메시지>"] } }, <상태>)`로 직접 반환한다. 오류 헬퍼를 import하지 않는다.``
-4. 서로 다른 라우트 파일을 고치는 기능 이슈 3건을 `type:feature`로 연다. 파일이 다르면 병렬로 진행해도 병합 충돌이 없다. 2026-10-12에 쓴 문안은 다음과 같다.
-   - #41 "사용자 bio 길이 상한": `PUT /api/user`에 bio가 500자를 넘으면 422와 `{"errors":{"bio":["must be 500 characters or less"]}}`. `users.ts`가 T2이므로 이 PR은 사람 승인을 기다린다.
-   - #42 "글 description 길이 상한": `POST /api/articles`와 `PUT /api/articles/:slug`에 description이 300자를 넘으면 422와 `{"errors":{"description":["must be 300 characters or less"]}}`.
-   - #43 "태그 목록 prefix 필터": `GET /api/tags?prefix=re`는 `re`로 시작하는 태그만 반환하고, prefix가 20자를 넘으면 422와 `{"errors":{"prefix":["must be 20 characters or less"]}}`.
+4. 서로 다른 라우트 파일을 고치는 기능 이슈 3건을 `type:feature`로 연다. 파일이 다르면 병렬로 진행해도 병합 충돌이 없다. 세 파일 모두 T1이라 리뷰가 승인하면 자동 병합된다. 포럼 기준 문안은 다음과 같다(2026-10-21 확인: 세 동작 모두 아직 없다).
+   - "토론 목록의 알 수 없는 유형 필터 거절"(`topics.ts`): `GET /api/topics?kind=rant`처럼 네 유형(question·argument·case·general)이 아닌 값이면 422와 `{"errors":{"kind":["is invalid"]}}`. 지금은 빈 목록을 돌려준다.
+   - "신고 사유 최소 길이"(`reports.ts`): 신고 사유가 5자보다 짧으면 422와 `{"errors":{"reason":["is too short (minimum is 5 characters)"]}}`.
+   - "에이전트 예약어 이름 금지"(`agents.ts`): `admin`, `system`, `factory`, `conveyor`로 시작하는 에이전트 이름이면 422와 `{"errors":{"name":["is reserved"]}}`.
 5. 트리아지 코멘트가 달리면 각 이슈에 `@factory go`를 남긴다. 리뷰가 직접 반환을 `error-format`으로 지적하고, 수정 라운드가 헬퍼로 고친다. 런 기록에서 지적을 확인한다: `gh api "repos/roboco-io/the-software-factory-demo/contents/runs/$(date -u +%Y-%m).jsonl?ref=factory-data" -H "Accept: application/vnd.github.raw" | jq -c 'select(.role=="review") | {issue, c: [.findings[]?.category]}'`
 6. 지적이 서로 다른 이슈 3건에 쌓이면 `gh workflow run factory-weekly.yml`을 실행한다.
 7. 보여 줄 화면은 다음과 같다.
@@ -107,7 +111,7 @@
    - 같은 실수를 넣은 draft PR에서 `lint`가 `no-restricted-syntax`로 실패한다(PR #48).
    - weekly를 다시 실행하면 리포트의 "규칙 효과" 표에 개선 PR이 나타나고, 후보는 다시 열리지 않는다(PR #51).
    - 보드의 `Factory` 필드가 `deployed`이고, 대시보드의 자가 개선 사례에 개선 PR·검증 결과 링크와 병합 전후 관찰 기록이 있다.
-8. 되돌리기: 3번에서 넣은 줄을 지우고 `AGENTS.md`의 오류 헬퍼 규칙("API 오류 형식은 `{"errors": {"field": ["message"]}}`이며 `apps/api/src/lib/errors.ts`의 헬퍼만 사용한다.")이 있는지 확인한다(PR #49). 오염된 프롬프트로 만든 PR 가운데 아직 병합되지 않은 것(T2인 #41의 PR #45)은 닫고 `@factory go`로 다시 구현한다.
+8. 되돌리기: 3번에서 넣은 줄을 지우고 `AGENTS.md`의 오류 헬퍼 규칙("API 오류 형식은 `{"errors": {"field": ["message"]}}`이며 `apps/api/src/lib/errors.ts`의 헬퍼만 사용한다.")이 있는지 확인한다(PR #49). 오염된 프롬프트로 만든 PR 가운데 아직 병합되지 않은 것(이전 RealWorld 리허설에서는 T2인 #41의 PR #45)은 닫고 `@factory go`로 다시 구현한다.
 
 ## 배포 롤백
 
