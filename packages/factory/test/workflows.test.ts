@@ -689,6 +689,16 @@ describe("evidence gate (P3)", () => {
     });
   });
 
+  it("re-triages on issue edits only when a person changed the title or body", () => {
+    const wf = load("factory-triage.yml");
+    expect(wf.on).toEqual({ issues: { types: ["opened", "reopened", "edited"] } });
+    const cond = wf.jobs.prepare!.if ?? "";
+    expect(cond).toContain("github.event.action != 'edited'");
+    expect(cond).toContain("github.event.changes.body");
+    expect(cond).toContain("github.event.changes.title");
+    expect(cond).toContain("github.event.sender.type != 'Bot'");
+  });
+
   it("produces every required check of factory/risk-policy.yml as a ci.yml job that runs on pull requests", () => {
     const jobs = load("ci.yml").jobs;
     const required = loadRiskPolicy().requiredChecks;
