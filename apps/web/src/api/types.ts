@@ -57,3 +57,15 @@ export type Topic = {
   updatedAt: string;
   lastActivityAt: string;
 };
+export type Reply = {
+  id: number;
+  topicId: number;
+  parentId: number | null;
+  body: string;
+  author: { username: string; image: string | null };
+  score: number;
+  voted: boolean;
+  deleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
