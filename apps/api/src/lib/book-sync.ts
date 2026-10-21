@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { sha256Hex } from "./hash";
 
 type ManifestEntry = { revision: string | number; anchors?: Record<string, string> };
 
@@ -12,23 +13,51 @@ export function docPath(docId: string): { kind: string; path: string } | null {
   return null;
 }
 
-export function parseManuscript(md: string): { title: string; headings: string[] } {
+export type ManuscriptSection = { heading: string; body: string };
+
+// 문서 제목(첫 `# `), `## ` 절 제목, 절 본문(제목 다음 줄부터 다음 `## ` 제목 전까지)을 읽는다.
+// 코드 블록 안의 `#` 줄은 제목이 아니며 본문에 포함한다.
+export function parseManuscript(md: string): {
+  title: string;
+  headings: string[];
+  sections: ManuscriptSection[];
+} {
   let title = "";
-  const headings: string[] = [];
+  const sections: { heading: string; lines: string[] }[] = [];
   let fence: string | null = null;
   for (const line of md.split(/\r?\n/)) {
     const f = /^\s*(```+|~~~+)/.exec(line);
     if (f) {
       if (fence === null) fence = f[1]![0]!;
       else if (f[1]![0] === fence) fence = null;
-      continue;
+    } else if (!fence) {
+      if (!title && /^# /.test(line)) {
+        title = line.slice(2).trim();
+        continue;
+      }
+      if (/^## /.test(line)) {
+        sections.push({ heading: line.slice(3).trim(), lines: [] });
+        continue;
+      }
     }
-    if (fence) continue;
-    if (!title && /^# /.test(line)) title = line.slice(2).trim();
-    else if (/^## /.test(line)) headings.push(line.slice(3).trim());
+    sections.at(-1)?.lines.push(line);
   }
-  return { title, headings };
+  const parsed = sections.map((s) => ({
+    heading: s.heading,
+    body: normalizeBody(s.lines.join("\n")),
+  }));
+  return { title, headings: parsed.map((s) => s.heading), sections: parsed };
 }
+
+// 줄 끝 공백·CRLF·앞뒤 빈 줄 차이는 개정으로 보지 않는다.
+const normalizeBody = (text: string) =>
+  text
+    .split(/\r?\n/)
+    .map((l) => l.trimEnd())
+    .join("\n")
+    .trim();
+
+export const sectionHash = (body: string): Promise<string> => sha256Hex(normalizeBody(body));
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -67,11 +96,14 @@ export async function syncBook(env: Env): Promise<void> {
   const manifest = validateManifest(
     JSON.parse(await getText(`${base}/website/content-manifest.json`)),
   );
-  const existing = await env.DB.prepare("SELECT doc_id, revision FROM book_documents").all<{
-    doc_id: string;
-    revision: number;
-  }>();
+  // 절 해시가 비어 있는 문서(해시 도입 이전 동기화)는 revision이 같아도 다시 읽는다.
+  const existing = await env.DB.prepare(
+    `SELECT d.doc_id, d.revision,
+       EXISTS (SELECT 1 FROM book_sections s WHERE s.doc_id = d.doc_id AND s.hash IS NULL) AS missing_hash
+     FROM book_documents d`,
+  ).all<{ doc_id: string; revision: number; missing_hash: number }>();
   const known = new Map(existing.results.map((r) => [r.doc_id, r.revision]));
+  const missingHash = new Set(existing.results.filter((r) => r.missing_hash).map((r) => r.doc_id));
 
   const stmts: D1PreparedStatement[] = [];
   const ids: string[] = [];
@@ -83,7 +115,7 @@ export async function syncBook(env: Env): Promise<void> {
     if (!Number.isInteger(revision)) throw new Error(`bad revision for ${docId}`);
     position += 1;
     ids.push(docId);
-    if (known.get(docId) === revision) {
+    if (known.get(docId) === revision && !missingHash.has(docId)) {
       stmts.push(
         env.DB.prepare("UPDATE book_documents SET position = ? WHERE doc_id = ?").bind(
           position,
@@ -92,7 +124,7 @@ export async function syncBook(env: Env): Promise<void> {
       );
       continue;
     }
-    const { title, headings } = parseManuscript(await getText(`${base}/${info.path}`));
+    const { title, sections } = parseManuscript(await getText(`${base}/${info.path}`));
     if (!title) throw new Error(`no title in ${docId}`);
     stmts.push(
       env.DB.prepare(
@@ -104,15 +136,15 @@ export async function syncBook(env: Env): Promise<void> {
     );
     const seen = new Set<string>();
     let sp = 0;
-    for (const heading of headings) {
+    for (const { heading, body } of sections) {
       const anchor = entry.anchors?.[heading];
       if (!anchor || seen.has(anchor)) continue;
       seen.add(anchor);
       sp += 1;
       stmts.push(
         env.DB.prepare(
-          "INSERT INTO book_sections (doc_id, anchor, heading, position) VALUES (?, ?, ?, ?)",
-        ).bind(docId, anchor, heading, sp),
+          "INSERT INTO book_sections (doc_id, anchor, heading, position, hash) VALUES (?, ?, ?, ?, ?)",
+        ).bind(docId, anchor, heading, sp, await sectionHash(body)),
       );
     }
   }

@@ -18,6 +18,27 @@ HTTP 201
 jsonpath "$.topic.book.revision" == 11
 jsonpath "$.topic.book.status" == "current"
 
+# ch01 s02: v2에서 장 revision은 오르지만 이 절 본문은 그대로다
+POST {{host}}/api/topics
+Authorization: Token {{token}}
+{
+  "topic": { "title": "본문이 그대로인 절 {{uid}}", "body": "본문", "docId": "ch01", "anchor": "s02" }
+}
+HTTP 201
+[Asserts]
+jsonpath "$.topic.book.status" == "current"
+
+# ch01 장 전체: 장 revision이 오르면 개정으로 본다
+POST {{host}}/api/topics
+Authorization: Token {{token}}
+{
+  "topic": { "title": "1장 전체 {{uid}}", "body": "본문", "docId": "ch01" }
+}
+HTTP 201
+[Asserts]
+jsonpath "$.topic.book.anchor" == null
+jsonpath "$.topic.book.status" == "current"
+
 # ch02 s02: v2에서 절이 사라진다
 POST {{host}}/api/topics
 Authorization: Token {{token}}

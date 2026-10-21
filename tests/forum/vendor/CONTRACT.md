@@ -26,6 +26,7 @@ API Worker의 `scheduled` 핸들러가 환경 변수 `BOOK_SOURCE_URL`(책 저�
 - 문서 제목은 원고 파일의 첫 `# ` 제목이다.
 - 절은 원고 파일의 `## ` 제목을 순서대로 읽고, 매니페스트 `anchors`에서 그 제목의 앵커를 찾은 것이다. 매니페스트에 없는 제목은 절 목록에 넣지 않는다. 같은 앵커에 여러 제목이 연결되어 있으면 현재 원고에 있는 제목을 쓴다.
 - 전에 있던 앵커가 현재 원고에 없으면 그 절은 사라진 절이다. 목록에서 빠지지만 토론은 남는다.
+- 절마다 본문의 해시를 저장한다. 본문 비교는 줄 끝 공백과 앞뒤 빈 줄을 무시한다.
 - 동기화가 실패하면 기존 데이터를 그대로 둔다.
 - `scheduled` 핸들러는 동기화를 끝낸 뒤 반환한다. `ctx.waitUntil()`로 미루지 않는다. 실행 스크립트는 호출 후 `GET /api/book`의 `syncedAt`이 바뀔 때까지도 기다린다.
 
@@ -65,7 +66,7 @@ API Worker의 `scheduled` 핸들러가 환경 변수 `BOOK_SOURCE_URL`(책 저�
 
 - `kind`는 `question`·`argument`·`case`·`general` 중 하나이며 생략하면 `general`이다.
 - `book`은 책과 연결하지 않은 토론이면 `null`이다. `anchor`는 장 전체 토론이면 `null`이다.
-- `book.revision`은 토론을 연 시점의 문서 revision이다. `status`는 앵커가 사라졌으면 `removed`, 문서의 현재 revision이 더 크면 `revised`, 그 밖에는 `current`다.
+- `book.revision`은 토론을 연 시점의 문서 revision이다. `status`는 앵커가 사라졌으면 `removed`다. 절에 연결된 토론은 토론을 연 시점의 절 본문(그 `## ` 제목 다음 줄부터 다음 `## ` 제목 전까지)과 현재 절 본문이 다르면 `revised`, 같으면 문서 revision이 올라도 `current`다(2026-10-21, 절 단위 판정). 장 전체 토론과 절 본문 기록이 없는 이전 토론은 문서의 현재 revision이 더 크면 `revised`다. 그 밖에는 `current`다.
 - `lastActivityAt`은 토론 생성 시각이며 답글이 달리면 그 시각으로 바뀐다.
 
 답글(`{"reply": ...}`, 목록은 `{"replies": [...]}`):

@@ -18,12 +18,27 @@ jsonpath "$.document.sections" count == 2
 jsonpath "$.document.sections[0].anchor" == "s01"
 jsonpath "$.document.sections[1].anchor" == "s03"
 
-# 장이 개정된 절의 토론
+# 본문이 바뀐 절의 토론
 GET {{host}}/api/topics?author=rev_{{uid}}&docId=ch01&anchor=s01
 HTTP 200
 [Asserts]
 jsonpath "$.topicsCount" == 1
 jsonpath "$.topics[0].book.revision" == 11
+jsonpath "$.topics[0].book.status" == "revised"
+
+# 장 revision은 올랐지만 본문이 그대로인 절의 토론
+GET {{host}}/api/topics?author=rev_{{uid}}&docId=ch01&anchor=s02
+HTTP 200
+[Asserts]
+jsonpath "$.topicsCount" == 1
+jsonpath "$.topics[0].book.status" == "current"
+
+# 장 전체 토론은 장 revision으로 판정한다
+GET {{host}}/api/topics?author=rev_{{uid}}&docId=ch01&sort=new
+HTTP 200
+[Asserts]
+jsonpath "$.topicsCount" == 3
+jsonpath "$.topics[0].book.anchor" == null
 jsonpath "$.topics[0].book.status" == "revised"
 
 # 사라진 절의 토론은 남아 있고 removed로 표시된다
