@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { ApiFailure } from "../api/client";
-import type { Errors, Topic } from "../api/types";
+import type { BookDocument, Errors, Topic } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { kindLabel } from "../lib/book";
 import { avatar } from "./ArticlePreview";
@@ -14,7 +14,7 @@ const STATUS_TEXT = {
   removed: "현재 판본에 없는 절",
 } as const;
 
-export function TopicPreview({ topic }: { topic: Topic }) {
+export function TopicPreview({ topic, docTitle }: { topic: Topic; docTitle?: string }) {
   const status = topic.book && topic.book.status !== "current" ? topic.book.status : null;
   return (
     <div className="article-preview">
@@ -37,8 +37,8 @@ export function TopicPreview({ topic }: { topic: Topic }) {
         <li className="tag-default tag-pill tag-outline">{kindLabel(topic.kind)}</li>
         {topic.book && (
           <li className="tag-default tag-pill tag-outline">
-            {topic.book.docId}
-            {topic.book.anchor ? ` · ${topic.book.anchor}` : ""}
+            {docTitle ?? topic.book.docId}
+            {topic.book.anchor ? ` · 절 ${topic.book.anchor}` : " · 장 전체"}
           </li>
         )}
         {status && <li className="tag-default tag-pill">{STATUS_TEXT[status]}</li>}
@@ -53,6 +53,22 @@ export function TopicList({ query }: { query: string }) {
   const [page, setPage] = useState(0);
   const [data, setData] = useState<{ topics: Topic[]; topicsCount: number } | null>(null);
   const [errors, setErrors] = useState<Errors | null>(null);
+  const [titles, setTitles] = useState<Record<string, string>>({});
+
+  // 미리보기에 문서 ID 대신 문서 제목을 보이기 위해 목차를 한 번 읽는다. 실패해도 목록은 보인다.
+  useEffect(() => {
+    let live = true;
+    client
+      .get<{ documents?: BookDocument[] }>("/book")
+      .then(
+        (r) =>
+          live && setTitles(Object.fromEntries((r.documents ?? []).map((d) => [d.docId, d.title]))),
+      )
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [client]);
 
   useEffect(() => setPage(0), [query]);
   useEffect(() => {
@@ -89,7 +105,7 @@ export function TopicList({ query }: { query: string }) {
     <>
       {ready}
       {data.topics.map((t) => (
-        <TopicPreview key={t.id} topic={t} />
+        <TopicPreview key={t.id} topic={t} docTitle={t.book ? titles[t.book.docId] : undefined} />
       ))}
       {pages > 1 && (
         <ul className="pagination">
