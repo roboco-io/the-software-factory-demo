@@ -38,7 +38,7 @@
 - RealWorld 공식 Hurl 계약 스위트를 은퇴시켰습니다. 필수 체크 `realworld-api`와 CI job, `tests/realworld/`, `scripts/realworld-api.sh`·`vendor-realworld.sh`, 관련 보호 경로(T3)·CODEOWNERS 항목을 제거했고, 봇 구현 PR이 건너뜀 목록에 줄을 추가하지 못하게 하는 규칙(F21)은 이제 포럼 건너뜀 목록에만 적용됩니다. 구현 요청의 수용 기준과 에이전트 프롬프트도 포럼 계약 기준으로 바꿨습니다. RealWorld 기준 데모 리허설 문서에는 그대로 재현할 수 없다는 안내를 붙였습니다. 이전 Hurl 테스트의 MIT 고지는 git 이력에 남습니다.
 - 프로덕션 스모크(`tests/smoke/readonly.hurl`)와 배포 직후 검사가 RealWorld 글·태그 목록 대신 포럼의 책 목차(`/api/book`)와 토론 목록(`/api/topics`)을 확인합니다. RealWorld 경로를 지우기 전에 스모크의 의존을 먼저 옮긴 것입니다(설계 6.3절).
 - 기존 RealWorld 글을 책과 연결하지 않은 일반 토론으로, 댓글을 최상위 답글로 옮겼습니다(D1 마이그레이션 `0010_legacy_articles_to_topics.sql`). 글의 요약은 토론 본문 첫 문단이 되고, 태그와 즐겨찾기는 옮기지 않습니다. 원본 테이블은 남겨 두며, 이전 결과를 프로덕션에서 확인한 뒤 별도로 지웁니다. 배포 전 프로덕션 데이터 사본(글 12개, 댓글 0개)으로 로컬에서 적용해 12개가 모두 옮겨지는 것을 확인했습니다.
-- 웹 홈 화면에 표시되는 사이트 이름을 `conduit`에서 `conveyor`로 변경했습니다. 이름 변경 후 프로덕션 스모크·배포 확인·PR 프리뷰 확인이 옛 이름을 찾아 실패하던 문제도 새 이름 기준으로 고쳤습니다. [PR #65](https://github.com/roboco-io/the-software-factory-demo/pull/65), [PR #64](https://github.com/roboco-io/the-software-factory-demo/pull/64)
+- 웹 홈 화면에 표시되는 사이트 이름을 `conduit`에서 `conveyor`로 변경했습니다(이름 변경 PR #65는 2026-10-14 병합, 스모크 기대값 갱신 PR #64는 2026-10-21 병합). 이름 변경 후 프로덕션 스모크·배포 확인·PR 프리뷰 확인이 옛 이름을 찾아 실패하던 문제도 새 이름 기준으로 고쳤습니다. [PR #65](https://github.com/roboco-io/the-software-factory-demo/pull/65), [PR #64](https://github.com/roboco-io/the-software-factory-demo/pull/64)
 - 사람이 연 PR의 승인 절차를 정했습니다. 1인 조직이라 작성자가 자기 PR을 병합해야 하는데, GitHub은 자기 PR 승인을 막습니다. 그래서 CODEOWNER가 로컬 세션에서 승인을 요청하면 독립 리뷰 에이전트가 PR diff를 한 번 리뷰하고, 통과하면 리뷰 결과를 PR 코멘트로 남긴 뒤 병합합니다. 절차는 [AGENTS.md](AGENTS.md)에 있습니다. [PR #80](https://github.com/roboco-io/the-software-factory-demo/pull/80)
 
 ## 2026-10-14
