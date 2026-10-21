@@ -4,7 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       issue: { description: 장애 이슈 번호(정체는 요청 이슈 번호), required: true, type: string }
-      kind: { description: smoke|deploy|error|stall, required: true, type: string }
+      kind:
+        {
+          description: smoke|deploy|error|stall|auto(이슈 라벨로 판정),
+          required: true,
+          type: string,
+        }
       event: { description: detected|recovered, required: true, type: string }
       dry_run:
         {
@@ -35,7 +40,7 @@ env:
 jobs:
   # 사실 수집 단계다. 닫힌 이슈 이벤트는 관련 라벨이 있을 때만 이어 간다.
   prepare:
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'source:error') || contains(join(github.event.issue.labels.*.name, ','), 'factory:') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'source:smoke') || contains(github.event.issue.labels.*.name, 'source:deploy') || contains(github.event.issue.labels.*.name, 'source:error') || contains(join(github.event.issue.labels.*.name, ','), 'factory:') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
