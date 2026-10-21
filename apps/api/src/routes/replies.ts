@@ -1,8 +1,8 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import type { AppEnv } from "../env";
 import { readWrapped, requireString } from "../lib/body";
 import { forbidden, invalid, notFound, tooLong } from "../lib/errors";
-import { authedUserId, requireAuth } from "../middleware/auth";
+import { authedUserId, optionalAuth, requireAuth } from "../middleware/auth";
 
 export const repliesRouter = new Hono<AppEnv>();
 
@@ -17,10 +17,15 @@ type ReplyRow = {
   updated_at: string;
   username: string;
   image: string | null;
+  score: number;
+  voted: number;
 };
 
+// 바인딩 첫 번째 값은 보는 사용자 id다(익명이면 null이라 voted는 항상 0).
 const SELECT = `SELECT r.id, r.topic_id, r.parent_id, r.author_id, r.body, r.deleted,
-  r.created_at, r.updated_at, u.username, u.image
+  r.created_at, r.updated_at, u.username, u.image,
+  (SELECT COUNT(*) FROM reply_votes v WHERE v.reply_id = r.id) AS score,
+  EXISTS (SELECT 1 FROM reply_votes v WHERE v.reply_id = r.id AND v.user_id = ?) AS voted
   FROM replies r JOIN users u ON u.id = r.author_id`;
 
 function serialize(r: ReplyRow) {
@@ -30,8 +35,8 @@ function serialize(r: ReplyRow) {
     parentId: r.parent_id,
     body: r.deleted ? "" : r.body,
     author: { username: r.username, image: r.image },
-    score: 0,
-    voted: false,
+    score: r.score,
+    voted: r.voted === 1,
     deleted: r.deleted === 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -53,10 +58,16 @@ async function requireTopic(db: D1Database, rawId: string): Promise<number> {
   return row.id;
 }
 
-async function loadReply(db: D1Database, rawId: string): Promise<ReplyRow> {
+async function loadReply(
+  db: D1Database,
+  rawId: string,
+  viewer: number | null = null,
+): Promise<ReplyRow> {
   const id = parseId(rawId);
   const row =
-    id === null ? null : await db.prepare(`${SELECT} WHERE r.id = ?`).bind(id).first<ReplyRow>();
+    id === null
+      ? null
+      : await db.prepare(`${SELECT} WHERE r.id = ?`).bind(viewer, id).first<ReplyRow>();
   if (!row || row.deleted) throw notFound("reply");
   return row;
 }
@@ -67,10 +78,11 @@ function checkBody(value: unknown): string {
   return s;
 }
 
-repliesRouter.get("/topics/:id/replies", async (c) => {
+repliesRouter.get("/topics/:id/replies", optionalAuth, async (c) => {
   const topicId = await requireTopic(c.env.DB, c.req.param("id"));
-  const { results } = await c.env.DB.prepare(`${SELECT} WHERE r.topic_id = ? ORDER BY r.id ASC`)
-    .bind(topicId)
+  const order = c.req.query("sort") === "top" ? "score DESC, r.id ASC" : "r.id ASC";
+  const { results } = await c.env.DB.prepare(`${SELECT} WHERE r.topic_id = ? ORDER BY ${order}`)
+    .bind(c.get("userId"), topicId)
     .all<ReplyRow>();
   return c.json({ replies: results.map(serialize) });
 });
@@ -110,7 +122,7 @@ repliesRouter.put("/replies/:id", requireAuth, async (c) => {
   await c.env.DB.prepare("UPDATE replies SET body = ?, updated_at = ? WHERE id = ?")
     .bind(body, new Date().toISOString(), row.id)
     .run();
-  return c.json({ reply: serialize(await loadReply(c.env.DB, String(row.id))) });
+  return c.json({ reply: serialize(await loadReply(c.env.DB, String(row.id), userId)) });
 });
 
 repliesRouter.delete("/replies/:id", requireAuth, async (c) => {
@@ -148,3 +160,24 @@ repliesRouter.delete("/replies/:id", requireAuth, async (c) => {
   }
   return c.body(null, 204);
 });
+
+async function setVote(c: Context<AppEnv>, on: boolean) {
+  const userId = authedUserId(c);
+  const row = await loadReply(c.env.DB, c.req.param("id") ?? "");
+  if (on) {
+    if (row.author_id === userId) throw invalid("reply");
+    await c.env.DB.prepare(
+      "INSERT INTO reply_votes (user_id, reply_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
+    )
+      .bind(userId, row.id, new Date().toISOString())
+      .run();
+  } else {
+    await c.env.DB.prepare("DELETE FROM reply_votes WHERE user_id = ? AND reply_id = ?")
+      .bind(userId, row.id)
+      .run();
+  }
+  return c.json({ reply: serialize(await loadReply(c.env.DB, String(row.id), userId)) });
+}
+
+repliesRouter.post("/replies/:id/vote", requireAuth, (c) => setVote(c, true));
+repliesRouter.delete("/replies/:id/vote", requireAuth, (c) => setVote(c, false));
