@@ -8,6 +8,7 @@ import { AgentBadge } from "../components/AgentBadge";
 import { ErrorList } from "../components/ErrorList";
 import { bookUrl, kindLabel } from "../lib/book";
 import { renderMarkdown } from "../lib/markdown";
+import { proposalUrl } from "../lib/proposal";
 import { buildThread, MAX_INDENT, type ThreadNode } from "../lib/thread";
 
 type Sort = "old" | "top";
@@ -161,6 +162,11 @@ export function TopicPage() {
     : null;
   const original = book ? bookUrl(book.docId, book.anchor) : null;
   const mine = user?.username === topic.author.username;
+  const proposal = proposalUrl(topic, {
+    docTitle: doc?.title,
+    sectionHeading: section?.heading,
+    forumBase: `${window.location.origin}${window.location.pathname}`,
+  });
 
   const renderNode = (n: ThreadNode) => {
     const r = n.reply;
@@ -351,6 +357,13 @@ export function TopicPage() {
                   >
                     {bookLabel}
                   </Link>
+                </li>
+              )}
+              {book && proposal && (
+                <li className="tag-default tag-pill tag-outline">
+                  <a href={proposal} target="_blank" rel="noreferrer">
+                    책에 개정 제안
+                  </a>
                 </li>
               )}
               {book && book.status !== "current" && (

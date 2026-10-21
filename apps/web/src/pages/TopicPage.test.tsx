@@ -229,4 +229,19 @@ describe("TopicPage", () => {
     await within(r).findByRole("button", { name: "답글" });
     expect(within(r).queryByRole("button", { name: /추천/ })).toBeNull();
   });
+
+  it("links a book-tied topic to a prefilled revision proposal in the book repository", async () => {
+    setup([]);
+    const link = await screen.findByRole("link", { name: "책에 개정 제안" });
+    const url = new URL(link.getAttribute("href")!);
+    expect(url.pathname).toBe("/roboco-io/the-software-factory/issues/new");
+    await waitFor(() =>
+      expect(
+        new URL(
+          screen.getByRole("link", { name: "책에 개정 제안" }).getAttribute("href")!,
+        ).searchParams.get("location"),
+      ).toContain("5장 계약 · 계약의 다섯 연결"),
+    );
+    expect(link).toHaveAttribute("target", "_blank");
+  });
 });
