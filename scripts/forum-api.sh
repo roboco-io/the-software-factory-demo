@@ -16,6 +16,22 @@ while IFS= read -r line; do
   SKIP+=("$line")
 done < "$SKIP_FILE"
 
+# 짝을 이루는 파일은 함께 건너뛰거나 함께 실행한다(revision_after는 revision_before가 연 토론을 확인한다).
+in_skip() {
+  if [ "${#SKIP[@]}" -gt 0 ]; then
+    for s in "${SKIP[@]}"; do [ "$s" = "$1" ] && return 0; done
+  fi
+  return 1
+}
+for f in "$VENDOR"/*_after.hurl; do
+  after="$(basename "$f")"
+  before="${after%_after.hurl}_before.hurl"
+  a=0; b=0
+  in_skip "$after" && a=1
+  in_skip "$before" && b=1
+  if [ "$a" != "$b" ]; then echo "skip.txt must list $before and $after together" >&2; exit 2; fi
+done
+
 # 건너뛰는 파일도 문법은 검사한다. 계약 파일이 깨진 채로 남지 않게 한다.
 for f in "$VENDOR"/*.hurl; do
   hurlfmt --out json "$f" > /dev/null || { echo "invalid hurl: $(basename "$f")" >&2; exit 2; }
@@ -26,12 +42,7 @@ BEFORE=()
 AFTER=()
 for f in "$VENDOR"/*.hurl; do
   name="$(basename "$f")"
-  skipped=0
-  # bash 3.2(macOS)에서 set -u 아래 빈 배열 확장이 실패하므로 길이를 먼저 확인한다.
-  if [ "${#SKIP[@]}" -gt 0 ]; then
-    for s in "${SKIP[@]}"; do [ "$s" = "$name" ] && skipped=1; done
-  fi
-  if [ "$skipped" = 1 ]; then
+  if in_skip "$name"; then
     echo "skip: $name"
   elif [[ "$name" == *_after.hurl ]]; then
     AFTER+=("$f")
@@ -44,6 +55,14 @@ WORK="$(mktemp -d)"
 BOOK="$WORK/book"
 STATE="$WORK/state"
 LOG="$ROOT/.wrangler-forum.log"
+PID=""
+BOOK_PID=""
+# bash 3.2에서 빈 변수로 kill하면 실패하므로 값이 있을 때만 종료한다.
+cleanup() {
+  for p in $PID $BOOK_PID; do kill "$p" 2>/dev/null || true; done
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
 serve_book() {
   rm -rf "$BOOK"
   cp -R "$VENDOR/fixtures/$1" "$BOOK"
@@ -57,7 +76,6 @@ pnpm exec wrangler d1 migrations apply sfd-prod --local --persist-to "$STATE"
 pnpm exec wrangler dev --port "$PORT" --persist-to "$STATE" --test-scheduled \
   --var JWT_SECRET:forum-local --var "BOOK_SOURCE_URL:http://127.0.0.1:$BOOK_PORT" > "$LOG" 2>&1 &
 PID=$!
-trap 'kill $PID $BOOK_PID 2>/dev/null || true; rm -rf "$WORK"' EXIT
 for _ in $(seq 1 60); do
   curl -fsS "$HOST/api/health" > /dev/null 2>&1 && break
   sleep 1
@@ -65,10 +83,22 @@ done
 curl -fsS "$HOST/api/health" > /dev/null || { tail -n 50 "$LOG"; exit 1; }
 
 # 동기화 결과는 계약 파일이 확인한다. scheduled 핸들러가 아직 없으면 실패해도 여기서는 멈추지 않는다.
+# 목차 API가 있으면 syncedAt이 바뀔 때까지 최대 30초 기다린다. 핸들러가 일을 뒤로 미뤄도 경합하지 않게 한다.
+synced_at() {
+  curl -fsS "$HOST/api/book" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("syncedAt"))' 2>/dev/null || echo "unavailable"
+}
 sync_book() {
-  local status
+  local status before now
+  before="$(synced_at)"
   status="$(curl -s -o /dev/null -w '%{http_code}' "$HOST/__scheduled" || true)"
   echo "book sync ($1): HTTP $status"
+  [ "$before" = "unavailable" ] && return 0
+  for _ in $(seq 1 60); do
+    now="$(synced_at)"
+    if [ "$now" != "$before" ] && [ "$now" != "None" ]; then return 0; fi
+    sleep 0.5
+  done
+  echo "book sync ($1): syncedAt did not change within 30s" >&2
 }
 
 UID_VAR="$(date +%s)$$"

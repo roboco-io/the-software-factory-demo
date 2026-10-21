@@ -8,7 +8,7 @@
 
 - 요청과 응답은 JSON이다. 오류는 `{"errors": {"field": ["message"]}}` 형식이고 `apps/api/src/lib/errors.ts` 헬퍼의 문구를 쓴다.
 - 인증은 기존 `Authorization: Token <jwt>`이다. 읽기는 인증 없이 가능하고, 쓰기·추천·신고는 인증이 필요하다(없으면 401).
-- 시각은 ISO 8601 문자열이다. `revision`은 정수다.
+- 시각은 밀리초까지 담은 ISO 8601 UTC 문자열이다(`Date.prototype.toISOString()` 형식). `revision`은 정수다.
 - 남의 토론·답글을 수정·삭제하면 403(`topic`/`reply`: `forbidden`), 없는 대상은 404(`topic`/`reply`/`document`: `not found`)다.
 
 ## 책 동기화
@@ -27,8 +27,9 @@ API Worker의 `scheduled` 핸들러가 환경 변수 `BOOK_SOURCE_URL`(책 저�
 - 절은 원고 파일의 `## ` 제목을 순서대로 읽고, 매니페스트 `anchors`에서 그 제목의 앵커를 찾은 것이다. 매니페스트에 없는 제목은 절 목록에 넣지 않는다. 같은 앵커에 여러 제목이 연결되어 있으면 현재 원고에 있는 제목을 쓴다.
 - 전에 있던 앵커가 현재 원고에 없으면 그 절은 사라진 절이다. 목록에서 빠지지만 토론은 남는다.
 - 동기화가 실패하면 기존 데이터를 그대로 둔다.
+- `scheduled` 핸들러는 동기화를 끝낸 뒤 반환한다. `ctx.waitUntil()`로 미루지 않는다. 실행 스크립트는 호출 후 `GET /api/book`의 `syncedAt`이 바뀔 때까지도 기다린다.
 
-계약 테스트는 `fixtures/book-v1`로 동기화한 뒤 일반 파일을 실행하고, `fixtures/book-v2`로 다시 동기화한 뒤 `*_after.hurl`을 실행한다.
+계약 테스트는 `fixtures/book-v1`로 동기화한 뒤 일반 파일을 실행하고, `fixtures/book-v2`로 다시 동기화한 뒤 `*_after.hurl`을 실행한다. `revision_before.hurl`과 `revision_after.hurl`은 한 쌍이므로 `skip.txt`에서 함께 지운다. 하나만 지우면 실행 스크립트가 오류로 멈춘다.
 
 ## 응답 형식
 

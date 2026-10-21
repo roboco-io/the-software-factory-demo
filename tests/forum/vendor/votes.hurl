@@ -115,7 +115,13 @@ HTTP 200
 [Asserts]
 jsonpath "$.reply.score" == 0
 
-# 점수가 같으면 작성순
+DELETE {{host}}/api/replies/{{early_id}}/vote
+Authorization: Token {{token_c}}
+HTTP 200
+[Asserts]
+jsonpath "$.reply.score" == 0
+
+# 점수가 같으면(둘 다 0) 작성순
 GET {{host}}/api/topics/{{topic_id}}/replies?sort=top
 HTTP 200
 [Asserts]

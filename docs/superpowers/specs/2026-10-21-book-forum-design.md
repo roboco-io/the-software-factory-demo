@@ -47,7 +47,7 @@
 |---|---|---|
 | 본문이 그대로다 | 현재 revision이 토론 시점과 같다 | 표시 없음 |
 | 토론 이후 장이 개정됐다 | 현재 revision이 더 크다(매니페스트는 문자열 `"11"`로 저장하므로 정수로 바꿔 비교한다) | "이 토론 이후 책이 개정됨" 배지와 책 링크 |
-| 절이 사라졌다 | 앵커가 현재 매니페스트에 없다 | "현재 판본에 없는 절" 배지. 토론은 장 단위로 계속 보인다 |
+| 절이 사라졌다 | 앵커가 현재 원고의 절 제목에 없다(매니페스트는 옛 제목도 남기므로 매니페스트로는 판정할 수 없다) | "현재 판본에 없는 절" 배지. 토론은 장 단위로 계속 보인다 |
 
 revision은 장 단위 번호이므로 같은 장의 다른 절이 바뀌어도 배지가 뜬다. 절 단위 변경 여부는 현재 매니페스트로 알 수 없다. 정확도를 높이려면 책 저장소가 절별 해시를 매니페스트에 추가해야 한다. 이는 책 저장소 쪽 변경이므로 이 설계의 범위 밖에 두고, 장 단위 배지로 시작한다.
 
@@ -55,11 +55,13 @@ revision은 장 단위 번호이므로 같은 장의 다른 절이 바뀌어도 
 
 ### 3.4 동기화
 
-API Worker에 Cloudflare Cron Trigger와 `scheduled` 핸들러를 추가한다. 핸들러는 `apps/api/src/index.ts`에 연결하고 Cron은 `wrangler.json`에 설정하므로 둘 다 T2 변경이다. Cron은 하루 몇 차례 `raw.githubusercontent.com`에서 매니페스트를 받아 `book_documents`·`book_sections` 테이블을 갱신한다. 장 제목은 매니페스트에 없으므로 각 장 마크다운의 첫 `#` 제목을 함께 읽는다. 동기화가 실패하면 기존 데이터를 그대로 두고 에러 수집 경로(`error-events`)로 기록한다. 포럼은 마지막 동기화 시각을 화면에 보여 준다.
+API Worker에 Cloudflare Cron Trigger와 `scheduled` 핸들러를 추가한다. 핸들러는 `apps/api/src/index.ts`에 연결하고 Cron은 `wrangler.json`에 설정하므로 둘 다 T2 변경이다. Cron은 하루 몇 차례 `raw.githubusercontent.com`에서 매니페스트를 받아 `book_documents`·`book_sections` 테이블을 갱신한다. 장 제목은 매니페스트에 없으므로 각 장 마크다운의 첫 `#` 제목을 함께 읽는다. 2026-10-21 기준 문서가 45개라 한 번에 모두 읽으면 매니페스트를 포함해 46회 요청이 필요하고, Workers 무료 플랜의 실행당 하위 요청 한도(50회)에 가깝다. 문서가 늘어나면 revision이 바뀐 문서만 읽거나 여러 실행에 나눠 읽어야 한다. 동기화가 실패하면 기존 데이터를 그대로 두고 에러 수집 경로(`error-events`)로 기록한다. 포럼은 마지막 동기화 시각을 화면에 보여 준다.
 
-책 사이트의 각 절에 "이 절 토론하기" 링크를 넣는 작업은 책 저장소의 변경이다. 포럼은 `#/new?doc=ch05&anchor=s03` 형태의 진입 주소만 제공하고, 책 사이트 변경은 책 저장소에 별도로 요청한다.
+책 사이트의 각 절에 "이 절 토론하기" 링크를 넣는 작업은 책 저장소의 변경이다. 포럼은 `#/new?docId=ch05&anchor=s03` 형태의 진입 주소만 제공하고, 책 사이트 변경은 책 저장소에 별도로 요청한다.
 
 ## 4. 포럼 모델과 API
+
+이 절은 개요다. 정확한 요청·응답 형식, 오류 문구, 정렬 규칙은 계약 테스트의 설명 문서 `tests/forum/vendor/CONTRACT.md`가 정하며, 둘이 다르면 계약이 우선한다.
 
 ### 4.1 데이터 모델
 
@@ -84,13 +86,13 @@ API Worker에 Cloudflare Cron Trigger와 `scheduled` 핸들러를 추가한다. 
 |---|---|
 | `GET /api/book` | 문서 목록, 문서별 토론 수, 마지막 동기화 시각 |
 | `GET /api/book/:docId` | 절 목록과 절별 토론 수 |
-| `GET /api/topics?doc=&anchor=&kind=&sort=activity\|new&limit=&offset=` | 토론 목록. 기본 정렬은 최근 활동순 |
+| `GET /api/topics?docId=&anchor=&kind=&author=&sort=activity\|new&limit=&offset=` | 토론 목록. 기본 정렬은 최근 활동순 |
 | `POST /api/topics` | 토론 생성. `doc`·`anchor`는 선택. 지정하면 현재 revision을 함께 저장 |
 | `GET /api/topics/:id` | 토론과 책 연결 상태(그대로/개정됨/사라진 절) |
 | `PUT`·`DELETE /api/topics/:id` | 작성자만 수정·삭제 |
 | `GET /api/topics/:id/replies?sort=top\|old` | 답글 트리 |
 | `POST /api/topics/:id/replies` | 답글 작성. `parentId`로 답글에 답글 |
-| `PUT`·`DELETE /api/replies/:id` | 작성자만 수정·삭제. 하위 답글이 있으면 본문만 "삭제됨"으로 바꾼다 |
+| `PUT`·`DELETE /api/replies/:id` | 작성자만 수정·삭제. 하위 답글이 있으면 `deleted: true`와 빈 본문으로 자리만 남긴다 |
 | `POST`·`DELETE /api/replies/:id/vote` | 추천과 취소 |
 
 `users`, `user`, `profiles/:username`, 이미지·피드백·수집 경로는 기존 것을 유지한다. `articles`, `comments`, `tags`, `favorite`, `follow`, `feed` 경로는 6장의 전환 마지막 단계에서 제거한다.
