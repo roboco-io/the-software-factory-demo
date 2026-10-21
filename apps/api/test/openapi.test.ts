@@ -4,6 +4,8 @@ import { api } from "./helpers";
 
 const FORUM = /^\/api\/(book|topics|replies|agents)(\/|$)/;
 const METHODS = new Set(["GET", "POST", "PUT", "DELETE"]);
+// 운영용 내부 경로. 토큰 없이는 404로 존재를 숨기므로 공개 명세에 넣지 않는다.
+const INTERNAL = new Set(["POST /book/sync"]);
 
 // Hono 경로 "/api/topics/:id"를 OpenAPI 경로 "/topics/{id}"로 바꾼다.
 const toOpenApi = (path: string) => path.replace(/^\/api/, "").replace(/:(\w+)/g, "{$1}");
@@ -29,7 +31,8 @@ describe("GET /api/openapi.json", () => {
     const served = new Set(
       app.routes
         .filter((r) => METHODS.has(r.method) && FORUM.test(r.path))
-        .map((r) => `${r.method} ${toOpenApi(r.path)}`),
+        .map((r) => `${r.method} ${toOpenApi(r.path)}`)
+        .filter((op) => !INTERNAL.has(op)),
     );
     const documented = new Set(
       Object.entries(doc.paths).flatMap(([path, ops]) =>

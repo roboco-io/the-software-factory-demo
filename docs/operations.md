@@ -29,6 +29,7 @@
 - 스모크 유입: `factory-smoke` 워크플로(6시간마다)가 프로덕션에 읽기 요청만 보낸다(Hurl `tests/smoke/readonly.hurl`, Playwright `apps/web/e2e-smoke/`). 실패하면 `source:smoke` 이슈를 만들거나 열린 이슈에 코멘트하고, 다음 성공 때 "복구됨" 코멘트를 남긴다. 이슈 종료는 사람이 정한다.
 - 유입 이슈는 자동으로 트리아지되지만, 구현은 리포 쓰기 권한자의 `@factory go`가 있어야 시작한다.
 - `INTAKE_TOKEN`: 원본은 GitHub environment `production`의 secret이다. 값을 바꾸려면 secret을 바꾼 뒤 `deploy` 워크플로를 다시 실행한다. 검증용 로컬 사본은 `~/.config/sfd-intake-token`(권한 600)에만 두고 터미널에 출력하지 않는다. 프리뷰 Worker에는 이 값을 넣지 않으므로 프리뷰의 수집 엔드포인트는 항상 404다.
+- `BOOK_SYNC_TOKEN`: 책 저장소(`roboco-io/the-software-factory`)의 Pages 배포가 끝나면 `POST /api/book/sync`를 `Authorization: Bearer <토큰>`과 본문 `{"ref":"<배포한 커밋 SHA>"}`로 호출해 책 목차를 바로 동기화한다. 커밋 SHA로 읽는 이유는 raw.githubusercontent.com이 브랜치 주소를 몇 분간 캐시하기 때문이다. 원본은 데모 저장소 environment `production`의 secret이고 `deploy` 워크플로가 Worker secret으로 넣는다. 같은 값을 책 저장소의 secret `FORUM_SYNC_TOKEN`에 둔다. 토큰이 없거나 틀리면 404다. 값을 바꾸려면 두 secret을 함께 바꾸고 데모의 `deploy`를 다시 실행한다. 매시 17분 Cron 동기화는 놓친 경우를 위한 보조로 계속 돈다.
 - 수동 실행: `gh workflow run factory-intake.yml`, `gh workflow run factory-smoke.yml`.
 - 스모크 실패 주입: `gh workflow run factory-smoke.yml -f api_base=https://sfd-api.roboco.workers.dev/api/__smoke_injected_failure`. 존재하지 않는 경로라 `/health`가 404가 된다. 입력 없이 다시 실행하면 복구를 확인할 수 있다. `api_base`는 프로덕션 API 주소 자신이나 그 하위 경로만 받는다. 다른 값을 주면 `target` job이 실패하고 스모크 검사와 이슈 기록은 실행되지 않는다.
 - 에러 주입: `POST /api/_factory/intake/probe`에 `Authorization: Bearer <INTAKE_TOKEN>`을 보내면 의도적 예외가 하나 기록된다(응답 500). 토큰이 없거나 틀리면 다른 미지 경로와 같은 404다. 토큰이 명령줄·셸 기록에 남지 않게 헤더를 파일 디스크립터로 넘긴다:

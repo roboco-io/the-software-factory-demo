@@ -13,6 +13,7 @@ export default defineConfig(async () => {
             TEST_MIGRATIONS: migrations,
             JWT_SECRET: "test-secret",
             INTAKE_TOKEN: "test-intake-token",
+            BOOK_SYNC_TOKEN: "test-book-sync-token",
           },
         },
       }),

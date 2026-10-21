@@ -36,6 +36,16 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           INTAKE_TOKEN: ${{ secrets.INTAKE_TOKEN }}
+      # BOOK_SYNC_TOKEN: 책 저장소 배포가 POST /api/book/sync를 부를 때 쓰는 토큰. INTAKE_TOKEN과 같은 방식으로 넣는다.
+      - name: Sync BOOK_SYNC_TOKEN Worker secret
+        working-directory: apps/api
+        run: |
+          test -n "$BOOK_SYNC_TOKEN"
+          printf '%s' "$BOOK_SYNC_TOKEN" | pnpm exec wrangler secret put BOOK_SYNC_TOKEN
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BOOK_SYNC_TOKEN: ${{ secrets.BOOK_SYNC_TOKEN }}
       - working-directory: apps/api
         run: pnpm exec wrangler deploy
         env:
