@@ -87,18 +87,22 @@ curl -fsS "$HOST/api/health" > /dev/null || { tail -n 50 "$LOG"; exit 1; }
 synced_at() {
   curl -fsS "$HOST/api/book" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("syncedAt"))' 2>/dev/null || echo "unavailable"
 }
+# 로컬 workerd가 처음 고정 데이터 서버에 연결할 때 "Network connection lost"로 한 번 실패한 적이 있다(2026-10-21).
+# 동기화가 반영되지 않으면 최대 3회 다시 호출한다. 동기화 실패는 기존 데이터를 바꾸지 않으므로 다시 호출해도 안전하다.
 sync_book() {
-  local status before now
+  local status before now attempt
   before="$(synced_at)"
-  status="$(curl -s -o /dev/null -w '%{http_code}' "$HOST/__scheduled" || true)"
-  echo "book sync ($1): HTTP $status"
-  [ "$before" = "unavailable" ] && return 0
-  for _ in $(seq 1 60); do
-    now="$(synced_at)"
-    if [ "$now" != "$before" ] && [ "$now" != "None" ]; then return 0; fi
-    sleep 0.5
+  for attempt in 1 2 3; do
+    status="$(curl -s -o /dev/null -w '%{http_code}' "$HOST/__scheduled" || true)"
+    echo "book sync ($1, attempt $attempt): HTTP $status"
+    [ "$before" = "unavailable" ] && return 0
+    for _ in $(seq 1 20); do
+      now="$(synced_at)"
+      if [ "$now" != "$before" ] && [ "$now" != "None" ]; then return 0; fi
+      sleep 0.5
+    done
   done
-  echo "book sync ($1): syncedAt did not change within 30s" >&2
+  echo "book sync ($1): syncedAt did not change after 3 attempts (before=$before now=$now)" >&2
 }
 
 UID_VAR="$(date +%s)$$"
