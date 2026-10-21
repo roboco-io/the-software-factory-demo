@@ -50,13 +50,34 @@ HTTP 201
 jsonpath "$.topic.book.revision" == 5
 jsonpath "$.topic.book.status" == "current"
 
-# p01 s01: v2에서도 그대로다
+# patterns p01: v2에서도 그대로다
 POST {{host}}/api/topics
 Authorization: Token {{token}}
 {
-  "topic": { "title": "그대로인 절 {{uid}}", "body": "본문", "docId": "p01", "anchor": "s01" }
+  "topic": { "title": "그대로인 패턴 {{uid}}", "body": "본문", "docId": "patterns", "anchor": "p01" }
 }
 HTTP 201
 [Asserts]
-jsonpath "$.topic.book.revision" == 2
+jsonpath "$.topic.book.revision" == 4
+jsonpath "$.topic.book.status" == "current"
+
+# patterns p02: v2에서 이 패턴 본문이 바뀐다
+POST {{host}}/api/topics
+Authorization: Token {{token}}
+{
+  "topic": { "title": "개정될 패턴 {{uid}}", "body": "본문", "docId": "patterns", "anchor": "p02" }
+}
+HTTP 201
+[Asserts]
+jsonpath "$.topic.book.status" == "current"
+
+# patterns 전체: 어느 패턴이든 revision이 오르면 개정으로 본다
+POST {{host}}/api/topics
+Authorization: Token {{token}}
+{
+  "topic": { "title": "패턴 전체 {{uid}}", "body": "본문", "docId": "patterns" }
+}
+HTTP 201
+[Asserts]
+jsonpath "$.topic.book.anchor" == null
 jsonpath "$.topic.book.status" == "current"
