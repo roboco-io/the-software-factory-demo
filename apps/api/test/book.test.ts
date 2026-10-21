@@ -109,6 +109,27 @@ describe("book sync", () => {
     expect(after[1]!.hash).not.toBe(before[1]!.hash);
   });
 
+  it("rereads the patterns when the pattern list changes even if the revision sum is unchanged", async () => {
+    const pat = (id: string) => `# ${id.toUpperCase()} 패턴\n\n본문.\n`;
+    const source = (m: Record<string, unknown>) => ({
+      "website/content-manifest.json": JSON.stringify(m),
+      "manuscript/patterns/p01.md": pat("p01"),
+      "manuscript/patterns/p02.md": pat("p02"),
+      "manuscript/patterns/p03.md": pat("p03"),
+    });
+    mockSource(source({ p01: { revision: "1" }, p02: { revision: "2" } }));
+    await syncBook(testEnv());
+    vi.restoreAllMocks();
+    // p02가 빠지고 p03이 같은 revision으로 들어오면 합은 그대로다
+    mockSource(source({ p01: { revision: "1" }, p03: { revision: "2" } }));
+    await syncBook(testEnv());
+    const { document } = (await (await api("/book/patterns")).json()) as {
+      document: { revision: number; sections: { anchor: string }[] };
+    };
+    expect(document.revision).toBe(3);
+    expect(document.sections.map((s) => s.anchor)).toEqual(["p01", "p03"]);
+  });
+
   it("rereads a manuscript whose section hashes are missing even if the revision is unchanged", async () => {
     const calls: string[] = [];
     mockSource(

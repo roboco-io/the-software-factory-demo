@@ -76,6 +76,14 @@ describe("BookPage", () => {
     );
   });
 
+  it("sends an old per-pattern link to that pattern's section in the patterns document", async () => {
+    const urls = setup("/book/p03?anchor=s02");
+    await screen.findByRole("heading", { name: "5장 의도를 실행 계약으로 바꾼다" });
+    expect(urls.some((u) => u.endsWith("/book/patterns"))).toBe(true);
+    expect(urls.some((u) => u.includes("/book/p03"))).toBe(false);
+    await waitFor(() => expect(urls.some((u) => u.includes("anchor=p03&"))).toBe(true));
+  });
+
   it("shows the API error for an unknown document", async () => {
     setup("/book/ch99", 404);
     expect(await screen.findByText("document not found")).toBeInTheDocument();
