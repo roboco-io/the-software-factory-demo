@@ -1,5 +1,4 @@
 pnpm-lock.yaml
-tests/realworld/vendor/
 apps/web/public/styles.css
 **/dist/
 **/.wrangler/

@@ -97,19 +97,19 @@ describe("runRisk", () => {
   it("forbids lines added to skip.txt in a bot implement PR but allows deleting lines (F21)", async () => {
     const h = makeTestDeps();
     const add = await openBotPr(h, {}, [
-      { filename: "tests/realworld/skip.txt", additions: ["tags.hurl"] },
+      { filename: "tests/forum/skip.txt", additions: ["votes.hurl"] },
     ]);
-    const del = await openBotPr(h, {}, [{ filename: "tests/realworld/skip.txt", additions: [] }]);
+    const del = await openBotPr(h, {}, [{ filename: "tests/forum/skip.txt", additions: [] }]);
     const moved = await openBotPr(h, {}, [
-      { filename: "tests/realworld/skip.txt", previousFilename: "tests/other.txt", additions: [] },
+      { filename: "tests/forum/skip.txt", previousFilename: "tests/other.txt", additions: [] },
     ]);
     expect((await runRisk(h.deps, { pr: add.pr, check: false })).forbidden).toEqual([
-      "tests/realworld/skip.txt",
+      "tests/forum/skip.txt",
     ]);
     const d = await runRisk(h.deps, { pr: del.pr, check: false });
     expect(d).toMatchObject({ tier: "T1", forbidden: [] });
     expect((await runRisk(h.deps, { pr: moved.pr, check: false })).forbidden).toEqual([
-      "tests/realworld/skip.txt",
+      "tests/forum/skip.txt",
     ]);
   });
 
@@ -150,7 +150,7 @@ describe("runRisk", () => {
 
   it("forbids a skip.txt change whose patch GitHub omitted, but not a verified deletion (F21)", async () => {
     const h = makeTestDeps();
-    const f = "tests/realworld/skip.txt";
+    const f = "tests/forum/skip.txt";
     const big = await openBotPr(h, {}, [
       { filename: f, additions: [], additionCount: 3, patchMissing: true },
     ]);

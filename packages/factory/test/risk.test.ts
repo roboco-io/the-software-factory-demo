@@ -20,7 +20,6 @@ describe("tierOf with factory/risk-policy.yml", () => {
     ["apps/api/src/routes/tags.ts", "T1"],
     ["apps/api/test/deferred.test.ts", "T1"],
     ["apps/web/src/pages/Home.tsx", "T1"],
-    ["tests/realworld/skip.txt", "T1"],
     ["tests/forum/skip.txt", "T1"],
     ["apps/api/src/routes/feedback.ts", "T2"],
     ["apps/api/src/lib/error-events.ts", "T2"],
@@ -70,9 +69,7 @@ describe("tierOf with factory/risk-policy.yml", () => {
     ["apps/api/Claude.MD", "T3"],
     ["apps/web/agents.override.md", "T3"],
     [".GitHub/workflows/x.yml", "T3"],
-    ["scripts/realworld-api.sh", "T3"],
-    ["tests/realworld/vendor/tags.hurl", "T3"],
-    ["tests/realworld/UPSTREAM.txt", "T3"],
+    ["scripts/forum-api.sh", "T3"],
     ["tests/forum/vendor/topics.hurl", "T3"],
     ["tests/forum/vendor/fixtures/book-v1/website/content-manifest.json", "T3"],
   ])("%s → %s", (file, tier) => {
@@ -111,7 +108,6 @@ describe("classifyFiles", () => {
       "typecheck",
       "lint",
       "unit",
-      "realworld-api",
       "forum-api",
       "e2e",
       "risk-tier",
@@ -145,7 +141,7 @@ describe("ChangedFile additions (F21)", () => {
   });
 
   it("carries additions on a changed file", () => {
-    const f: ChangedFile = { filename: "tests/realworld/skip.txt", additions: ["x.hurl"] };
+    const f: ChangedFile = { filename: "tests/forum/skip.txt", additions: ["x.hurl"] };
     expect(f.additions).toEqual(["x.hurl"]);
     expect(tierOf(f.filename, policy).tier).toBe("T1");
   });

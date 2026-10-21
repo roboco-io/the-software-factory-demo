@@ -16,7 +16,6 @@ const GREEN = {
   typecheck: "success",
   lint: "success",
   unit: "success",
-  "realworld-api": "success",
   "forum-api": "success",
   e2e: "success",
   "risk-tier": "success",
@@ -31,7 +30,7 @@ const TAGS: FakeStep = {
   writeFiles: {
     "apps/api/src/routes/tags.ts": "export const tagsRouter = 1;\n",
     "apps/api/test/deferred.test.ts": "// tags는 이제 200을 반환한다\n",
-    "tests/realworld/skip.txt": "favorites.hurl\nfeed.hurl\nprofiles.hurl\n",
+    "tests/forum/skip.txt": "reports.hurl\nvotes.hurl\n",
   },
   result: { summary: "GET /api/tags 구현, skip.txt에서 tags.hurl 제거", turns: 25, costUsd: 0.9 },
 };
@@ -41,7 +40,7 @@ const FAVORITES: FakeStep = {
     "apps/api/migrations/0002_favorites.sql":
       "CREATE TABLE favorites (user_id INTEGER, article_id INTEGER);\n",
     "apps/api/src/routes/favorites.ts": "export const favoritesRouter = 1;\n",
-    "tests/realworld/skip.txt": "feed.hurl\nprofiles.hurl\ntags.hurl\n",
+    "tests/forum/skip.txt": "reports.hurl\n",
   },
   result: { summary: "즐겨찾기 구현" },
 };

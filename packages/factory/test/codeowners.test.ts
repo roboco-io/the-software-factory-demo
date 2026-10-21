@@ -61,9 +61,7 @@ describe(".github/CODEOWNERS", () => {
     "apps/web/.claude/settings.json",
     "apps/api/.agents/config.yml",
     ".agents/skills/x.md",
-    "scripts/realworld-api.sh",
-    "tests/realworld/vendor/tags.hurl",
-    "tests/realworld/UPSTREAM.txt",
+    "scripts/forum-api.sh",
     "tests/forum/vendor/topics.hurl",
     "tests/smoke/readonly.hurl",
     "apps/web/e2e-smoke/home.spec.ts",
@@ -128,7 +126,6 @@ describe(".github/CODEOWNERS", () => {
 
   it("does not require a human for T1 application code", () => {
     expect(ownersOf("apps/api/src/routes/tags.ts")).toEqual([]);
-    expect(ownersOf("tests/realworld/skip.txt")).toEqual([]);
     expect(ownersOf("tests/forum/skip.txt")).toEqual([]);
     expect(ownersOf("docs/notes.md")).toEqual([]);
   });

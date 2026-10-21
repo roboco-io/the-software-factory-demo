@@ -32,7 +32,7 @@ export interface RiskResult {
 
 /**
  * PR의 변경 파일 한 건. `additions`는 이 파일에서 추가된 줄의 내용(diff의 `+` 접두사 제외)이다.
- * runRisk가 봇 implement PR의 `tests/realworld/skip.txt` 추가 줄을 금지할 때 쓴다(F21).
+ * runRisk가 봇 implement PR의 `tests/forum/skip.txt` 추가 줄을 금지할 때 쓴다(F21).
  */
 export interface ChangedFile {
   filename: string;

@@ -13,7 +13,7 @@ body:
     id: acceptance
     attributes:
       label: 수용 기준
-      description: 완료를 판단할 수 있는 기준을 한 줄에 하나씩 쓴다. RealWorld 기능이면 해당 .hurl 파일 이름을 쓴다.
+      description: 완료를 판단할 수 있는 기준을 한 줄에 하나씩 쓴다. 포럼 API 기능이면 tests/forum/vendor/의 해당 .hurl 파일 이름을 쓴다.
     validations:
       required: true
   - type: textarea

@@ -104,4 +104,4 @@
 
 이 프로젝트의 자체 코드, 문서 및 설정은 [Apache License 2.0](LICENSE)으로 배포합니다.
 
-`tests/realworld/vendor/`의 RealWorld 공식 Hurl 테스트는 원본 MIT 라이선스를 따릅니다. 원본 저작권 및 라이선스 고지는 [THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt)에 보존합니다. 외부 의존성은 각 패키지의 라이선스를 따릅니다.
+외부 의존성은 각 패키지의 라이선스를 따릅니다. 포럼 전환 전까지 저장소에 포함했던 RealWorld 공식 Hurl 테스트(MIT)는 2026-10-21에 제거했으며, 그 고지는 제거 전 git 이력의 `THIRD_PARTY_LICENSES.txt`에 남아 있습니다.

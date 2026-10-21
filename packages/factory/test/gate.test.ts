@@ -8,7 +8,6 @@ export const GREEN = {
   typecheck: "success",
   lint: "success",
   unit: "success",
-  "realworld-api": "success",
   "forum-api": "success",
   e2e: "success",
   "risk-tier": "success",
@@ -407,7 +406,7 @@ describe("runGate", () => {
   it("refuses a skip.txt change it cannot verify even if risk-tier passed (F21)", async () => {
     const h = makeTestDeps();
     const { pr } = await openBotPr(h, {}, [
-      { filename: "tests/realworld/skip.txt", additions: [], additionCount: 2, patchMissing: true },
+      { filename: "tests/forum/skip.txt", additions: [], additionCount: 2, patchMissing: true },
     ]);
     h.gh.setChecks("sha-a", GREEN);
     await verdict(h, pr, "sha-a", "APPROVE");

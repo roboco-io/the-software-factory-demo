@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { micromark } from "micromark";
 import { gfm, gfmHtml } from "micromark-extension-gfm";
 
-const EXCLUDE = ["tests/realworld/vendor/"];
+const EXCLUDE = [];
 
 // 코드 펜스 안의 빈 줄에서는 나누지 않는다. 각 덩어리는 { line(1부터), text }다.
 export function chunks(src) {

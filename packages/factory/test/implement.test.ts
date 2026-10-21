@@ -13,7 +13,7 @@ import { BOT, makeTestDeps, scriptedSpawn, type TestHarness } from "./helpers";
 const TAGS: FakeStep = {
   writeFiles: {
     "apps/api/src/routes/tags.ts": "export const tags = 1;\n",
-    "tests/realworld/skip.txt": "favorites.hurl\nfeed.hurl\nprofiles.hurl\n",
+    "tests/forum/skip.txt": "reports.hurl\nvotes.hurl\n",
   },
   result: {
     summary: "GET /api/tags 구현\n남은 위험: 태그가 많으면 응답이 커진다",

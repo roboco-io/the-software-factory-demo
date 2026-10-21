@@ -7,7 +7,7 @@
 ## 규칙
 
 - AGENTS.md를 따른다. 지적과 관계없는 변경을 하지 않는다.
-- 다음 경로는 수정하지 않는다: .github/, factory/, packages/factory/, AGENTS.md, CLAUDE.md, scripts/, tests/realworld/vendor/, tests/forum/vendor/, tests/smoke/, apps/web/e2e-smoke/.
+- 다음 경로는 수정하지 않는다: .github/, factory/, packages/factory/, AGENTS.md, CLAUDE.md, scripts/, tests/forum/vendor/, tests/smoke/, apps/web/e2e-smoke/.
 - 지적을 해결하려면 수정 금지 경로를 바꿔야 하면 그 파일은 고치지 말고 출력에 "사람 조치 필요:"로 쓴다.
 - git commit, git push를 하지 않는다.
 - 끝내기 전에 pnpm format을 실행하고, pnpm typecheck, pnpm lint, pnpm test가 통과하는지 확인한다.
