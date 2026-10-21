@@ -61,6 +61,7 @@ describe("triage stage", () => {
     expect(after.labels.sort()).toEqual(["factory:triaged", "type:feature"]);
     const comment = (await h.gh.listComments(issue.number))[0]!;
     expect(comment.author).toBe(BOT);
+    // 고정 데이터는 RealWorld 시절(2026-10-11)에 기록한 트리아지 출력의 재생이다. 문구는 그대로 전달되는지만 본다.
     expect(comment.body).toContain("tests/realworld/skip.txt에서 tags.hurl");
     expect(pi.calls[0]?.readOnly).toBe(true);
     expect(pi.calls[0]?.prompt).toContain("#1 기존 이슈");
