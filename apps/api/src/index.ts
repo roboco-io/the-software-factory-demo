@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import type { AppEnv } from "./env";
+import type { AppEnv, Env } from "./env";
 import { recordError } from "./lib/error-events";
 import { ApiError, ROUTE_NOT_FOUND } from "./lib/errors";
 import { intakeRouter } from "./routes/intake";
@@ -12,6 +12,9 @@ import { profilesRouter } from "./routes/profiles";
 import { tagsRouter } from "./routes/tags";
 import { usersRouter } from "./routes/users";
 import { imagesRouter } from "./routes/images";
+import { bookRouter } from "./routes/book";
+import { topicsRouter } from "./routes/topics";
+import { syncBook } from "./lib/book-sync";
 
 const app = new Hono<AppEnv>();
 
@@ -34,6 +37,8 @@ router.route("/", articlesRouter);
 router.route("/", commentsRouter);
 router.route("/", tagsRouter);
 router.route("/", feedbackRouter);
+router.route("/", bookRouter);
+router.route("/", topicsRouter);
 router.route("/", intakeRouter);
 
 app.route("/api", router);
@@ -61,4 +66,13 @@ app.onError((err, c) => {
   return c.json({ errors: { server: ["internal error"] } }, 500);
 });
 
-export default app;
+// 동기화를 끝낸 뒤 반환한다. 실패해도 기존 데이터를 그대로 둔다.
+export default Object.assign(app, {
+  async scheduled(_event: ScheduledController, env: Env): Promise<void> {
+    try {
+      await syncBook(env);
+    } catch (err) {
+      console.error("book sync failed", err);
+    }
+  },
+});

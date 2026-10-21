@@ -5,7 +5,11 @@
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
   "vars": {
+    "BOOK_SOURCE_URL": "https://raw.githubusercontent.com/roboco-io/the-software-factory/main",
     "ALLOWED_ORIGINS": "https://roboco.io,https://roboco-io.github.io,http://localhost:5173,http://localhost:4173"
+  },
+  "triggers": {
+    "crons": ["17 * * * *"]
   },
   "d1_databases": [
     {

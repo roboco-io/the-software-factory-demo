@@ -9,12 +9,16 @@ describe("schema", () => {
     expect(results.map((r) => r.name)).toEqual([
       "article_tags",
       "articles",
+      "book_documents",
+      "book_meta",
+      "book_sections",
       "comments",
       "error_events",
       "favorites",
       "feedback",
       "images",
       "tags",
+      "topics",
       "users",
     ]);
   });
