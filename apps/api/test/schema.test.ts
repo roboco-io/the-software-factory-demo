@@ -2,27 +2,22 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
 describe("schema", () => {
-  it("creates P1 tables and the P3 intake tables", async () => {
+  it("has the forum, account and intake tables, without the RealWorld tables", async () => {
     const { results } = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'd1_%' AND name NOT LIKE '_cf_%' ORDER BY name",
     ).all<{ name: string }>();
     expect(results.map((r) => r.name)).toEqual([
       "agent_tokens",
       "agent_writes",
-      "article_tags",
-      "articles",
       "book_documents",
       "book_meta",
       "book_sections",
-      "comments",
       "error_events",
-      "favorites",
       "feedback",
       "images",
       "replies",
       "reply_votes",
       "reports",
-      "tags",
       "topics",
       "users",
     ]);
