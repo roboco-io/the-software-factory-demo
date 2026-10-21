@@ -1,6 +1,6 @@
 # AGENTS.md
 
-이 리포는 GitHub Issues/Actions 위에서 동작하는 소프트웨어 팩토리 데모다. 애플리케이션은 RealWorld(Conduit)다.
+이 리포는 GitHub Issues/Actions 위에서 동작하는 소프트웨어 팩토리 데모다. 애플리케이션은 책 『The Software Factory』를 두고 토론하는 포럼(conveyor)이다. RealWorld(Conduit)에서 출발해 2026-10-21에 전환했다.
 설계: `docs/superpowers/specs/2026-10-11-software-factory-design.md`
 
 ## 구조
