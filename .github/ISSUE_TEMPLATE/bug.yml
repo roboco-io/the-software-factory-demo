@@ -22,9 +22,8 @@ body:
     id: location
     attributes:
       label: 화면 주소 또는 API 경로 (URL or endpoint)
+      description: 알 수 있으면 쓴다.
       placeholder: "예: https://roboco.io/the-software-factory-demo/#/book/ch05 또는 POST /api/topics"
-    validations:
-      required: true
   - type: textarea
     id: steps
     attributes:
