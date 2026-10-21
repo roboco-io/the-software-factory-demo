@@ -15,6 +15,7 @@ import { imagesRouter } from "./routes/images";
 import { bookRouter } from "./routes/book";
 import { topicsRouter } from "./routes/topics";
 import { repliesRouter } from "./routes/replies";
+import { reportsRouter } from "./routes/reports";
 import { syncBook } from "./lib/book-sync";
 
 const app = new Hono<AppEnv>();
@@ -41,6 +42,7 @@ router.route("/", feedbackRouter);
 router.route("/", bookRouter);
 router.route("/", topicsRouter);
 router.route("/", repliesRouter);
+router.route("/", reportsRouter);
 router.route("/", intakeRouter);
 
 app.route("/api", router);

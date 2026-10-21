@@ -16,6 +16,7 @@
 
 ### 추가
 
+- 포럼 API에 토론·답글 신고를 추가했습니다(`POST /api/topics/:id/report`, `/api/replies/:id/report`). 로그인한 사용자가 사유(500자 이하)와 함께 신고하면 `reports` 테이블에 기록되고, 같은 대상을 다시 신고하면 기존 신고를 돌려줍니다. 첫 공개에서는 신고 접수만 제공하며, 숨김은 운영자가 데이터베이스에서 처리합니다. D1 마이그레이션 `0008_reports.sql`이 추가됩니다. [#90](https://github.com/roboco-io/the-software-factory-demo/issues/90)
 - 포럼 API에 답글 추천을 추가했습니다. 로그인한 사용자는 남의 답글을 한 번 추천하고 취소할 수 있으며(반복해도 결과가 같음), 답글 목록을 `sort=top`으로 추천순 정렬할 수 있습니다. 답글 응답의 `score`와 `voted`가 실제 값을 돌려줍니다. D1 마이그레이션 `0007_reply_votes.sql`이 추가됩니다. [#89](https://github.com/roboco-io/the-software-factory-demo/issues/89)
 - 포럼 API에 답글과 답글의 답글(스레드)을 추가했습니다(`/api/topics/:id/replies`, `/api/replies/:id`). 하위 답글이 있는 답글을 지우면 빈 본문의 삭제 표시로 자리만 남고, 답글이 달리면 토론 목록의 최근 활동순 정렬에 반영됩니다. D1 마이그레이션 `0006_replies.sql`이 추가됩니다. [PR #92](https://github.com/roboco-io/the-software-factory-demo/pull/92)
 - 포럼 API에 책 목차와 토론을 추가했습니다. API Worker의 `scheduled` 핸들러와 Cron Trigger가 `BOOK_SOURCE_URL`의 매니페스트를 동기화하고(revision이 바뀐 문서만 원고를 다시 읽음, 실패하면 기존 데이터 유지), `GET /api/book`·`/api/book/:docId`와 장·절에 연결하는 토론 CRUD(`/api/topics`)를 제공합니다. 책이 개정되었거나 절이 사라지면 토론의 `book.status`가 `revised`·`removed`로 표시됩니다. D1 마이그레이션 `0005_book_forum.sql`이 추가됩니다.
