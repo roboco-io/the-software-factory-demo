@@ -159,3 +159,4 @@
 {"ts":"2026-10-21T05:03:30.153Z","issue":88,"pr":null,"role":"command","engine":null,"model":null,"ok":true,"turns":0,"costUsd":null,"durationMs":0,"failureReason":null,"round":0}
 {"ts":"2026-10-21T05:11:24.827Z","issue":88,"pr":null,"role":"implement","engine":"claude","model":"claude-sonnet-5-5","ok":true,"turns":17,"costUsd":0.29029869999999997,"durationMs":320517,"failureReason":null,"round":0}
 {"ts":"2026-10-21T05:13:43.808Z","issue":88,"pr":92,"role":"review","engine":"codex","model":"gpt-6.1-sol","ok":true,"turns":4,"costUsd":null,"durationMs":22528,"failureReason":null,"round":0,"findings":[{"category":"other","file":"CHANGELOG.md","message":"사용자에게 제공되는 답글 API와 새 D1 마이그레이션이 추가됐지만 변경 기록이 없습니다. AGENTS.md의 변경 기록 규칙에 따라 미출시 절에 스레드 답글·삭제 동작·최근 활동순 목록과 마이그레이션 추가를 기록해야 합니다."}]}
+{"ts":"2026-10-21T05:14:30.434Z","issue":88,"pr":92,"role":"gate","engine":null,"model":null,"ok":false,"turns":0,"costUsd":null,"durationMs":0,"failureReason":"risk_t2","round":0}
