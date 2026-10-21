@@ -46,7 +46,7 @@
 | 상황 | 판정 기준 | 포럼 표시 |
 |---|---|---|
 | 본문이 그대로다 | 현재 revision이 토론 시점과 같다 | 표시 없음 |
-| 토론 이후 장이 개정됐다 | 현재 revision이 더 크다 | "이 토론 이후 책이 개정됨" 배지와 책 링크 |
+| 토론 이후 장이 개정됐다 | 현재 revision이 더 크다(매니페스트는 문자열 `"11"`로 저장하므로 정수로 바꿔 비교한다) | "이 토론 이후 책이 개정됨" 배지와 책 링크 |
 | 절이 사라졌다 | 앵커가 현재 매니페스트에 없다 | "현재 판본에 없는 절" 배지. 토론은 장 단위로 계속 보인다 |
 
 revision은 장 단위 번호이므로 같은 장의 다른 절이 바뀌어도 배지가 뜬다. 절 단위 변경 여부는 현재 매니페스트로 알 수 없다. 정확도를 높이려면 책 저장소가 절별 해시를 매니페스트에 추가해야 한다. 이는 책 저장소 쪽 변경이므로 이 설계의 범위 밖에 두고, 장 단위 배지로 시작한다.
@@ -55,7 +55,7 @@ revision은 장 단위 번호이므로 같은 장의 다른 절이 바뀌어도 
 
 ### 3.4 동기화
 
-API Worker에 Cloudflare Cron Trigger를 추가한다. Cron은 하루 몇 차례 `raw.githubusercontent.com`에서 매니페스트를 받아 `book_documents`·`book_sections` 테이블을 갱신한다. 장 제목은 매니페스트에 없으므로 각 장 마크다운의 첫 `#` 제목을 함께 읽는다. 동기화가 실패하면 기존 데이터를 그대로 두고 에러 수집 경로(`error-events`)로 기록한다. 포럼은 마지막 동기화 시각을 화면에 보여 준다.
+API Worker에 Cloudflare Cron Trigger와 `scheduled` 핸들러를 추가한다. 핸들러는 `apps/api/src/index.ts`에 연결하고 Cron은 `wrangler.json`에 설정하므로 둘 다 T2 변경이다. Cron은 하루 몇 차례 `raw.githubusercontent.com`에서 매니페스트를 받아 `book_documents`·`book_sections` 테이블을 갱신한다. 장 제목은 매니페스트에 없으므로 각 장 마크다운의 첫 `#` 제목을 함께 읽는다. 동기화가 실패하면 기존 데이터를 그대로 두고 에러 수집 경로(`error-events`)로 기록한다. 포럼은 마지막 동기화 시각을 화면에 보여 준다.
 
 책 사이트의 각 절에 "이 절 토론하기" 링크를 넣는 작업은 책 저장소의 변경이다. 포럼은 `#/new?doc=ch05&anchor=s03` 형태의 진입 주소만 제공하고, 책 사이트 변경은 책 저장소에 별도로 요청한다.
 
@@ -131,10 +131,12 @@ RealWorld 공식 Hurl 스위트(`tests/realworld/vendor/`)는 필수 체크 `rea
 
 다음 변경은 T3 경로라서 팩토리 구현 에이전트가 수정할 수 없다. 저장소 소유자 또는 소유자가 지정한 로컬 실행자가 PR로 만들고 CODEOWNERS가 승인한다.
 
-- `tests/forum/*.hurl`: 포럼 계약 테스트. 4.2의 각 경로에 대해 정상·오류·권한 케이스를 쓴다. 계약 테스트는 이 설계 문서가 승인된 뒤 작성한다.
-- `tests/forum/skip.txt`와 `scripts/forum-api.sh`: 기존 `scripts/realworld-api.sh`와 같은 방식의 실행 스크립트.
+- `tests/forum/vendor/*.hurl`: 포럼 계약 테스트. 4.2의 각 경로에 대해 정상·오류·권한 케이스를 쓴다. 계약 테스트는 이 설계 문서가 승인된 뒤 작성한다.
+- `tests/forum/skip.txt`: 아직 구현되지 않은 계약 파일 목록. 봇이 기능을 구현하면 이 파일에서 줄을 지우므로 T1으로 둔다(`tests/**` 규칙). RealWorld의 `tests/realworld/skip.txt`와 같은 방식이다.
+- `scripts/forum-api.sh`: 기존 `scripts/realworld-api.sh`와 같은 방식의 실행 스크립트(`scripts/**`, T3).
+- `packages/factory/src/stages/risk.ts`, `gate.ts`: 봇 구현 PR이 `skip.txt`에 줄을 추가해 실패를 숨기지 못하게 막는 규칙(F21)이 지금은 `tests/realworld/skip.txt`에만 적용된다. `tests/forum/skip.txt`에도 적용한다. 이 규칙이 없으면 봇이 포럼 계약 실패를 건너뜀 목록에 넣고 자동 병합할 수 있다.
 - `.github/workflows/ci.yml`: `forum-api` 체크 추가.
-- `factory/risk-policy.yml`: `requiredChecks`에 `forum-api` 추가, `tests/forum/**`를 T3에 추가. `.github/CODEOWNERS`도 함께 갱신.
+- `factory/risk-policy.yml`: `requiredChecks`에 `forum-api` 추가, `tests/forum/vendor/**`를 T3에 추가. `tests/forum/skip.txt`는 T3에 넣지 않는다. `.github/CODEOWNERS`도 함께 갱신.
 - `factory/prompts/*.md`, `AGENTS.md`: RealWorld 언급을 포럼 계약 기준으로 바꾼다.
 - `apps/web/e2e-smoke/home.spec.ts`: 웹 스모크를 RealWorld 화면 문구에서 분리한다. 6.3절의 0단계 변경이다.
 
@@ -148,13 +150,13 @@ RealWorld 공식 Hurl 스위트(`tests/realworld/vendor/`)는 필수 체크 `rea
 
 | 시점 | 스모크 변경 | 수행 | 선행 조건 |
 |---|---|---|---|
-| 0단계 | 웹 스모크의 "Global Feed" 검사를 고정 표식 `data-testid="smoke-ready"`(주 목록 로딩이 끝나면 나타남) 검사로 바꾼다. 제목·오류 없음·피드백 버튼 검사는 유지한다. 현재 홈에 표식을 추가한다. | 사람 | 없음 |
+| 0단계 | 웹 스모크의 "Global Feed" 검사와 "Loading articles..." 문구가 사라지는지 보는 검사를 고정 표식 `data-testid="smoke-ready"` 검사 하나로 바꾼다. 표식은 주 목록 로딩이 끝나야 나타나므로 로딩 완료도 함께 확인한다. 제목·오류 없음·피드백 버튼 검사는 유지한다. 현재 홈에 표식을 추가한다. | 사람 | 없음 |
 | 3단계 | 스모크 파일은 바꾸지 않는다. 새 홈 화면 하위 이슈의 완료 기준에 "`smoke-ready` 표식과 피드백 버튼을 유지한다"를 넣는다. | 팩토리 | 0단계 병합 |
 | 1·2단계 배포 후 | Hurl 스모크에 `GET /book`, `GET /topics?limit=1`을 추가한다. 토론이 0건이어도 통과하도록 응답 형식만 검사한다. | 사람 | 해당 기능의 프로덕션 배포 확인 |
 | 5단계 직전 | Hurl 스모크에서 `/articles`, `/tags` 검사를 뺀다. | 사람 | 포럼 경로 스모크가 프로덕션에서 통과 |
 | 5단계 | RealWorld 경로 제거 PR을 진행한다. | 팩토리 + 사람 | 위 스모크 축소 PR 병합 |
 
-전환을 시작하기 전에 열린 스모크 장애 이슈를 정리한다. 2026-10-21 기준 #66은 2026-10-20 21:41(UTC) 실행부터 스모크가 다시 통과했지만 열려 있다. 전환 중의 스모크 실패와 섞이지 않게 하기 위해서다.
+전환 중의 스모크 실패가 이전 장애와 섞이지 않도록, 전환을 시작할 때 열린 스모크 장애 이슈가 없어야 한다. 이전 장애 #66은 2026-10-20 21:41(UTC) 실행부터 스모크가 다시 통과해 2026-10-21에 닫았다. 포스트모템 재생 기록 #81은 아직 열려 있다.
 
 ### 6.4 단계와 하위 이슈
 
@@ -162,17 +164,21 @@ RealWorld 공식 Hurl 스위트(`tests/realworld/vendor/`)는 필수 체크 `rea
 |---|---|---|---|
 | 0 | 포럼 계약 테스트·CI 체크·팩토리 지침 갱신, 웹 스모크의 고정 표식 전환(6.3) | 사람 | T3 |
 | 1 | 책 문서·절 테이블과 매니페스트 동기화 Cron | 팩토리 | T2(마이그레이션·wrangler 설정) |
-| 1 | `GET /api/book`, `GET /api/book/:docId` | 팩토리 | T1 |
-| 2 | 토론 테이블과 토론 CRUD·목록(유형·책 연결·최근 활동순) | 팩토리 | T2(마이그레이션) |
+| 1 | `GET /api/book`, `GET /api/book/:docId` | 팩토리 | T2(라우터를 `apps/api/src/index.ts`에 연결) |
+| 2 | 토론 테이블과 토론 CRUD·목록(유형·책 연결·최근 활동순) | 팩토리 | T2(마이그레이션·`index.ts`) |
 | 2 | 답글 트리와 답글 CRUD | 팩토리 | T2(마이그레이션) |
 | 2 | 답글 추천과 추천순 정렬 | 팩토리 | T2(마이그레이션) |
 | 3 | 웹: 홈·장 화면(`smoke-ready` 표식 유지) | 팩토리 | T1 |
 | 3 | 웹: 토론 화면·작성 화면 | 팩토리 | T1 |
 | 4 | 에이전트 계정·토큰, 에이전트 표시 | 팩토리 | T2(인증) |
-| 4 | OpenAPI 명세와 `llms.txt` | 팩토리 | T1 |
+| 4 | OpenAPI 명세와 `llms.txt` | 팩토리 | T2(`index.ts`) |
 | 5 | 기존 글·댓글을 토론·답글로 옮기는 마이그레이션 | 팩토리 | T2, 병합 전 사람 확인 |
-| 5 | 스모크에서 RealWorld 검사 제거(먼저), RealWorld 경로·화면·스위트 제거(나중) | 사람(T3) → 팩토리 | T3 |
+| 5 | ① 스모크에서 RealWorld 검사 제거 | 사람 | T3 |
+| 5 | ② `requiredChecks`·`ci.yml`에서 `realworld-api` 제거, `tests/realworld/`·`scripts/realworld-api.sh` 삭제, F21 규칙의 RealWorld 경로 제거를 한 PR로 | 사람 | T3 |
+| 5 | ③ RealWorld API 경로와 화면 제거 | 팩토리 | T2(`index.ts`) |
 | 이후 | MCP 서버, 책 사이트의 "이 절 토론하기" 링크 | 별도 결정 | - |
+
+5단계의 ①②③은 이 순서로 병합한다. ②에서 `realworld-api`를 필수 체크에서 빼는 일과 스위트 삭제를 한 PR로 묶는 이유는, 스위트만 먼저 지우면 이후 모든 PR이 필수 체크에서 실패하기 때문이다. ③은 RealWorld 계약 테스트가 사라진 뒤에 경로를 지우므로 계약 실패 없이 진행된다.
 
 5단계의 테이블 삭제는 되돌릴 수 없다. AGENTS.md 규칙에 따라 사람이 병합 전에 확인한다. 이전 마이그레이션이 프로덕션에서 확인될 때까지 기존 테이블 삭제는 별도 PR로 미룬다.
 
