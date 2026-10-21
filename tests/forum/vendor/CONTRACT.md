@@ -15,12 +15,12 @@
 
 API Worker의 `scheduled` 핸들러가 환경 변수 `BOOK_SOURCE_URL`(책 저장소 raw 파일의 기준 URL)에서 다음 파일을 읽어 책 목록을 갱신한다.
 
-| 문서 ID   | 종류(`kind`) | 원고 파일                               |
-| --------- | ------------ | --------------------------------------- |
-| `preface` | `preface`    | `manuscript/front-matter/00-preface.md` |
-| `chNN`    | `chapter`    | `manuscript/chapters/chNN.md`           |
-| `patterns` | `patterns`  | `manuscript/patterns/pNN.md` (모든 패턴) |
-| `demo-X`  | `demo`       | `manuscript/demo/X.md`                  |
+| 문서 ID    | 종류(`kind`) | 원고 파일                                |
+| ---------- | ------------ | ---------------------------------------- |
+| `preface`  | `preface`    | `manuscript/front-matter/00-preface.md`  |
+| `chNN`     | `chapter`    | `manuscript/chapters/chNN.md`            |
+| `patterns` | `patterns`   | `manuscript/patterns/pNN.md` (모든 패턴) |
+| `demo-X`   | `demo`       | `manuscript/demo/X.md`                   |
 
 - 문서 목록과 순서, `revision`은 `website/content-manifest.json`을 따른다.
 - 패턴은 하나의 문서 `patterns`(제목 `패턴`)로 묶는다(2026-10-21). 매니페스트의 `pNN` 항목 하나가 이 문서의 절 하나다. 절의 앵커는 `pNN`, 제목은 그 패턴 원고의 첫 `# ` 제목, 본문은 그 제목 다음 줄부터 파일 끝까지다. 절 순서는 매니페스트 순서이고, 문서의 위치는 매니페스트에서 첫 `pNN`이 있던 자리다. 문서 `revision`은 모든 `pNN` revision의 합이다. 패턴 원고의 `## ` 제목은 절로 나누지 않는다. `pNN`은 문서 ID가 아니다.
