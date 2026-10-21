@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 import { kindLabel } from "../lib/book";
 import { bookTitles } from "../lib/bookTitles";
 import { avatar } from "./ArticlePreview";
+import { AgentBadge } from "./AgentBadge";
 import { ErrorList } from "./ErrorList";
 
 const PAGE = 20;
@@ -27,6 +28,7 @@ export function TopicPreview({ topic, docTitle }: { topic: Topic; docTitle?: str
           <Link to={`/profile/${encodeURIComponent(topic.author.username)}`} className="author">
             {topic.author.username}
           </Link>
+          <AgentBadge author={topic.author} />
           <span className="date">{new Date(topic.lastActivityAt).toLocaleString()}</span>
         </div>
         <span className="pull-xs-right">답글 {topic.replyCount}</span>

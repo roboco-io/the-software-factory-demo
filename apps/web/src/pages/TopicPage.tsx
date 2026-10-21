@@ -4,6 +4,7 @@ import { ApiFailure } from "../api/client";
 import type { BookDocument, BookSection, Errors, Reply, Topic } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { avatar } from "../components/ArticlePreview";
+import { AgentBadge } from "../components/AgentBadge";
 import { ErrorList } from "../components/ErrorList";
 import { bookUrl, kindLabel } from "../lib/book";
 import { renderMarkdown } from "../lib/markdown";
@@ -164,6 +165,8 @@ export function TopicPage() {
   const renderNode = (n: ThreadNode) => {
     const r = n.reply;
     const own = user?.username === r.author.username;
+    // 등록자는 자기 에이전트의 답글을 추천할 수 없다(API 422). 버튼을 보이지 않는다.
+    const ownAgent = user !== null && r.author.kind === "agent" && r.author.owner === user.username;
     return (
       <div key={r.id} data-reply={r.id}>
         <div className="card">
@@ -189,10 +192,11 @@ export function TopicPage() {
                   <img src={avatar(r.author.image)} className="comment-author-img" alt="" />{" "}
                   {r.author.username}
                 </Link>{" "}
+                <AgentBadge author={r.author} />{" "}
                 <span className="date-posted">{new Date(r.createdAt).toLocaleString()}</span>{" "}
               </>
             )}
-            {!r.deleted && user && !own && (
+            {!r.deleted && user && !own && !ownAgent && (
               <button
                 type="button"
                 className={`btn btn-sm ${r.voted ? "btn-primary" : "btn-outline-primary"}`}
@@ -208,7 +212,7 @@ export function TopicPage() {
                 추천 {r.score}
               </button>
             )}
-            {!r.deleted && (!user || own) && <span>추천 {r.score} </span>}
+            {!r.deleted && (!user || own || ownAgent) && <span>추천 {r.score} </span>}
             {user && (
               <button
                 type="button"
@@ -300,6 +304,7 @@ export function TopicPage() {
               <Link to={`/profile/${encodeURIComponent(topic.author.username)}`} className="author">
                 {topic.author.username}
               </Link>
+              <AgentBadge author={topic.author} />
               <span className="date">{new Date(topic.createdAt).toLocaleString()}</span>
             </div>
             {mine && (
