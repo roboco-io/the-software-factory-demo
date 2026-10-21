@@ -3,11 +3,16 @@ import { sha256Hex } from "./hash";
 
 type ManifestEntry = { revision: string | number; anchors?: Record<string, string> };
 
+// 패턴(매니페스트의 pNN)은 문서 하나로 묶고 패턴 하나를 절 하나로 다룬다(2026-10-21).
+export const PATTERNS_DOC = "patterns";
+const PATTERNS_TITLE = "패턴";
+const isPattern = (docId: string) => /^p\d+$/.test(docId);
+const patternPath = (id: string) => `manuscript/patterns/${id}.md`;
+
 export function docPath(docId: string): { kind: string; path: string } | null {
   if (docId === "preface")
     return { kind: "preface", path: "manuscript/front-matter/00-preface.md" };
   if (/^ch\d+$/.test(docId)) return { kind: "chapter", path: `manuscript/chapters/${docId}.md` };
-  if (/^p\d+$/.test(docId)) return { kind: "pattern", path: `manuscript/patterns/${docId}.md` };
   const demo = /^demo-([A-Za-z0-9_-]+)$/.exec(docId);
   if (demo) return { kind: "demo", path: `manuscript/demo/${demo[1]}.md` };
   return null;
@@ -59,6 +64,17 @@ const normalizeBody = (text: string) =>
 
 export const sectionHash = (body: string): Promise<string> => sha256Hex(normalizeBody(body));
 
+// 패턴 원고는 첫 `# ` 제목이 절 제목이고, 그 다음 줄부터 파일 끝까지가 절 본문이다.
+export function parsePattern(md: string): ManuscriptSection {
+  const lines = md.split(/\r?\n/);
+  const at = lines.findIndex((l) => /^# /.test(l));
+  if (at < 0) return { heading: "", body: "" };
+  return {
+    heading: lines[at]!.slice(2).trim(),
+    body: normalizeBody(lines.slice(at + 1).join("\n")),
+  };
+}
+
 // 정규식 대신 문자열 연산으로 끝의 `/`를 지운다(설정값이라도 CodeQL ReDoS 경고를 피한다).
 function trimSlashes(v: string): string {
   let end = v.length;
@@ -75,7 +91,7 @@ function validateManifest(raw: unknown): Record<string, ManifestEntry> {
   if (!isRecord(raw)) throw new Error("manifest is not an object");
   let docs = 0;
   for (const [docId, entry] of Object.entries(raw)) {
-    if (!docPath(docId)) continue;
+    if (!docPath(docId) && !isPattern(docId)) continue;
     if (!isRecord(entry)) throw new Error(`bad manifest entry for ${docId}`);
     const { revision, anchors } = entry;
     if (typeof revision !== "string" && typeof revision !== "number")
@@ -110,25 +126,55 @@ export async function syncBook(env: Env, opts: { ref?: string } = {}): Promise<n
     JSON.parse(await getText(`${base}/website/content-manifest.json`)),
   );
   // 절 해시가 비어 있는 문서(해시 도입 이전 동기화)는 revision이 같아도 다시 읽는다.
-  const existing = await env.DB.prepare(
-    `SELECT d.doc_id, d.revision,
-       EXISTS (SELECT 1 FROM book_sections s WHERE s.doc_id = d.doc_id AND s.hash IS NULL) AS missing_hash
-     FROM book_documents d`,
-  ).all<{ doc_id: string; revision: number; missing_hash: number }>();
+  // 패턴이 빠지거나 바뀌어도 revision 합이 같을 수 있으므로 저장된 패턴 목록도 함께 읽는다.
+  // 하위 요청 50회 한도 때문에 두 조회를 batch 한 번으로 보낸다.
+  const [existing, storedPatterns] = (await env.DB.batch([
+    env.DB.prepare(
+      `SELECT d.doc_id, d.revision,
+         EXISTS (SELECT 1 FROM book_sections s WHERE s.doc_id = d.doc_id AND s.hash IS NULL) AS missing_hash
+       FROM book_documents d`,
+    ),
+    env.DB.prepare("SELECT anchor FROM book_sections WHERE doc_id = ? ORDER BY position").bind(
+      PATTERNS_DOC,
+    ),
+  ])) as [
+    D1Result<{ doc_id: string; revision: number; missing_hash: number }>,
+    D1Result<{ anchor: string }>,
+  ];
   const known = new Map(existing.results.map((r) => [r.doc_id, r.revision]));
   const missingHash = new Set(existing.results.filter((r) => r.missing_hash).map((r) => r.doc_id));
 
-  const stmts: D1PreparedStatement[] = [];
-  const ids: string[] = [];
-  let position = 0;
+  // 문서 순서를 먼저 정한다. 패턴 문서는 매니페스트에서 첫 pNN이 있던 자리에 둔다.
+  const plan: { docId: string; revision: number; entry?: ManifestEntry }[] = [];
+  const patterns: string[] = [];
+  let patternsRevision = 0;
   for (const [docId, entry] of Object.entries(manifest)) {
-    const info = docPath(docId);
-    if (!info) continue;
+    const pattern = isPattern(docId);
+    if (!pattern && !docPath(docId)) continue;
     const revision = Number(entry.revision);
     if (!Number.isInteger(revision)) throw new Error(`bad revision for ${docId}`);
-    position += 1;
-    ids.push(docId);
-    if (known.get(docId) === revision && !missingHash.has(docId)) {
+    if (!pattern) {
+      plan.push({ docId, revision, entry });
+      continue;
+    }
+    if (patterns.length === 0) plan.push({ docId: PATTERNS_DOC, revision: 0 });
+    patterns.push(docId);
+    patternsRevision += revision;
+  }
+
+  const samePatterns = storedPatterns.results.map((r) => r.anchor).join(",") === patterns.join(",");
+
+  const stmts: D1PreparedStatement[] = [];
+  const ids = plan.map((p) => p.docId);
+  for (const [i, doc] of plan.entries()) {
+    const position = i + 1;
+    const { docId, entry } = doc;
+    const revision = docId === PATTERNS_DOC ? patternsRevision : doc.revision;
+    if (
+      known.get(docId) === revision &&
+      !missingHash.has(docId) &&
+      (docId !== PATTERNS_DOC || samePatterns)
+    ) {
       stmts.push(
         env.DB.prepare("UPDATE book_documents SET position = ? WHERE doc_id = ?").bind(
           position,
@@ -137,27 +183,46 @@ export async function syncBook(env: Env, opts: { ref?: string } = {}): Promise<n
       );
       continue;
     }
-    const { title, sections } = parseManuscript(await getText(`${base}/${info.path}`));
-    if (!title) throw new Error(`no title in ${docId}`);
+    let kind: string;
+    let title: string;
+    let sections: { anchor: string; heading: string; body: string }[];
+    if (docId === PATTERNS_DOC) {
+      kind = PATTERNS_DOC;
+      title = PATTERNS_TITLE;
+      sections = [];
+      for (const id of patterns) {
+        const { heading, body } = parsePattern(await getText(`${base}/${patternPath(id)}`));
+        if (!heading) throw new Error(`no title in ${id}`);
+        sections.push({ anchor: id, heading, body });
+      }
+    } else {
+      const info = docPath(docId)!;
+      const parsed = parseManuscript(await getText(`${base}/${info.path}`));
+      if (!parsed.title) throw new Error(`no title in ${docId}`);
+      kind = info.kind;
+      title = parsed.title;
+      const seen = new Set<string>();
+      sections = [];
+      for (const { heading, body } of parsed.sections) {
+        const anchor = entry?.anchors?.[heading];
+        if (!anchor || seen.has(anchor)) continue;
+        seen.add(anchor);
+        sections.push({ anchor, heading, body });
+      }
+    }
     stmts.push(
       env.DB.prepare(
         `INSERT INTO book_documents (doc_id, kind, title, revision, position) VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(doc_id) DO UPDATE SET kind = excluded.kind, title = excluded.title,
            revision = excluded.revision, position = excluded.position`,
-      ).bind(docId, info.kind, title, revision, position),
+      ).bind(docId, kind, title, revision, position),
       env.DB.prepare("DELETE FROM book_sections WHERE doc_id = ?").bind(docId),
     );
-    const seen = new Set<string>();
-    let sp = 0;
-    for (const { heading, body } of sections) {
-      const anchor = entry.anchors?.[heading];
-      if (!anchor || seen.has(anchor)) continue;
-      seen.add(anchor);
-      sp += 1;
+    for (const [sp, { anchor, heading, body }] of sections.entries()) {
       stmts.push(
         env.DB.prepare(
           "INSERT INTO book_sections (doc_id, anchor, heading, position, hash) VALUES (?, ?, ?, ?, ?)",
-        ).bind(docId, anchor, heading, sp, await sectionHash(body)),
+        ).bind(docId, anchor, heading, sp + 1, await sectionHash(body)),
       );
     }
   }

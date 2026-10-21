@@ -49,12 +49,34 @@ jsonpath "$.topicsCount" == 1
 jsonpath "$.topics[0].book.anchor" == "s02"
 jsonpath "$.topics[0].book.status" == "removed"
 
-# 그대로인 절
-GET {{host}}/api/topics?author=rev_{{uid}}&docId=p01
+# 패턴 문서 revision은 패턴 revision의 합이다
+GET {{host}}/api/book/patterns
+HTTP 200
+[Asserts]
+jsonpath "$.document.revision" == 5
+jsonpath "$.document.sections" count == 3
+
+# 그대로인 패턴
+GET {{host}}/api/topics?author=rev_{{uid}}&docId=patterns&anchor=p01
 HTTP 200
 [Asserts]
 jsonpath "$.topicsCount" == 1
 jsonpath "$.topics[0].book.status" == "current"
+
+# 본문이 바뀐 패턴
+GET {{host}}/api/topics?author=rev_{{uid}}&docId=patterns&anchor=p02
+HTTP 200
+[Asserts]
+jsonpath "$.topicsCount" == 1
+jsonpath "$.topics[0].book.status" == "revised"
+
+# 패턴 전체 토론은 패턴 문서 revision으로 판정한다
+GET {{host}}/api/topics?author=rev_{{uid}}&docId=patterns&sort=new
+HTTP 200
+[Asserts]
+jsonpath "$.topicsCount" == 3
+jsonpath "$.topics[0].book.anchor" == null
+jsonpath "$.topics[0].book.status" == "revised"
 
 # 사라진 절에는 새 토론을 열 수 없다
 POST {{host}}/api/users

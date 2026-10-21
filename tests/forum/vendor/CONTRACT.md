@@ -15,16 +15,17 @@
 
 API Worker의 `scheduled` 핸들러가 환경 변수 `BOOK_SOURCE_URL`(책 저장소 raw 파일의 기준 URL)에서 다음 파일을 읽어 책 목록을 갱신한다.
 
-| 문서 ID   | 종류(`kind`) | 원고 파일                               |
-| --------- | ------------ | --------------------------------------- |
-| `preface` | `preface`    | `manuscript/front-matter/00-preface.md` |
-| `chNN`    | `chapter`    | `manuscript/chapters/chNN.md`           |
-| `pNN`     | `pattern`    | `manuscript/patterns/pNN.md`            |
-| `demo-X`  | `demo`       | `manuscript/demo/X.md`                  |
+| 문서 ID    | 종류(`kind`) | 원고 파일                                |
+| ---------- | ------------ | ---------------------------------------- |
+| `preface`  | `preface`    | `manuscript/front-matter/00-preface.md`  |
+| `chNN`     | `chapter`    | `manuscript/chapters/chNN.md`            |
+| `patterns` | `patterns`   | `manuscript/patterns/pNN.md` (모든 패턴) |
+| `demo-X`   | `demo`       | `manuscript/demo/X.md`                   |
 
 - 문서 목록과 순서, `revision`은 `website/content-manifest.json`을 따른다.
-- 문서 제목은 원고 파일의 첫 `# ` 제목이다.
-- 절은 원고 파일의 `## ` 제목을 순서대로 읽고, 매니페스트 `anchors`에서 그 제목의 앵커를 찾은 것이다. 매니페스트에 없는 제목은 절 목록에 넣지 않는다. 같은 앵커에 여러 제목이 연결되어 있으면 현재 원고에 있는 제목을 쓴다.
+- 패턴은 하나의 문서 `patterns`(제목 `패턴`)로 묶는다(2026-10-21). 매니페스트의 `pNN` 항목 하나가 이 문서의 절 하나다. 절의 앵커는 `pNN`, 제목은 그 패턴 원고의 첫 `# ` 제목, 본문은 그 제목 다음 줄부터 파일 끝까지다. 절 순서는 매니페스트 순서이고, 문서의 위치는 매니페스트에서 첫 `pNN`이 있던 자리다. 문서 `revision`은 모든 `pNN` revision의 합이다. 패턴 원고의 `## ` 제목은 절로 나누지 않는다. `pNN`은 문서 ID가 아니다.
+- 문서 제목은 원고 파일의 첫 `# ` 제목이다(`patterns` 제외).
+- `patterns` 밖의 문서에서 절은 원고 파일의 `## ` 제목을 순서대로 읽고, 매니페스트 `anchors`에서 그 제목의 앵커를 찾은 것이다. 매니페스트에 없는 제목은 절 목록에 넣지 않는다. 같은 앵커에 여러 제목이 연결되어 있으면 현재 원고에 있는 제목을 쓴다.
 - 전에 있던 앵커가 현재 원고에 없으면 그 절은 사라진 절이다. 목록에서 빠지지만 토론은 남는다.
 - 절마다 본문의 해시를 저장한다. 본문 비교는 줄 끝 공백과 앞뒤 빈 줄을 무시한다.
 - 동기화가 실패하면 기존 데이터를 그대로 둔다.

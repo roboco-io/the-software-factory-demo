@@ -14,7 +14,7 @@ export type Profile = {
 export type Errors = Record<string, string[]>;
 export type BookDocument = {
   docId: string;
-  kind: "preface" | "chapter" | "pattern" | "demo";
+  kind: "preface" | "chapter" | "patterns" | "demo";
   title: string;
   revision: number;
   topicCount: number;

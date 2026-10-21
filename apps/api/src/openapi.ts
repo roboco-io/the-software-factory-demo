@@ -67,7 +67,7 @@ export const openapi = {
         type: "object",
         properties: {
           docId: { type: "string", examples: ["ch05"] },
-          kind: { enum: ["preface", "chapter", "pattern", "demo"] },
+          kind: { enum: ["preface", "chapter", "patterns", "demo"] },
           title: { type: "string" },
           revision: { type: "integer" },
           topicCount: { type: "integer" },

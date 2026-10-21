@@ -57,6 +57,79 @@ describe("book sync", () => {
     expect(after.documents.length).toBeGreaterThan(0);
   });
 
+  it("groups patterns into one document with one section per pattern", async () => {
+    const calls: string[] = [];
+    const files = {
+      "website/content-manifest.json": JSON.stringify({
+        ch01: manifest.ch01,
+        p01: { revision: "2", anchors: { 문제: "s01" } },
+        p02: { revision: "3", anchors: { 문제: "s01" } },
+      }),
+      "manuscript/chapters/ch01.md": md,
+      "manuscript/patterns/p01.md": "# P01 첫 패턴\n\n## 문제\n\n본문.\n",
+      "manuscript/patterns/p02.md": "# P02 둘째 패턴\n\n## 문제\n\n본문.\n",
+    };
+    mockSource(files, calls);
+    await syncBook(testEnv());
+    const { documents } = (await (await api("/book")).json()) as {
+      documents: { docId: string; kind: string; title: string; revision: number }[];
+    };
+    expect(documents.map((d) => d.docId)).toEqual(["ch01", "patterns"]);
+    expect(documents[1]).toMatchObject({ kind: "patterns", title: "패턴", revision: 5 });
+    const { document } = (await (await api("/book/patterns")).json()) as {
+      document: { sections: { anchor: string; heading: string }[] };
+    };
+    expect(document.sections).toEqual([
+      expect.objectContaining({ anchor: "p01", heading: "P01 첫 패턴" }),
+      expect.objectContaining({ anchor: "p02", heading: "P02 둘째 패턴" }),
+    ]);
+    expect((await api("/book/p01")).status).toBe(404);
+
+    // 패턴 하나의 revision만 올라도 패턴 원고를 다시 읽고, 그 패턴 절만 해시가 바뀐다
+    const hashes = async () =>
+      (
+        await env.DB.prepare(
+          "SELECT anchor, hash FROM book_sections WHERE doc_id = 'patterns' ORDER BY position",
+        ).all<{ anchor: string; hash: string }>()
+      ).results;
+    const before = await hashes();
+    vi.restoreAllMocks();
+    mockSource({
+      ...files,
+      "website/content-manifest.json": JSON.stringify({
+        ch01: manifest.ch01,
+        p01: { revision: "2", anchors: {} },
+        p02: { revision: "4", anchors: {} },
+      }),
+      "manuscript/patterns/p02.md": "# P02 둘째 패턴\n\n## 문제\n\n고친 본문.\n",
+    });
+    await syncBook(testEnv());
+    const after = await hashes();
+    expect(after[0]!.hash).toBe(before[0]!.hash);
+    expect(after[1]!.hash).not.toBe(before[1]!.hash);
+  });
+
+  it("rereads the patterns when the pattern list changes even if the revision sum is unchanged", async () => {
+    const pat = (id: string) => `# ${id.toUpperCase()} 패턴\n\n본문.\n`;
+    const source = (m: Record<string, unknown>) => ({
+      "website/content-manifest.json": JSON.stringify(m),
+      "manuscript/patterns/p01.md": pat("p01"),
+      "manuscript/patterns/p02.md": pat("p02"),
+      "manuscript/patterns/p03.md": pat("p03"),
+    });
+    mockSource(source({ p01: { revision: "1" }, p02: { revision: "2" } }));
+    await syncBook(testEnv());
+    vi.restoreAllMocks();
+    // p02가 빠지고 p03이 같은 revision으로 들어오면 합은 그대로다
+    mockSource(source({ p01: { revision: "1" }, p03: { revision: "2" } }));
+    await syncBook(testEnv());
+    const { document } = (await (await api("/book/patterns")).json()) as {
+      document: { revision: number; sections: { anchor: string }[] };
+    };
+    expect(document.revision).toBe(3);
+    expect(document.sections.map((s) => s.anchor)).toEqual(["p01", "p03"]);
+  });
+
   it("rereads a manuscript whose section hashes are missing even if the revision is unchanged", async () => {
     const calls: string[] = [];
     mockSource(

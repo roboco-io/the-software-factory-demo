@@ -13,9 +13,10 @@ jsonpath "$.documents[1].title" == "1장 시험용 첫 장"
 jsonpath "$.documents[1].revision" == 11
 jsonpath "$.documents[1].topicCount" isInteger
 jsonpath "$.documents[2].docId" == "ch02"
-jsonpath "$.documents[3].docId" == "p01"
-jsonpath "$.documents[3].kind" == "pattern"
-jsonpath "$.documents[3].title" == "P01 시험용 패턴"
+jsonpath "$.documents[3].docId" == "patterns"
+jsonpath "$.documents[3].kind" == "patterns"
+jsonpath "$.documents[3].title" == "패턴"
+jsonpath "$.documents[3].revision" == 4
 jsonpath "$.syncedAt" matches "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}"
 
 # 절: 현재 원고의 제목만, 원고 순서대로. 매니페스트에 없는 제목은 빠진다
@@ -51,23 +52,38 @@ HTTP 201
 [Captures]
 token: jsonpath "$.user.token"
 
-# 절에 토론을 열면 절과 문서의 토론 수가 늘어난다(p01 s02는 이 파일만 쓴다)
+# 패턴은 하나의 문서이고 패턴 하나가 절 하나다. 패턴 원고의 `## ` 제목은 절이 아니다
+GET {{host}}/api/book/patterns
+HTTP 200
+[Asserts]
+jsonpath "$.document.kind" == "patterns"
+jsonpath "$.document.sections" count == 3
+jsonpath "$.document.sections[0].anchor" == "p01"
+jsonpath "$.document.sections[0].heading" == "P01 시험용 패턴"
+jsonpath "$.document.sections[2].anchor" == "p03"
+jsonpath "$.document.sections[2].heading" == "P03 세 번째 시험용 패턴"
+
+# pNN은 문서 ID가 아니다
+GET {{host}}/api/book/p01
+HTTP 404
+
+# 절에 토론을 열면 절과 문서의 토론 수가 늘어난다(patterns p03은 이 파일만 쓴다)
 POST {{host}}/api/topics
 Authorization: Token {{token}}
 {
   "topic": {
-    "title": "해법 절에 대한 질문 {{uid}}",
+    "title": "세 번째 패턴에 대한 질문 {{uid}}",
     "body": "본문",
     "kind": "question",
-    "docId": "p01",
-    "anchor": "s02"
+    "docId": "patterns",
+    "anchor": "p03"
   }
 }
 HTTP 201
 
-GET {{host}}/api/book/p01
+GET {{host}}/api/book/patterns
 HTTP 200
 [Asserts]
-jsonpath "$.document.sections[1].anchor" == "s02"
-jsonpath "$.document.sections[1].topicCount" == 1
+jsonpath "$.document.sections[2].anchor" == "p03"
+jsonpath "$.document.sections[2].topicCount" == 1
 jsonpath "$.document.topicCount" >= 1

@@ -29,6 +29,18 @@
       "해법": "s02"
     }
   },
+  "p02": {
+    "revision": "2",
+    "anchors": {
+      "문제": "s01"
+    }
+  },
+  "p03": {
+    "revision": "1",
+    "anchors": {
+      "문제": "s01"
+    }
+  },
   "ch03": {
     "revision": "1",
     "anchors": {
