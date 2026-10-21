@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { ApiFailure } from "../api/client";
 import type { BookDocument, BookSection, Errors, Reply, Topic } from "../api/types";
@@ -77,27 +77,37 @@ export function TopicPage() {
 
   const fail = (e: unknown) => setErrors(e instanceof ApiFailure ? e.errors : { app: ["failed"] });
 
-  const loadReplies = useCallback(
-    () =>
-      client
-        .get<{ replies: Reply[] }>(`/topics/${id}/replies?sort=${sort}`)
-        .then((r) => setReplies(r.replies))
-        .catch(fail),
-    [client, id, sort],
-  );
+  // 정렬을 빠르게 바꾸면 늦게 온 이전 응답이 덮어쓰지 않도록 마지막 요청만 반영한다.
+  const latest = useRef(0);
+  const loadReplies = useCallback(() => {
+    const seq = ++latest.current;
+    return client
+      .get<{ replies: Reply[] }>(`/topics/${id}/replies?sort=${sort}`)
+      .then((r) => {
+        if (seq === latest.current) setReplies(r.replies);
+      })
+      .catch(fail);
+  }, [client, id, sort]);
 
   useEffect(() => {
+    let live = true;
+    setTopic(null);
+    setDoc(null);
     client
       .get<{ topic: Topic }>(`/topics/${id}`)
       .then((r) => {
+        if (!live) return;
         setTopic(r.topic);
         if (r.topic.book)
           client
             .get<{ document: Doc }>(`/book/${encodeURIComponent(r.topic.book.docId)}`)
-            .then((d) => setDoc(d.document))
-            .catch(() => setDoc(null));
+            .then((d) => live && setDoc(d.document))
+            .catch(() => live && setDoc(null));
       })
-      .catch(fail);
+      .catch((e: unknown) => live && fail(e));
+    return () => {
+      live = false;
+    };
   }, [client, id]);
 
   useEffect(() => {
@@ -118,16 +128,20 @@ export function TopicPage() {
     }
   }
 
+  // 실패하면 오류를 보여 주고 다시 던진다. 폼은 실패 시 입력을 지우지 않고, 성공 안내는 성공했을 때만 뜬다.
   async function act(fn: () => Promise<unknown>) {
     setErrors(null);
+    setNotice(null);
     try {
       await fn();
       setOpen(null);
       await loadReplies();
     } catch (e) {
       fail(e);
+      throw e;
     }
   }
+  const run = (fn: () => Promise<unknown>) => void act(fn).catch(() => undefined);
 
   if (!topic)
     return (
@@ -181,7 +195,7 @@ export function TopicPage() {
                 className={`btn btn-sm ${r.voted ? "btn-primary" : "btn-outline-primary"}`}
                 aria-pressed={r.voted}
                 onClick={() =>
-                  void act(() =>
+                  run(() =>
                     r.voted
                       ? client.del(`/replies/${r.id}/vote`)
                       : client.post(`/replies/${r.id}/vote`),
@@ -213,7 +227,7 @@ export function TopicPage() {
                 <button
                   type="button"
                   className="btn btn-sm btn-outline-danger"
-                  onClick={() => void act(() => client.del(`/replies/${r.id}`))}
+                  onClick={() => run(() => client.del(`/replies/${r.id}`))}
                 >
                   삭제
                 </button>
@@ -349,13 +363,9 @@ export function TopicPage() {
           <ReplyForm
             submitLabel="신고하기"
             onSubmit={(reason) =>
-              client
-                .post(`/topics/${topic.id}/report`, { report: { reason } })
-                .then(() => {
-                  setOpen(null);
-                  setNotice("신고를 접수했습니다.");
-                })
-                .catch(fail)
+              act(() => client.post(`/topics/${topic.id}/report`, { report: { reason } })).then(
+                () => setNotice("신고를 접수했습니다."),
+              )
             }
             onCancel={() => setOpen(null)}
           />
