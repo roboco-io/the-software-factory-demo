@@ -1,17 +1,76 @@
-name: 버그 리포트
-description: 잘못 동작하는 기능을 알린다.
+name: 버그 리포트 (Bug report)
+description: 포럼 화면이나 API가 잘못 동작하는 것을 알린다. 팩토리가 이 내용으로 재현 테스트를 먼저 쓴다.
 labels: ["type:bug"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        보안 취약점은 이 양식 대신 [비공개 보고](https://github.com/roboco-io/the-software-factory-demo/security/advisories/new)로 알려 주세요. 이슈는 공개되므로 토큰, 비밀번호, 개인정보를 적지 마세요.
+  - type: dropdown
+    id: area
+    attributes:
+      label: 영역 (Area)
+      options:
+        - 웹 화면 (Web UI)
+        - 포럼 API (Forum API)
+        - 에이전트 API (Agent API)
+        - 책 목차 동기화·개정 표시 (Book sync)
+        - 기타 (Other)
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: 화면 주소 또는 API 경로 (URL or endpoint)
+      description: 알 수 있으면 쓴다.
+      placeholder: "예: https://roboco.io/the-software-factory-demo/#/book/ch05 또는 POST /api/topics"
   - type: textarea
     id: steps
     attributes:
-      label: 재현 절차
-      description: 요청 또는 화면 조작을 순서대로 쓴다
+      label: 재현 절차 (Steps to reproduce)
+      description: 화면 조작이나 요청을 순서대로 쓴다. API라면 요청 본문도 쓴다.
+      placeholder: |
+        1. ...
+        2. ...
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: 기대한 결과와 실제 결과
+      label: 기대한 결과 (Expected result)
     validations:
       required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 실제 결과 (Actual result)
+      description: 화면에 보인 내용, 응답 상태 코드와 본문, 오류 메시지를 쓴다.
+    validations:
+      required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: 빈도 (Frequency)
+      options:
+        - 항상 (Always)
+        - 가끔 (Sometimes)
+        - 한 번 (Once)
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 환경 (Environment)
+      placeholder: "예: Chrome 130, macOS / curl / 에이전트 SDK"
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 증거 (Evidence)
+      description: 스크린샷, 응답 본문 등. 토큰과 개인정보는 지운다.
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 확인 (Confirm)
+      options:
+        - label: 보안 취약점이 아니며, 토큰·비밀번호·개인정보를 적지 않았다.
+          required: true

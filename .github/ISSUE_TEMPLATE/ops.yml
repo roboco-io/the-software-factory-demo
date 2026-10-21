@@ -1,0 +1,42 @@
+name: 포럼 운영 문제 (Forum operations)
+description: 스팸 다발, 에이전트 오남용, 모더레이션 정책처럼 운영자가 다뤄야 할 문제를 알린다.
+labels: ["type:feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        개별 토론이나 답글은 포럼 화면의 신고 버튼으로 알려 주세요. 이 이슈는 공개되므로 문제가 된 글의 본문을 옮기지 말고 링크만 적어 주세요.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 종류 (Kind)
+      options:
+        - 스팸·도배 다발 (Spam wave)
+        - 에이전트 오남용 (Agent misuse)
+        - 모더레이션 정책 (Moderation policy)
+        - 기타 (Other)
+    validations:
+      required: true
+  - type: textarea
+    id: targets
+    attributes:
+      label: 대상 링크 (Affected links)
+      description: 토론·답글·사용자·에이전트 화면 주소를 한 줄에 하나씩. 본문은 옮기지 않는다.
+    validations:
+      required: true
+  - type: input
+    id: observed
+    attributes:
+      label: 관찰 시각 (Observed at)
+      placeholder: "예: 2026-10-22 14:00 KST"
+  - type: textarea
+    id: description
+    attributes:
+      label: 상황 설명 (What happened)
+      description: 어떤 패턴이 얼마나 반복되는가.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 제안 조치 (Proposed action)

@@ -1,22 +1,52 @@
-name: 기능 요청
+name: 기능 요청 (Feature request)
 description: 팩토리가 구현할 기능을 요청한다. 쓰기 권한자가 `@factory go`를 남겨야 구현이 시작된다.
 labels: ["type:feature"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        트리아지가 이 이슈를 분류하고 수용 기준과 위험 등급을 정리한다. 구현은 쓰기 권한자가 `@factory go` 코멘트를 남긴 뒤에 시작된다.
+  - type: textarea
+    id: problem
+    attributes:
+      label: 문제와 배경 (Problem)
+      description: 지금 무엇이 불편하거나 불가능한가. 누가 겪는가.
+    validations:
+      required: true
   - type: textarea
     id: goal
     attributes:
-      label: 목표
-      description: 사용자가 무엇을 할 수 있어야 하는가
+      label: 목표 (Goal)
+      description: 사용자(사람 또는 에이전트)가 무엇을 할 수 있어야 하는가.
     validations:
       required: true
   - type: textarea
     id: acceptance
     attributes:
-      label: 수용 기준
-      description: 완료를 판단할 수 있는 기준을 한 줄에 하나씩 쓴다. 포럼 API 기능이면 tests/forum/vendor/의 해당 .hurl 파일 이름을 쓴다.
+      label: 수용 기준 (Acceptance criteria)
+      description: 테스트로 확인할 수 있는 기준을 한 줄에 하나씩 쓴다. 포럼 API 기능이면 tests/forum/vendor/의 해당 .hurl 파일 이름을 쓴다.
+      placeholder: |
+        - ...
     validations:
       required: true
   - type: textarea
+    id: out-of-scope
+    attributes:
+      label: 범위 밖 (Out of scope)
+      description: 이번 요청에서 하지 않을 것.
+  - type: dropdown
+    id: area
+    attributes:
+      label: 영향 영역 (Affected area)
+      multiple: true
+      options:
+        - 웹 화면 (Web UI)
+        - 포럼 API (Forum API)
+        - 에이전트 API (Agent API)
+        - 책 목차 동기화 (Book sync)
+        - 데이터베이스 (Database)
+        - 문서 (Docs)
+  - type: textarea
     id: notes
     attributes:
-      label: 참고
+      label: 참고 (Notes)
