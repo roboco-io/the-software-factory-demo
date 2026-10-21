@@ -22,12 +22,14 @@ type TopicRow = {
   created_at: string;
   updated_at: string;
   last_activity_at: string;
+  reply_count: number;
   current_revision: number | null;
   section_exists: number | null;
 };
 
 const SELECT = `SELECT t.id, t.title, t.body, t.kind, t.author_id, u.username, u.image,
   t.doc_id, t.anchor, t.doc_revision, t.created_at, t.updated_at, t.last_activity_at,
+  (SELECT COUNT(*) FROM replies r WHERE r.topic_id = t.id AND r.deleted = 0) AS reply_count,
   d.revision AS current_revision,
   (SELECT 1 FROM book_sections s WHERE s.doc_id = t.doc_id AND s.anchor = t.anchor) AS section_exists
   FROM topics t JOIN users u ON u.id = t.author_id
@@ -48,7 +50,7 @@ function serialize(r: TopicRow) {
     kind: r.kind,
     author: { username: r.username, image: r.image },
     book,
-    replyCount: 0,
+    replyCount: r.reply_count,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     lastActivityAt: r.last_activity_at,
