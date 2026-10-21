@@ -70,8 +70,8 @@ jobs:
     steps:
       - name: API health
         run: curl -fsS --retry 5 --retry-delay 5 "$API_URL/api/health"
-      - name: API articles
-        run: curl -fsS "$API_URL/api/articles?limit=1" | grep -q '"articlesCount"'
+      - name: API topics
+        run: curl -fsS "$API_URL/api/topics?limit=1" | grep -q '"topicsCount"'
       - name: Web index (Pages 반영 대기 최대 5분)
         run: |
           for i in $(seq 1 30); do

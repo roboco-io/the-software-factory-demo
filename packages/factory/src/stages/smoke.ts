@@ -16,7 +16,7 @@ export type SmokeAction = "created" | "commented" | "recovered" | "refailed" | "
 export const SMOKE_EXCERPT = { maxLines: 80, maxChars: 4000 } as const;
 
 const CHECKS =
-  "프로덕션 읽기 전용 스모크(Hurl: `/api/health`, 글 목록, 태그 목록 / Playwright: 홈 화면 렌더링)";
+  "프로덕션 읽기 전용 스모크(Hurl: `/api/health`, 책 목차, 토론 목록 / Playwright: 홈 화면 렌더링)";
 
 // 워크플로의 checks job 결과(success|failure|cancelled|skipped|timed_out)를 받는다.
 // success가 아닌 값은 모두 실패로 본다(건너뛰거나 취소된 검사를 통과로 취급하지 않는다). 값이 없으면 null.
