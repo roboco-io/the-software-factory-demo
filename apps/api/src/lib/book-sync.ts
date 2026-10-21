@@ -90,9 +90,12 @@ async function getText(url: string): Promise<string> {
 }
 
 /** 매니페스트와 revision이 바뀐 원고를 읽어 한 번에 반영한다. 어느 단계든 실패하면 아무것도 바꾸지 않는다. */
-export async function syncBook(env: Env): Promise<void> {
-  const base = env.BOOK_SOURCE_URL?.replace(/\/+$/, "");
-  if (!base) throw new Error("BOOK_SOURCE_URL is not set");
+// ref(40자 커밋 SHA)를 주면 BOOK_SOURCE_URL의 마지막 경로(브랜치 이름)를 그 커밋으로 바꿔 읽는다.
+// raw.githubusercontent.com은 브랜치 주소를 몇 분간 캐시하므로, 책 배포 직후에는 커밋 주소로 읽어야 새 내용을 받는다.
+export async function syncBook(env: Env, opts: { ref?: string } = {}): Promise<number> {
+  const configured = env.BOOK_SOURCE_URL?.replace(/\/+$/, "");
+  if (!configured) throw new Error("BOOK_SOURCE_URL is not set");
+  const base = opts.ref ? configured.replace(/\/[^/]+$/, `/${opts.ref}`) : configured;
   const manifest = validateManifest(
     JSON.parse(await getText(`${base}/website/content-manifest.json`)),
   );
@@ -163,4 +166,5 @@ export async function syncBook(env: Env): Promise<void> {
     ).bind(new Date().toISOString()),
   );
   await env.DB.batch(stmts);
+  return ids.length;
 }
