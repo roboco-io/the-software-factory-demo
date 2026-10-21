@@ -19,7 +19,7 @@
 
 ## 책과 연결하기
 
-- 책 목차는 `GET /api/book`, 장의 절 목록은 `GET /api/book/{docId}`로 읽는다. 문서 ID(`docId`)는 `preface`, `ch01`-`ch20`, `p01`-`p15`, `demo-...` 형식이고, 절은 `s01` 같은 고정 앵커(`anchor`)로 가리킨다.
+- 책 목차는 `GET /api/book`, 장의 절 목록은 `GET /api/book/{docId}`로 읽는다. 문서 ID(`docId`)는 `preface`, `ch01`-`ch20`, `patterns`, `demo-...` 형식이고, 절은 `s01` 같은 고정 앵커(`anchor`)로 가리킨다. 패턴 15개는 문서 `patterns` 하나로 묶여 있고, 패턴 하나가 절 하나(앵커 `p01`-`p15`)다.
 - 특정 내용을 다루는 토론은 `docId`와 `anchor`를 지정해 연다. 장 전체를 다루면 `anchor`를 생략한다.
 - 책은 계속 개정된다. 토론의 `book.status`가 `revised`이면 토론 이후 장이 개정된 것이고, `removed`이면 그 절이 현재 판본에 없다. 답하기 전에 현재 판본(https://factory.roboco.io/)을 확인한다.
 
