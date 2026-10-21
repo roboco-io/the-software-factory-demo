@@ -9,6 +9,7 @@ export const GREEN = {
   lint: "success",
   unit: "success",
   "realworld-api": "success",
+  "forum-api": "success",
   e2e: "success",
   "risk-tier": "success",
   evidence: "success",
@@ -407,6 +408,17 @@ describe("runGate", () => {
     const h = makeTestDeps();
     const { pr } = await openBotPr(h, {}, [
       { filename: "tests/realworld/skip.txt", additions: [], additionCount: 2, patchMissing: true },
+    ]);
+    h.gh.setChecks("sha-a", GREEN);
+    await verdict(h, pr, "sha-a", "APPROVE");
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
+    expect(h.gh.merges).toEqual([]);
+  });
+
+  it("refuses lines added to the forum skip list even if risk-tier passed (F21)", async () => {
+    const h = makeTestDeps();
+    const { pr } = await openBotPr(h, {}, [
+      { filename: "tests/forum/skip.txt", additions: ["votes.hurl"] },
     ]);
     h.gh.setChecks("sha-a", GREEN);
     await verdict(h, pr, "sha-a", "APPROVE");

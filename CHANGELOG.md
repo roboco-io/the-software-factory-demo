@@ -16,6 +16,7 @@
 
 ### 추가
 
+- 책 토론 포럼으로 전환하기 위한 포럼 API 계약 스위트(`tests/forum/vendor/`)와 필수 체크 `forum-api`를 추가했습니다. 계약은 책 목차 동기화, 토론·답글·추천, 신고를 다루며 [계약 설명](tests/forum/vendor/CONTRACT.md)에 정리했습니다. 처음에는 모든 계약 파일이 건너뜀 목록(`tests/forum/skip.txt`)에 있고, 팩토리가 기능을 구현할 때마다 목록에서 지웁니다. 봇 구현 PR이 건너뜀 목록에 줄을 추가하는 것은 RealWorld와 같이 금지합니다. 프로덕션 웹 스모크는 "Global Feed" 문구 대신 홈 목록의 로딩 완료 표식을 확인하도록 바꿔, 홈 화면이 바뀌어도 스모크가 깨지지 않게 했습니다. 설계는 [책 토론 포럼 전환 설계](docs/superpowers/specs/2026-10-21-book-forum-design.md)에 있습니다.
 - 프로필 이미지 업로드를 추가했습니다. 로그인한 사용자가 PNG·JPEG·GIF·WebP(최대 1MB)를 올리면 아바타가 갱신됩니다. 이미지는 새 `images` 테이블(D1 마이그레이션)에 저장되고, 본문 크기는 스트림을 읽는 동안 제한해 Content-Length가 없는 초과 요청도 거부합니다(PR #69, 이슈 #67).
 - 데모 앱과 팩토리 대시보드에 Google Analytics 4를 추가했습니다. `roboco.io`에서 방문자가 동의 배너에서 동의한 뒤에만 GA를 불러오고, "통계 설정"에서 동의를 철회하면 수집을 끄고 데모 전용 GA 쿠키를 지웁니다. 로컬 실행과 PR 프리뷰에서는 배너와 GA를 불러오지 않습니다. [PR #68](https://github.com/roboco-io/the-software-factory-demo/pull/68)
 

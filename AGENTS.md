@@ -8,14 +8,16 @@
 - `apps/api`: Hono on Cloudflare Workers, D1. 마이그레이션은 `apps/api/migrations/NNNN_name.sql`에 손으로 쓴다.
 - `apps/web`: React + Vite, HashRouter, GitHub Pages 배포.
 - `tests/realworld/vendor/`: RealWorld 공식 Hurl 스위트. 수정 금지. 기능을 구현하면 `tests/realworld/skip.txt`에서 해당 파일을 지운다.
+- `tests/forum/vendor/`: 책 토론 포럼 API 계약 스위트(계약 설명은 `CONTRACT.md`). 수정 금지. 기능을 구현하면 `tests/forum/skip.txt`에서 해당 파일을 지운다. 서비스는 RealWorld에서 이 포럼으로 단계적으로 전환 중이다(`docs/superpowers/specs/2026-10-21-book-forum-design.md`).
 - `packages/factory`: 팩토리 런타임(단계 스크립트, 에이전트 어댑터, 위험 정책). `factory/`: 정책·예산·프롬프트. 두 경로와 `.github/`는 T3이며 구현 에이전트는 수정하지 않는다.
-- `tests/smoke/`, `apps/web/e2e-smoke/`: 프로덕션 읽기 전용 스모크. T3이며 구현 에이전트는 수정하지 않는다.
+- `tests/smoke/`, `apps/web/e2e-smoke/`: 프로덕션 읽기 전용 스모크. T3이며 구현 에이전트는 수정하지 않는다. 웹 스모크는 홈 주 목록의 `data-testid="smoke-ready"` 표식(로딩이 끝나면 나타남)을 확인하므로 홈 화면을 바꿔도 이 표식을 유지한다.
 
 ## 명령
 
 - 설치: `pnpm install`
 - 전체 검사: `pnpm typecheck && pnpm lint && pnpm test`
 - RealWorld API 스위트: `pnpm --filter api build:check && scripts/realworld-api.sh`
+- 포럼 API 계약 스위트: `scripts/forum-api.sh`
 - 웹 E2E: `pnpm --filter web e2e`
 - 팩토리 CLI: `pnpm -s factory <triage|command|implement|review|fix|gate|on-closed|risk|deployed|deploy-failed|guard|bootstrap> ...`
 

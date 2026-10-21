@@ -7,7 +7,7 @@
 ## 규칙
 
 - AGENTS.md를 먼저 읽고 따른다. 테스트를 먼저 쓴다.
-- 다음 경로는 수정하지 않는다: .github/, factory/, packages/factory/, AGENTS.md, CLAUDE.md, scripts/, tests/realworld/vendor/, tests/smoke/, apps/web/e2e-smoke/. 이 경로를 바꾸면 변경 전체가 거부된다.
+- 다음 경로는 수정하지 않는다: .github/, factory/, packages/factory/, AGENTS.md, CLAUDE.md, scripts/, tests/realworld/vendor/, tests/forum/vendor/, tests/smoke/, apps/web/e2e-smoke/. 이 경로를 바꾸면 변경 전체가 거부된다.
 - 의존성을 추가하지 않는다(package.json, pnpm-lock.yaml을 바꾸지 않는다). 꼭 필요하면 바꾸지 말고 요약에 이유를 쓴다.
 - 바꾸는 이름·문구·응답 형식을 검사하는 테스트를 수정 금지 경로까지 포함해 리포 전체에서 찾는다. 수정 금지 경로의 테스트나 워크플로가 변경 후 실패하거나 갱신이 필요하면 그 파일은 고치지 말고 출력에 "사람 조치 필요:"로 쓴다.
 - git commit, git push를 하지 않는다. 커밋은 팩토리가 한다.

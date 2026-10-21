@@ -34,11 +34,19 @@ export function ArticleList({ query }: { query: string }) {
 
   if (errors) return <ErrorList errors={errors} />;
   if (!data) return <div className="article-preview">Loading articles...</div>;
+  // 프로덕션 스모크가 화면 문구 대신 이 표식으로 로딩 완료를 확인한다. 화면을 바꿔도 유지한다.
+  const ready = <span data-testid="smoke-ready" hidden />;
   if (data.articles.length === 0)
-    return <div className="article-preview">No articles are here... yet.</div>;
+    return (
+      <>
+        {ready}
+        <div className="article-preview">No articles are here... yet.</div>
+      </>
+    );
   const pages = Math.ceil(data.articlesCount / PAGE);
   return (
     <>
+      {ready}
       {data.articles.map((a) => (
         <ArticlePreview key={a.slug} article={a} />
       ))}

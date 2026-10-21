@@ -16,21 +16,27 @@ export interface RiskReport {
   previewAllowed: boolean;
 }
 
-const SKIP_FILE = "tests/realworld/skip.txt";
+export const SKIP_FILES = ["tests/realworld/skip.txt", "tests/forum/skip.txt"] as const;
 
-// F21: 봇 implement PR이 skip.txt에 줄을 더하면 RealWorld 실패를 숨길 수 있다. 줄 삭제는 허용한다.
+// F21: 봇 implement PR이 skip.txt에 줄을 더하면 계약 실패(RealWorld·포럼)를 숨길 수 있다. 줄 삭제는 허용한다.
 // 이름 변경으로 skip.txt를 만드는 경우와, patch가 없거나 잘려 줄 단위로 확인할 수 없는
-// 추가(바이너리·큰 diff)도 내용을 알 수 없으므로 금지한다.
-export function addsSkipEntries(files: ChangedFile[]): boolean {
-  return files.some((f) => {
-    if (normalizePath(f.filename) !== SKIP_FILE) return false;
-    if (f.additions.some((l) => l.trim() !== "")) return true;
-    if (f.previousFilename !== undefined && normalizePath(f.previousFilename) !== SKIP_FILE) {
-      return true;
-    }
+// 추가(바이너리·큰 diff)도 내용을 알 수 없으므로 금지한다. 줄을 더한 skip 파일 경로를 돌려준다.
+export function skipEntryFiles(files: ChangedFile[]): string[] {
+  const hit = new Set<string>();
+  for (const f of files) {
+    const name = normalizePath(f.filename);
+    if (!(SKIP_FILES as readonly string[]).includes(name)) continue;
     const count = f.additionCount ?? 0;
-    return (f.patchMissing === true && count > 0) || count > f.additions.length;
-  });
+    if (
+      f.additions.some((l) => l.trim() !== "") ||
+      (f.previousFilename !== undefined && normalizePath(f.previousFilename) !== name) ||
+      (f.patchMissing === true && count > 0) ||
+      count > f.additions.length
+    ) {
+      hit.add(name);
+    }
+  }
+  return [...hit];
 }
 
 export async function runRisk(
@@ -56,7 +62,7 @@ export async function runRisk(
     if (!changed) forbidden.push("(변경 파일이 너무 많아 등급을 판정할 수 없다)");
     else {
       forbidden.push(...risk.files.filter((f) => f.tier === "T3").map((f) => f.file));
-      if (addsSkipEntries(changed)) forbidden.push(SKIP_FILE);
+      forbidden.push(...skipEntryFiles(changed));
     }
   }
   const stale = args.sha !== undefined && pull.headSha !== args.sha;

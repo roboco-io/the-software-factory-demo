@@ -21,6 +21,7 @@ describe("tierOf with factory/risk-policy.yml", () => {
     ["apps/api/test/deferred.test.ts", "T1"],
     ["apps/web/src/pages/Home.tsx", "T1"],
     ["tests/realworld/skip.txt", "T1"],
+    ["tests/forum/skip.txt", "T1"],
     ["apps/api/src/routes/feedback.ts", "T2"],
     ["apps/api/src/lib/error-events.ts", "T2"],
     ["apps/api/src/index.ts", "T2"],
@@ -72,6 +73,8 @@ describe("tierOf with factory/risk-policy.yml", () => {
     ["scripts/realworld-api.sh", "T3"],
     ["tests/realworld/vendor/tags.hurl", "T3"],
     ["tests/realworld/UPSTREAM.txt", "T3"],
+    ["tests/forum/vendor/topics.hurl", "T3"],
+    ["tests/forum/vendor/fixtures/book-v1/website/content-manifest.json", "T3"],
   ])("%s → %s", (file, tier) => {
     expect(tierOf(file, policy).tier).toBe(tier);
   });
@@ -109,6 +112,7 @@ describe("classifyFiles", () => {
       "lint",
       "unit",
       "realworld-api",
+      "forum-api",
       "e2e",
       "risk-tier",
       "evidence",

@@ -1,0 +1,12 @@
+# 아직 구현되지 않은 포럼 계약 파일. 팩토리가 기능을 구현하면 해당 줄을 지운다.
+# 봇 구현 PR은 이 파일에 줄을 추가할 수 없다(F21).
+book.hurl
+errors_replies.hurl
+errors_topics.hurl
+replies.hurl
+reports.hurl
+revision_after.hurl
+revision_before.hurl
+topics_sort.hurl
+topics.hurl
+votes.hurl

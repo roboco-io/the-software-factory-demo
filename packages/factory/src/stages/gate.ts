@@ -4,7 +4,7 @@ import { latestVerdict } from "../report/comments";
 import { REVERT_TRAILER, signatureTrailers } from "../report/commit";
 import { parsePrMeta, type PrMeta } from "../report/pr";
 import { inline } from "../report/text";
-import { addsSkipEntries } from "./risk";
+import { skipEntryFiles } from "./risk";
 import { moveTo, readState, record, runLink, stepRecord } from "./common";
 import type { StageDeps } from "./deps";
 
@@ -274,13 +274,14 @@ export async function runGate(deps: StageDeps, args: GateArgs): Promise<GateDeci
   }
   const risk = classifyFiles(flattenFiles(files), deps.policy);
   // 방어선 이중화: risk-tier 체크가 통과했더라도 skip.txt 우회는 여기서도 막는다(F21).
-  if (meta.role === "implement" && addsSkipEntries(files)) {
+  const skipHits = meta.role === "implement" ? skipEntryFiles(files) : [];
+  if (skipHits.length > 0) {
     await moveTo(
       deps,
       meta.issue,
       "needs-human",
       "gate",
-      `PR #${pull.number}이 \`tests/realworld/skip.txt\`에 줄을 추가했거나 변경을 줄 단위로 확인할 수 없다. 자동 병합하지 않는다.${runLink(deps.settings)}`,
+      `PR #${pull.number}이 ${skipHits.map((f) => `\`${f}\``).join(", ")}에 줄을 추가했거나 변경을 줄 단위로 확인할 수 없다. 자동 병합하지 않는다.${runLink(deps.settings)}`,
     );
     await record(deps, stepRecord("gate", meta.issue, pull.number, false, "skip_txt", meta.round));
     return "needs-human";

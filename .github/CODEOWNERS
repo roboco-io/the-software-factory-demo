@@ -20,6 +20,7 @@ claude.local.md @serithemage
 /scripts/ @serithemage
 /tests/realworld/vendor/ @serithemage
 /tests/realworld/UPSTREAM.txt @serithemage
+/tests/forum/vendor/ @serithemage
 /tests/smoke/ @serithemage
 /apps/web/e2e-smoke/ @serithemage
 
