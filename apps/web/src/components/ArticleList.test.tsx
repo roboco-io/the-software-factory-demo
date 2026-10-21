@@ -76,3 +76,28 @@ describe("ArticleList pagination", () => {
     expect(urls.at(-1)).toContain("offset=10");
   });
 });
+
+// 프로덕션 스모크(apps/web/e2e-smoke/home.spec.ts)는 이 표식으로 주 목록 로딩 완료를 확인한다.
+describe("ArticleList smoke marker", () => {
+  it("appears only after the list has loaded, including an empty list", async () => {
+    setup(0);
+    expect(screen.queryByTestId("smoke-ready")).toBeNull();
+    await waitFor(() => expect(screen.getByTestId("smoke-ready")).toBeInTheDocument());
+  });
+
+  it("does not appear when loading fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 500 })),
+    );
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <ArticleList query="" />
+        </AuthProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.queryByText("Loading articles...")).toBeNull());
+    expect(screen.queryByTestId("smoke-ready")).toBeNull();
+  });
+});
