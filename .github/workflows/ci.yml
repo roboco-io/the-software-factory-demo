@@ -248,3 +248,73 @@ jobs:
           EVAL_PLAN: ${{ needs.eval-plan.outputs.plan }}
           EVAL_BASE_DIR: ${{ github.workspace }}/base
           FACTORY_WORKDIR: ${{ github.workspace }}/head
+  # 보안 검사 3종(SDLC 보안 통제). 필수 체크이며 실패를 무시하는 단계가 없다(fail-closed).
+  # SAST. CodeQL analyze는 탐지 결과가 있어도 성공하므로 sarif-gate가 심각도 7.0 이상 결과로 작업을 실패시킨다.
+  codeql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: github/codeql-action/init@v4.39.1
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v4.39.1
+        with:
+          category: "/language:javascript-typescript"
+          output: sarif-results
+      - uses: actions/setup-node@v7
+        with: { node-version-file: .nvmrc }
+      - run: node scripts/sarif-gate.mjs sarif-results
+  # 의존성 취약점 검사. 개발 의존성도 시크릿이 있는 CI에서 실행되므로 전체를 검사한다.
+  deps-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm audit --audit-level=high
+  # 시크릿 검사. gitleaks-action은 조직 계정에서 유료 라이선스가 필요하므로 CLI 컨테이너 이미지를 쓴다.
+  # PR은 base..head, push는 before..sha 범위의 모든 커밋을 검사한다(before가 전부 0이면 HEAD 커밋만).
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.1
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: /repo
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          {
+            ref: "${{ github.event.pull_request.head.sha || github.sha }}",
+            fetch-depth: 0,
+            persist-credentials: false,
+          }
+      - name: gitleaks (PR 범위)
+        if: github.event_name == 'pull_request'
+        run: docker run --rm -e GIT_CONFIG_COUNT -e GIT_CONFIG_KEY_0 -e GIT_CONFIG_VALUE_0 -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" git --config factory/security/gitleaks.toml --redact --exit-code 1 --log-opts "$RANGE" /repo
+        env:
+          RANGE: ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}
+      - name: gitleaks (push 범위)
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        run: docker run --rm -e GIT_CONFIG_COUNT -e GIT_CONFIG_KEY_0 -e GIT_CONFIG_VALUE_0 -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" git --config factory/security/gitleaks.toml --redact --exit-code 1 --log-opts "$RANGE" /repo
+        env:
+          RANGE: ${{ github.event.before }}..${{ github.sha }}
+      - name: gitleaks (새 브랜치 push, HEAD만)
+        if: github.event_name == 'push' && github.event.before == '0000000000000000000000000000000000000000'
+        run: docker run --rm -e GIT_CONFIG_COUNT -e GIT_CONFIG_KEY_0 -e GIT_CONFIG_VALUE_0 -v "$PWD:/repo" -w /repo "$GITLEAKS_IMAGE" git --config factory/security/gitleaks.toml --redact --exit-code 1 --log-opts "-1" /repo

@@ -113,6 +113,9 @@ describe("classifyFiles", () => {
       "risk-tier",
       "evidence",
       "eval",
+      "codeql",
+      "deps-audit",
+      "secrets",
     ]);
   });
 

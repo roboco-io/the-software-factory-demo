@@ -13,6 +13,9 @@ export const GREEN = {
   "risk-tier": "success",
   evidence: "success",
   eval: "success",
+  codeql: "success",
+  "deps-audit": "success",
+  secrets: "success",
   deploy: "success",
   "e2e-preview": "success",
   "smoke-preview": "success",
@@ -324,6 +327,42 @@ describe("runGate", () => {
     h.gh.setChecks("sha-a", { ...GREEN, "risk-tier": "failure" });
     expect(await runGate(h.deps, { pr })).toBe("needs-human");
     expect((await h.gh.getIssue(issue)).labels).toEqual(["factory:needs-human"]);
+  });
+
+  it("failing secrets moves issue to needs-human and does not dispatch factory-fix", async () => {
+    const h = makeTestDeps();
+    const { pr, issue } = await openBotPr(h);
+    h.gh.setChecks("sha-a", { ...GREEN, secrets: "failure" });
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
+    expect((await h.gh.getIssue(issue)).labels).toEqual(["factory:needs-human"]);
+    expect(h.gh.dispatches.filter((d) => d.file === "factory-fix.yml")).toEqual([]);
+    expect((await h.gh.listComments(issue)).some((c) => c.body.includes("시크릿"))).toBe(true);
+  });
+
+  it("failing secrets plus unit still goes to needs-human", async () => {
+    const h = makeTestDeps();
+    const { pr, issue } = await openBotPr(h);
+    h.gh.setChecks("sha-a", { ...GREEN, secrets: "failure", unit: "failure" });
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
+    expect((await h.gh.getIssue(issue)).labels).toEqual(["factory:needs-human"]);
+    expect(h.gh.dispatches.filter((d) => d.file === "factory-fix.yml")).toEqual([]);
+  });
+
+  it("failing unit only still dispatches factory-fix with reason ci", async () => {
+    const h = makeTestDeps();
+    const { pr } = await openBotPr(h);
+    h.gh.setChecks("sha-a", { ...GREEN, secrets: "success", unit: "failure" });
+    expect(await runGate(h.deps, { pr })).toBe("fix-dispatched");
+    expect(h.gh.dispatches[0]?.inputs.reason).toBe("ci");
+  });
+
+  it("risk-tier failure path unchanged when secrets also fails or passes", async () => {
+    const h = makeTestDeps();
+    const { pr, issue } = await openBotPr(h);
+    h.gh.setChecks("sha-a", { ...GREEN, secrets: "success", "risk-tier": "failure" });
+    expect(await runGate(h.deps, { pr })).toBe("needs-human");
+    expect((await h.gh.getIssue(issue)).labels).toEqual(["factory:needs-human"]);
+    expect(h.gh.dispatches.filter((d) => d.file === "factory-fix.yml")).toEqual([]);
   });
 
   it("never merges a T2 PR and asks for CODEOWNERS approval once", async () => {
