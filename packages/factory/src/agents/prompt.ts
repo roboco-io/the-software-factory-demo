@@ -31,11 +31,12 @@ const DELIMITER_TAGS = [
   "feedback",
   "failures",
   "previous-findings",
+  "threat-model",
   "timeline",
 ];
 const TAG = new RegExp(`<\\s*(/?)\\s*(${DELIMITER_TAGS.join("|")})`, "gi");
 const ZERO_WIDTH = /[\u200B-\u200D\u2060\uFEFF]/g;
-const COMMENT_STRIPPED = new Set(["issueTitle", "issueBody", "feedback"]);
+const COMMENT_STRIPPED = new Set(["issueTitle", "issueBody", "feedback", "threatModel"]);
 
 function neutralize(value: string): string {
   // NFKC(전각 ＜ 등)와 제로폭 문자를 걷어낸 형태에서 태그가 보이면 그 형태로 이스케이프한다.
@@ -52,7 +53,8 @@ export function renderPrompt(template: string, vars: Record<string, string>): st
   const all: Record<string, string> = { ...vars, untrustedNotice: UNTRUSTED_NOTICE };
   // 한 번의 replace로 치환한다. 치환된 값 안의 {{x}}는 다시 해석하지 않는다.
   return template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => {
-    const value = all[name];
+    // 위협 모델은 트리아지가 없을 때가 있다. 값을 주지 않는 호출자(평가 비교 실행 등)에는 "(없음)"을 준다.
+    const value = all[name] ?? (name === "threatModel" ? "(없음)" : undefined);
     if (value === undefined) throw new Error(`prompt variable missing: ${name}`);
     if (name === "untrustedNotice") return value;
     return neutralize(COMMENT_STRIPPED.has(name) ? stripComments(value) : value);

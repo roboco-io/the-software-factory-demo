@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { BUG_RULE, NOT_BUG_RULE } from "../src/agents/prompt";
 import { createFakeAdapter, loadFakeScript, type FakeStep } from "../src/agents/fake";
-import { renderTriageComment } from "../src/report/comments";
+import { renderTriageComment, type ThreatModel } from "../src/report/comments";
 import { parsePrMeta } from "../src/report/pr";
 import { implementStage } from "../src/stages/implement";
 import { runPhase } from "../src/stages/phased";
@@ -26,6 +26,7 @@ function approvedIssue(
   h: TestHarness,
   labels = ["factory:approved", "type:feature"],
   contractChanges?: string[],
+  threatModel?: ThreatModel,
 ): number {
   const issue = h.gh.addIssue({ title: "태그 목록 API", body: "GET /api/tags를 구현한다", labels });
   h.gh.addComment(
@@ -35,8 +36,9 @@ function approvedIssue(
       {
         type: "feature",
         duplicateOf: null,
-        riskTier: "T1",
+        riskTier: threatModel ? "T2" : "T1",
         acceptanceCriteria: ["GET /api/tags가 태그 목록을 반환한다"],
+        ...(threatModel ? { threatModel } : {}),
         summary: "s",
         ...(contractChanges ? { contractChanges } : {}),
       },
@@ -53,6 +55,35 @@ const lastComment = async (h: TestHarness, n: number) =>
   (await h.gh.listComments(n)).at(-1)?.body ?? "";
 
 describe("implement stage", () => {
+  it("implement prompt contains rendered threat model", async () => {
+    const agent = createFakeAdapter([TAGS], "claude");
+    const h = makeTestDeps({ adapters: { claude: agent } });
+    await run(
+      h,
+      approvedIssue(h, undefined, undefined, {
+        assets: ["에이전트 토큰"],
+        threats: [
+          {
+            category: "spoofing",
+            threat: "다른 사람의 토큰으로 글을 쓴다",
+            mitigation: "토큰 소유자를 확인한다",
+          },
+        ],
+      }),
+      BOT,
+    );
+    expect(agent.calls[0]?.prompt).toContain(
+      "- [spoofing] 다른 사람의 토큰으로 글을 쓴다 → 대응: 토큰 소유자를 확인한다",
+    );
+  });
+
+  it("implement prompt shows (없음) without threat model", async () => {
+    const agent = createFakeAdapter([TAGS], "claude");
+    const h = makeTestDeps({ adapters: { claude: agent } });
+    await run(h, approvedIssue(h), BOT);
+    expect(agent.calls[0]?.prompt).toMatch(/<threat-model>\n\(없음\)\n<\/threat-model>/);
+  });
+
   it("tells the agent which protected contracts to report as human actions", async () => {
     const agent = createFakeAdapter([TAGS], "claude");
     const h = makeTestDeps({ adapters: { claude: agent } });

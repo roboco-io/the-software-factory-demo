@@ -1,0 +1,4 @@
+kind: prompt-contains
+category: implement:security
+file: factory/prompts/implement.md
+text: 위협 모델의 대응을 구현하고 테스트로 확인한다.

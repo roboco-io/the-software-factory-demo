@@ -1,0 +1,4 @@
+kind: prompt-contains
+category: review:security
+file: factory/prompts/review.md
+text: 위협 모델의 각 대응이 구현되었거나 테스트로 확인되는가. 빠진 대응은 category `security`로 지적한다.

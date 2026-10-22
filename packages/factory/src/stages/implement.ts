@@ -5,7 +5,7 @@ import type { Budget, EngineName } from "../agents/types";
 import { assignEngines, resolveModel } from "../config/agents";
 import { CHECK_SCRIPTS, formatCheckFailures } from "../exec/checks";
 import type { Issue } from "../github/port";
-import { findTriage } from "../report/comments";
+import { findTriage, renderThreatModel } from "../report/comments";
 import { commitMessage } from "../report/commit";
 import {
   extractHumanActions,
@@ -127,6 +127,7 @@ export async function buildImplementPrompt(
           ]
         : []),
     ].join("\n"),
+    threatModel: renderThreatModel(triage?.threatModel),
     bugRule: bugRuleFor(issue.labels),
   };
   return {
