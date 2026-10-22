@@ -605,7 +605,9 @@ describe("P3 intake workflows", () => {
     expect(step.run).not.toMatch(/\becho\b/);
     expect(step.env?.INTAKE_TOKEN).toBe("${{ secrets.INTAKE_TOKEN }}");
     expect(step["working-directory"]).toBe("apps/api");
-    const deploy = job.steps.findIndex((s) => s.run?.trim() === "pnpm exec wrangler deploy");
+    const deploy = job.steps.findIndex(
+      (s) => s.run?.trim() === "pnpm exec wrangler deploy --outdir dist-worker",
+    );
     expect(deploy).toBeGreaterThan(index);
     const others = job.steps.filter((_, i) => i !== index);
     expect(JSON.stringify(others)).not.toContain("INTAKE_TOKEN");

@@ -8,3 +8,4 @@ apps/api/wrangler.preview.json
 .DS_Store
 .wrangler-dev.log
 .wrangler-forum.log
+dist-worker/

@@ -46,11 +46,17 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           BOOK_SYNC_TOKEN: ${{ secrets.BOOK_SYNC_TOKEN }}
+      # --outdir: 배포되는 번들을 파일로 남긴다. provenance job이 이 파일을 증명(attest)한다.
       - working-directory: apps/api
-        run: pnpm exec wrangler deploy
+        run: pnpm exec wrangler deploy --outdir dist-worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: worker-bundle
+          path: apps/api/dist-worker
+          if-no-files-found: error
   web:
     needs: api
     runs-on: ubuntu-latest
@@ -68,6 +74,12 @@ jobs:
         env:
           VITE_API_BASE: ${{ env.API_URL }}/api
           VITE_BUILD_SHA: ${{ github.sha }}
+      # 게시하는 dist와 같은 파일을 올린다. provenance job이 이 산출물을 증명한다.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          path: apps/web/dist
+          if-no-files-found: error
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -89,6 +101,53 @@ jobs:
             sleep 10
           done
           exit 1
+  provenance:
+    # 배포한 산출물의 빌드 출처와 SBOM을 증명한다. factory-report는 이 job에 의존하지 않는다:
+    # 증명이 실패해도 눈에 보이지만 프로덕션 장애로 보고하지 않는다.
+    needs: [api, web]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: actions/download-artifact@v8
+        with:
+          name: worker-bundle
+          path: worker-bundle
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web-dist
+      - name: web-dist.tgz 만들기
+        run: tar -czf web-dist.tgz -C web-dist .
+      - uses: anchore/sbom-action@v0.24.3
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: sbom.spdx.json
+          if-no-files-found: error
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: worker-bundle/*
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: web-dist.tgz
+      - uses: actions/attest-sbom@v4
+        with:
+          subject-path: worker-bundle/*
+          sbom-path: sbom.spdx.json
+      - uses: actions/attest-sbom@v4
+        with:
+          subject-path: web-dist.tgz
+          sbom-path: sbom.spdx.json
   factory-report:
     # 배포·스모크 결과를 해당 커밋의 팩토리 이슈에 반영한다. Cloudflare 시크릿과 environment는 쓰지 않는다.
     # 연속 병합으로 대기 중이던 deploy run이 취소되면 그 커밋의 이슈는 merged에 남는다(docs/operations.md 런북 참고).
