@@ -35,7 +35,7 @@ export interface Timeline {
 
 const TIER_ORDER: Tier[] = ["T0", "T1", "T2", "T3"];
 
-function requestIssueOf(p: MergedPull): number | null {
+export function requestIssueOf(p: MergedPull): number | null {
   return parsePrMeta(p.body)?.issue ?? parseFactoryIssues(p.body)[0] ?? null;
 }
 

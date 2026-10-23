@@ -89,6 +89,9 @@ jobs:
   smoke:
     needs: web
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - name: API health
         run: curl -fsS --retry 5 --retry-delay 5 "$API_URL/api/health"
@@ -101,6 +104,18 @@ jobs:
             sleep 10
           done
           exit 1
+      # 새 빌드가 반영된 뒤 factory-smoke와 같은 읽기 전용 Playwright 스모크를 실행한다. 실패하면 smoke job이 실패해 factory-report가 deploy-failed를 처리한다.
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with: { node-version-file: .nvmrc, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web exec playwright install --with-deps chromium
+      - name: 웹 읽기 전용 스모크(Playwright)
+        run: pnpm --filter web exec playwright test -c e2e-smoke/playwright.config.ts
+        env:
+          E2E_BASE_URL: ${{ vars.WEB_URL }}
   provenance:
     # 배포한 산출물의 빌드 출처와 SBOM을 증명한다. factory-report는 이 job에 의존하지 않는다:
     # 증명이 실패해도 눈에 보이지만 프로덕션 장애로 보고하지 않는다.

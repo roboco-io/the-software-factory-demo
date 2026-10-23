@@ -60,6 +60,7 @@ const OPTIONS = {
   base: { type: "string" },
   result: { type: "string" },
   "excerpt-file": { type: "string" },
+  "last-success": { type: "string" },
   kind: { type: "string" },
   event: { type: "string" },
   "dry-run": { type: "boolean" },
@@ -323,8 +324,16 @@ export const COMMANDS: Record<string, Handler> = {
     // --excerpt-file은 실패 원문 발췌다. checks가 시간 초과 등으로 발췌를 못 남겼으면 파일이 없다. 그래도 보고는 한다.
     const file = str(v, "excerpt-file");
     const excerpt = file && existsSync(file) ? readFileSync(file, "utf8").slice(0, 64_000) : null;
+    // --last-success는 직전 성공 run의 시각(ISO)이다. 비었거나 해석할 수 없으면 모르는 것으로 본다.
+    const rawLast = str(v, "last-success")?.trim();
+    const lastSuccessAt =
+      rawLast && !Number.isNaN(new Date(rawLast).getTime())
+        ? new Date(rawLast).toISOString()
+        : null;
     ctx.stdout(
-      JSON.stringify(await runSmokeReport(ctx.buildDeps(ctx.env, "all"), { result, excerpt })),
+      JSON.stringify(
+        await runSmokeReport(ctx.buildDeps(ctx.env, "all"), { result, excerpt, lastSuccessAt }),
+      ),
     );
     return 0;
   },

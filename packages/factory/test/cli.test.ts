@@ -55,6 +55,27 @@ describe("cli main", () => {
     expect(JSON.parse(out.at(-1)!)).toEqual({ action: "recovered", issue: 1 });
   });
 
+  it("smoke-report parses --last-success and ignores garbage", async () => {
+    const h = makeTestDeps();
+    const out: string[] = [];
+    let since: Date | null = null;
+    h.gh.listMergedPulls = async (d: Date) => {
+      since = d;
+      return [];
+    };
+    const args = ["smoke-report", "--result", "failure", "--last-success"];
+    expect(await main([...args, "2026-10-12T00:00:00Z"], context(h, [], out))).toBe(0);
+    expect(since).toEqual(new Date("2026-10-12T00:00:00Z"));
+    expect((await h.gh.getIssue(1)).body).toContain("병합된 PR이 없다");
+    const g = makeTestDeps();
+    let asked = 0;
+    g.gh.listMergedPulls = async () => (asked++, []);
+    expect(await main([...args, "garbage"], context(g, [], out))).toBe(0);
+    expect(await main([...args, ""], context(makeTestDeps(), [], out))).toBe(0);
+    expect(asked).toBe(0);
+    expect((await g.gh.getIssue(1)).body).toContain("알 수 없어");
+  });
+
   it("smoke-report reads --excerpt-file and still reports when the file is missing", async () => {
     const h = makeTestDeps();
     const out: string[] = [];

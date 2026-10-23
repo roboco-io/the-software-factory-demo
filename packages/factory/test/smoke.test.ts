@@ -244,3 +244,95 @@ describe("runSmokeReport postmortem triggers", () => {
     expect(dispatched(h)).toEqual(["detected/smoke#1", "recovered/smoke#1", "detected/smoke#1"]);
   });
 });
+
+describe("runSmokeReport deploys since last success", () => {
+  const LAST = "2026-10-12T00:00:00.000Z";
+  const pull = (n: number, mergedAt: string, extra: Record<string, unknown> = {}) => ({
+    number: n,
+    title: `PR ${n}`,
+    body: "",
+    author: "x",
+    labels: [],
+    mergedAt,
+    mergeSha: `${n}abcdef0123456`,
+    headSha: null,
+    ...extra,
+  });
+  function setup(pulls: ReturnType<typeof pull>[]) {
+    const h = makeTestDeps();
+    let asked = 0;
+    h.gh.listMergedPulls = async () => {
+      asked++;
+      return pulls as never;
+    };
+    return { h, asked: () => asked };
+  }
+
+  it("lists PRs merged after the last success, newest first, and skips older ones", async () => {
+    const { h } = setup([
+      pull(10, "2026-10-11T23:00:00.000Z"),
+      pull(11, "2026-10-12T01:00:00.000Z", { body: "Factory-Issue: #7" }),
+      pull(12, "2026-10-12T02:00:00.000Z"),
+    ]);
+    await runSmokeReport(h.deps, { result: "failure", lastSuccessAt: LAST });
+    const body = (await h.gh.getIssue(1)).body;
+    expect(body).toContain("마지막 성공(2026-10-12T00:00:00.000Z) 이후 main에 병합되어 배포된 PR:");
+    const i12 = body.indexOf("- #12 PR 12");
+    const i11 = body.indexOf("- #11 PR 11 (요청 이슈 #7, 병합 커밋 `11abcde`)");
+    expect(i12).toBeGreaterThan(-1);
+    expect(i11).toBeGreaterThan(i12);
+    expect(body).toContain("- #12 PR 12 (병합 커밋 `12abcde`)");
+    expect(body).not.toContain("#10 PR 10");
+  });
+
+  it("says no PR was merged when the window is empty", async () => {
+    const { h } = setup([pull(10, "2026-10-11T23:00:00.000Z")]);
+    await runSmokeReport(h.deps, { result: "failure", lastSuccessAt: LAST });
+    expect((await h.gh.getIssue(1)).body).toContain("병합된 PR이 없다");
+    expect((await h.gh.getIssue(1)).body).toContain("외부 의존성");
+  });
+
+  it("says the last success is unknown without listing PRs", async () => {
+    const { h, asked } = setup([pull(12, "2026-10-12T02:00:00.000Z")]);
+    await runSmokeReport(h.deps, { result: "failure", lastSuccessAt: null });
+    expect((await h.gh.getIssue(1)).body).toContain("마지막 스모크 성공 시각을 알 수 없어");
+    expect(asked()).toBe(0);
+  });
+
+  it("does not repeat the section on follow-up failure comments", async () => {
+    const { h } = setup([pull(12, "2026-10-12T02:00:00.000Z")]);
+    await runSmokeReport(h.deps, { result: "failure", lastSuccessAt: LAST });
+    await runSmokeReport(h.deps, { result: "failure", lastSuccessAt: LAST });
+    expect((await h.gh.listComments(1)).at(-1)!.body).not.toContain("#12");
+  });
+
+  it("neutralizes mentions and closing keywords in untrusted titles", async () => {
+    const { h } = setup([pull(12, "2026-10-12T02:00:00.000Z", { title: "@x closes #9" })]);
+    await runSmokeReport(h.deps, { result: "failure", lastSuccessAt: LAST });
+    const body = (await h.gh.getIssue(1)).body;
+    expect(body).not.toContain("@x");
+    expect(body).not.toMatch(/closes #9/);
+  });
+
+  it("still opens the issue when the merged-PR lookup fails", async () => {
+    const { h } = setup([]);
+    h.gh.listMergedPulls = async () => {
+      throw new Error("boom");
+    };
+    const r = await runSmokeReport(h.deps, { result: "failure", lastSuccessAt: LAST });
+    expect(r.action).toBe("created");
+    expect((await h.gh.getIssue(1)).body).toContain("조회하지 못했다");
+  });
+
+  it("caps the list at 20 lines and counts the rest", async () => {
+    const { h } = setup(
+      Array.from({ length: 25 }, (_, k) =>
+        pull(100 + k, `2026-10-12T01:${String(k).padStart(2, "0")}:00.000Z`),
+      ),
+    );
+    await runSmokeReport(h.deps, { result: "failure", lastSuccessAt: LAST });
+    const body = (await h.gh.getIssue(1)).body;
+    expect(body.match(/^- #1\d\d /gm)).toHaveLength(20);
+    expect(body).toContain("외 5건");
+  });
+});

@@ -1,6 +1,14 @@
 import { z } from "zod";
 import type { Comment, Issue } from "../github/port";
-import { codeBlock, codeCell, neutralizeRefs, readMarker, writeMarker } from "../report/text";
+import {
+  codeBlock,
+  codeCell,
+  inline,
+  neutralizeRefs,
+  readMarker,
+  writeMarker,
+} from "../report/text";
+import { requestIssueOf } from "../postmortem/timeline";
 import { COLLECT } from "./collect";
 import { isBot, record, runLink, stepRecord } from "./common";
 import type { Settings, StageDeps } from "./deps";
@@ -85,9 +93,49 @@ function target(settings: Settings): string {
   return injected ? `검증용으로 지정한 API \`${codeCell(injected)}\`` : "프로덕션 API와 웹";
 }
 
+export const DEPLOY_LIST_CAP = 20;
+
+// 새 스모크 이슈에 싣는 "마지막 성공 이후 배포된 PR" 절. main 병합마다 프로덕션 배포가 일어나므로 병합된 PR이 곧 배포 목록이다.
+async function deploysSince(deps: StageDeps, lastSuccessAt: string | null): Promise<string> {
+  const from = lastSuccessAt ? new Date(lastSuccessAt) : null;
+  if (!from || Number.isNaN(from.getTime())) {
+    return "마지막 스모크 성공 시각을 알 수 없어 그 이후 배포된 PR을 나열하지 못했다.";
+  }
+  const to = deps.now();
+  let listed: Awaited<ReturnType<StageDeps["gh"]["listMergedPulls"]>>;
+  try {
+    listed = await deps.gh.listMergedPulls(from);
+  } catch {
+    // 조회 실패가 스모크 보고를 막으면 안 된다.
+    return "배포된 PR 목록을 조회하지 못했다.";
+  }
+  const pulls = listed
+    .filter((p) => new Date(p.mergedAt) > from && new Date(p.mergedAt) <= to)
+    .sort((a, b) => new Date(b.mergedAt).getTime() - new Date(a.mergedAt).getTime());
+  if (pulls.length === 0) {
+    return `마지막 성공(${from.toISOString()}) 이후 main에 병합된 PR이 없다. 원인이 배포 밖(외부 의존성, 데이터, 인프라)에 있을 수 있다.`;
+  }
+  const lines = pulls.slice(0, DEPLOY_LIST_CAP).map((p) => {
+    const issue = requestIssueOf(p);
+    const parts = [
+      ...(issue === null ? [] : [`요청 이슈 #${issue}`]),
+      ...(p.mergeSha ? [`병합 커밋 \`${codeCell(p.mergeSha.slice(0, 7))}\``] : []),
+    ];
+    return `- #${p.number} ${inline(p.title)}${parts.length ? ` (${parts.join(", ")})` : ""}`;
+  });
+  if (pulls.length > DEPLOY_LIST_CAP) lines.push(`외 ${pulls.length - DEPLOY_LIST_CAP}건`);
+  return [`마지막 성공(${from.toISOString()}) 이후 main에 병합되어 배포된 PR:`, "", ...lines].join(
+    "\n",
+  );
+}
+
 export async function runSmokeReport(
   deps: StageDeps,
-  { result, excerpt: raw }: { result: "success" | "failure"; excerpt?: string | null },
+  {
+    result,
+    excerpt: raw,
+    lastSuccessAt = null,
+  }: { result: "success" | "failure"; excerpt?: string | null; lastSuccessAt?: string | null },
 ): Promise<{ action: SmokeAction; issue: number | null }> {
   const excerpt = result === "failure" ? cleanSmokeExcerpt(raw) : null;
   const issue = findIntakeIssue(await deps.gh.listOpenIssues(), deps.settings, "smoke", SMOKE_KEY);
@@ -111,6 +159,8 @@ export async function runSmokeReport(
     }
     const body = [
       `${CHECKS}가 실패했다. 대상: ${target(deps.settings)}. 실패한 단계와 로그는 워크플로 run에서 확인한다.${run}${excerptSection(excerpt)}`,
+      "",
+      await deploysSince(deps, lastSuccessAt),
       "",
       '실패가 이어지면 이 이슈에 코멘트를 추가하고, 다음 스모크가 성공하면 "복구됨" 코멘트를 남긴다. 이슈 종료는 사람이 정한다. 구현은 리포 쓰기 권한자의 `@factory go`가 있어야 시작한다.',
       "",

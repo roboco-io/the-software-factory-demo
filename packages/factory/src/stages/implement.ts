@@ -14,7 +14,7 @@ import {
   type PrMeta,
   type PrReport,
 } from "../report/pr";
-import { codeCell } from "../report/text";
+import { codeBlock, codeCell } from "../report/text";
 import { canTransition, stateLabel } from "../state/machine";
 import {
   ROUND_PREFIX,
@@ -77,7 +77,15 @@ const OutcomeSchema = z.discriminatedUnion("kind", [
     runs: RunsSchema,
     reason: FailureReasonSchema,
   }),
-  z.object({ kind: z.literal("no-changes"), runs: RunsSchema }),
+  z.object({
+    kind: z.literal("no-changes"),
+    runs: RunsSchema,
+    // 에이전트가 변경 없이 끝난 이유. 신뢰할 수 없는 값이라 길이를 제한하고 게시할 때 무력화한다.
+    summary: z
+      .string()
+      .transform((s) => s.slice(0, 2000))
+      .optional(),
+  }),
   z.object({
     kind: z.literal("forbidden-paths"),
     runs: RunsSchema,
@@ -251,7 +259,8 @@ export const implementStage: PhasedStage<ImplementArgs, ImplementPlan, Implement
       return { kind: "agent-failed", runs, reason: first.failureReason ?? "engine_error" };
 
     let changes = await inspectChanges(deps, plan.baseSha);
-    if (changes.files.length === 0) return { kind: "no-changes", runs };
+    if (changes.files.length === 0)
+      return { kind: "no-changes", runs, summary: first.summary.trim().slice(0, 2000) };
     if (changes.forbidden.length > 0)
       return { kind: "forbidden-paths", runs, files: changes.forbidden };
 
@@ -317,9 +326,10 @@ export const implementStage: PhasedStage<ImplementArgs, ImplementPlan, Implement
     }
     if (out.kind === "no-changes") {
       if (await skip(true, true)) return;
-      await toHuman(
-        "구현 에이전트가 파일을 바꾸지 않았다. 이슈가 구현 가능한 요청인지 사람이 확인한다.",
-      );
+      const fixed =
+        "구현 에이전트가 파일을 바꾸지 않았다. 이슈가 구현 가능한 요청인지 사람이 확인한다.";
+      const why = out.summary?.trim();
+      await toHuman(why ? `${fixed}\n\n에이전트가 남긴 설명:\n\n${codeBlock(why)}` : fixed);
       return;
     }
     if (out.kind === "forbidden-paths") {

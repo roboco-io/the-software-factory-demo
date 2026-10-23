@@ -271,6 +271,48 @@ describe("implement stage", () => {
     expect(await lastComment(h, n)).toContain("파일을 바꾸지 않았다");
   });
 
+  describe("no-changes carries the agent's explanation", () => {
+    const FIXED =
+      "구현 에이전트가 파일을 바꾸지 않았다. 이슈가 구현 가능한 요청인지 사람이 확인한다.";
+    async function noChanges(summary: string) {
+      const claude = createFakeAdapter([{ result: { summary, turns: 1, costUsd: 0.1 } }], "claude");
+      const h = makeTestDeps({ adapters: { claude } });
+      const n = approvedIssue(h);
+      await run(h, n, BOT);
+      return lastComment(h, n);
+    }
+
+    it("includes the summary after the fixed sentence", async () => {
+      const text = "수정 대상 apps/web/e2e-smoke/home.spec.ts가 T3 경로라 바꾸지 않았다.";
+      const c = await noChanges(text);
+      expect(c).toContain(FIXED);
+      expect(c).toContain("에이전트가 남긴 설명:");
+      expect(c).toContain(text);
+    });
+
+    it("neutralizes mentions, closing keywords and markers", async () => {
+      const c = await noChanges("@someone closes #1 <!-- factory:x -->");
+      expect(c).not.toContain("@someone");
+      expect(c).not.toMatch(/closes #1/);
+      expect(c).not.toContain("<!-- factory:x -->");
+    });
+
+    it("keeps today's text for an empty summary", async () => {
+      const c = await noChanges("  \n ");
+      expect(c).toContain(FIXED);
+      expect(c).not.toContain("에이전트가 남긴 설명");
+    });
+
+    it("truncates an over-long summary instead of rejecting it", async () => {
+      const c = await noChanges(`${"가".repeat(5000)}끝`);
+      expect(c).toContain(FIXED);
+      expect(c).toContain("에이전트가 남긴 설명:");
+      expect(c).toContain("가".repeat(100));
+      expect(c).not.toContain("끝");
+      expect(c).not.toContain("가".repeat(2001));
+    });
+  });
+
   it("moves to needs-human when the agent phase crashed", async () => {
     const h = makeTestDeps({ adapters: { claude: createFakeAdapter([], "claude") } });
     const n = approvedIssue(h);
