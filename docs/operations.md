@@ -165,7 +165,7 @@ Workflows 권한은 주지 않는다. 이 권한이 없으면 App 토큰으로�
 - CI의 Cloudflare 토큰(`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`)은 워크플로 전체가 아니라 wrangler 또는 Cloudflare API를 호출하는 단계에만 `env`로 전달한다. 의존성 설치, 웹 빌드, Playwright 단계는 이 토큰을 받지 않는다.
 - Cloudflare 토큰은 `production`·`preview` environment 시크릿으로만 둔다. 팩토리 워크플로(`factory-*.yml`)는 Cloudflare 토큰을 받지 않는다. 봇 PR이 T2·T3 경로를 바꾸면 `preview.yml`의 `policy` job이 프리뷰 배포를 생략한다.
 - 팩토리의 에이전트는 GitHub 토큰이 없는 별도 job(VM)에서 실행되고, prepare job이 배정한 엔진의 API 키 하나만 받는다. push·PR·라벨은 에이전트가 실행된 적 없는 publish job이 새로 발급한 App 토큰으로 한다. publish job은 main을 체크아웃한 별도 디렉토리의 팩토리 CLI를 실행하고, 에이전트가 만든 작업 트리의 코드는 실행하지 않는다.
-- 보안 검사 세 개(`codeql`, `deps-audit`, `secrets`)는 `factory/risk-policy.yml`의 `requiredChecks`에 있지만 main 브랜치 보호 규칙에는 아직 없다(2026-10-23 기준). 운영자가 GitHub 저장소 설정 > Branches > main 규칙의 필수 상태 검사에 세 체크를 직접 추가한다. 추가하기 전에는 GitHub이 병합 조건으로 강제하지 않는다.
+- main의 병합 조건은 저장소 ruleset `main-protection`(Settings > Rules > Rulesets)이 정한다. 이 ruleset의 필수 상태 체크는 `factory/risk-policy.yml`의 `requiredChecks`와 같아야 한다. 2026-10-23에 보안 검사 세 개(`codeql`, `deps-audit`, `secrets`)를 추가해 두 목록이 11개로 같다. `requiredChecks`를 바꾸는 PR을 병합하면 운영자가 ruleset도 갱신한다. 방법은 [#120](https://github.com/roboco-io/the-software-factory-demo/issues/120)에 있다.
 - `deps-audit`이 새 권고 때문에 관련 없는 PR을 실패시키면, 먼저 의존성 갱신으로 해결할 수 있는지 본다. 해결할 수 없으면 `pnpm-workspace.yaml`의 `auditConfig.ignoreGhsas`에 권고 번호(GHSA)를 추가하는 PR을 연다. 이 파일은 T2이므로 사람 승인 후에만 병합된다. 무시한 이유와 재검토 시점을 PR 본문에 적는다.
 - `secrets` 체크가 실패하면 gate가 이슈를 `factory:needs-human`으로 넘기고 수정 에이전트를 부르지 않는다. 운영자는 발견된 시크릿을 먼저 발급처에서 폐기하고 새로 발급한 뒤, 이력에서 시크릿을 제거하거나 새 브랜치로 다시 작업한다. 이미 push된 시크릿은 폐기하기 전에는 유출된 것으로 본다. 오탐이면 `factory/security/gitleaks.toml`의 `[allowlist]`에 경로를 추가하는 T3 PR을 연다.
 - 각 단계별 통제와 한계는 [security.md](security.md)에 있다.
