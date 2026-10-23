@@ -28,7 +28,7 @@ PR이 병합되기 전에 거치는 단계다. 필수 체크의 목록은 `facto
 
 2026-10-23에 `.github/workflows/ci.yml`에 검사 세 개를 추가하고 `requiredChecks`에 넣었다. 세 검사 모두 실패를 무시하는 단계가 없다.
 
-`codeql`은 정적 분석(SAST)이다. CodeQL의 `javascript-typescript` 분석을 `security-extended` 쿼리로 실행하고 결과를 코드 스캐닝에 올린다. CodeQL 분석 단계는 탐지 결과가 있어도 성공하므로, `scripts/sarif-gate.mjs`가 결과 파일(SARIF)을 읽어 보안 심각도 7.0 이상인 결과, 또는 심각도가 없고 수준이 `error`인 결과가 있으면 job을 실패시킨다. 결과 파일이 없거나 읽을 수 없으면 종료 코드 2로 실패한다. 즉 검사가 조용히 건너뛰어지지 않는다. 억제 표시가 있는 결과는 무시한다.
+`codeql`은 정적 분석(SAST)이다. CodeQL의 `javascript-typescript` 분석을 `security-extended` 쿼리로 실행한다. 저장소의 CodeQL 기본 설정(default setup)이 켜져 있어 코드 스캐닝 경고는 기본 설정이 올리고, 기본 설정이 켜진 저장소는 워크플로의 업로드를 거부하므로 이 job은 결과를 올리지 않고 PR 게이트로만 쓴다(2026-10-23 확인). CodeQL 분석 단계는 탐지 결과가 있어도 성공하므로, `scripts/sarif-gate.mjs`가 결과 파일(SARIF)을 읽어 보안 심각도 7.0 이상인 결과, 또는 심각도가 없고 수준이 `error`인 결과가 있으면 job을 실패시킨다. 결과 파일이 없거나 읽을 수 없으면 종료 코드 2로 실패한다. 즉 검사가 조용히 건너뛰어지지 않는다. 억제 표시가 있는 결과는 무시한다.
 
 `deps-audit`은 `pnpm audit --audit-level=high`를 전체 의존성에 실행한다. 개발 의존성도 시크릿이 있는 CI에서 실행되므로 범위에 넣었다.
 
@@ -48,7 +48,7 @@ main 병합 후 `.github/workflows/deploy.yml`이 프로덕션에 배포한다. 
 
 프로덕션에서 문제를 찾고 시스템을 고치는 단계다. `factory-smoke.yml`이 6시간마다 프로덕션 읽기 전용 스모크를 실행하고, `factory-intake.yml`이 30분마다 `error_events`와 피드백을 읽어 이슈로 만든다. 스모크 실패와 배포 실패는 각각 `source:smoke`, `source:deploy` 이슈가 되고, 오류와 피드백은 `source:error` 계열 이슈가 되어 위의 의도 정의 단계부터 다시 거친다. 이슈를 닫으면 `packages/factory/src/stages/postmortem-trigger.ts`가 이슈 라벨로 장애 종류를 정하고 자동 포스트모템이 실행된다. 롤백 절차는 [operations.md](operations.md)의 "배포 롤백"에 있고 사람이 실행한다. 주간 자기 개선(`factory-weekly.yml`)이 실패 원문에서 개선 PR을 만들지만 개선 PR은 T3 경로를 건드리므로 사람 승인이 필요하다.
 
-2026-10-23에 추가한 보안 검사의 결과도 이 순환에 들어간다. CodeQL 결과는 저장소의 코드 스캐닝 화면에 쌓이고, Dependabot 보안 업데이트는 의존성 취약점 수정 PR을 연다. 이 PR은 `package.json`·`pnpm-lock.yaml`을 바꾸므로 T2이고 사람 승인이 필요하다.
+2026-10-23에 추가한 보안 검사의 결과도 이 순환에 들어간다. CodeQL 기본 설정의 결과는 저장소의 코드 스캐닝 화면에 쌓이고, Dependabot 보안 업데이트는 의존성 취약점 수정 PR을 연다. 이 PR은 `package.json`·`pnpm-lock.yaml`을 바꾸므로 T2이고 사람 승인이 필요하다.
 
 ## 6. 한계
 

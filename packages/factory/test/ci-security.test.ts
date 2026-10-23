@@ -40,10 +40,10 @@ describe("ci security jobs", () => {
     );
   });
 
-  it("codeql job has security-events: write, actions: read, contents: read and runs sarif-gate", () => {
+  it("codeql job has read-only permissions, does not upload, and runs sarif-gate", () => {
     const job = ci.jobs.codeql!;
+    // 저장소의 CodeQL 기본 설정이 켜져 있으면 워크플로 업로드는 거부되므로 쓰기 권한이 필요 없다.
     expect(job.permissions).toEqual({
-      "security-events": "write",
       actions: "read",
       contents: "read",
     });
@@ -54,7 +54,7 @@ describe("ci security jobs", () => {
       queries: "security-extended",
     });
     const analyze = job.steps.find((s) => s.uses?.startsWith("github/codeql-action/analyze@"))!;
-    expect(analyze.with).toMatchObject({ output: "sarif-results" });
+    expect(analyze.with).toMatchObject({ output: "sarif-results", upload: "never" });
     expect(runs(job)).toContain("node scripts/sarif-gate.mjs sarif-results");
   });
 

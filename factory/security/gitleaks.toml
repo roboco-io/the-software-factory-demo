@@ -1,11 +1,8 @@
 # gitleaks 설정. 기본 규칙을 그대로 쓴다.
 # 2026-10-23 기준 저장소의 테스트 픽스처 토큰(ghs_x 등)은 기본 규칙의 최소 길이보다 짧아 탐지되지 않는다(grep으로 확인, docker 미사용).
-# 오탐이 생기면 아래 allowlist에 경로를 추가한다. 이 파일은 T3이므로 사람 승인이 필요하다.
+# 오탐이 생기면 [[allowlists]] 표를 추가하고 paths 등 조건을 하나 이상 적는다. 빈 allowlist는 gitleaks가 설정 오류로 거부한다.
+# 이 파일은 T3이므로 사람 승인이 필요하다.
 title = "software-factory-demo gitleaks"
 
 [extend]
 useDefault = true
-
-[allowlist]
-description = "가짜 토큰을 담은 테스트 픽스처(현재 없음)"
-paths = []

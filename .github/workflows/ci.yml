@@ -250,11 +250,12 @@ jobs:
           FACTORY_WORKDIR: ${{ github.workspace }}/head
   # 보안 검사 3종(SDLC 보안 통제). 필수 체크이며 실패를 무시하는 단계가 없다(fail-closed).
   # SAST. CodeQL analyze는 탐지 결과가 있어도 성공하므로 sarif-gate가 심각도 7.0 이상 결과로 작업을 실패시킨다.
+  # 저장소의 CodeQL 기본 설정(default setup)이 코드 스캐닝 경고를 올리고, 기본 설정이 켜져 있으면 워크플로의 업로드는 거부된다.
+  # 그래서 이 job은 결과를 올리지 않고(upload: never) PR 게이트로만 쓴다.
   codeql:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      security-events: write
       actions: read
       contents: read
     steps:
@@ -269,6 +270,7 @@ jobs:
         with:
           category: "/language:javascript-typescript"
           output: sarif-results
+          upload: never
       - uses: actions/setup-node@v7
         with: { node-version-file: .nvmrc }
       - run: node scripts/sarif-gate.mjs sarif-results
