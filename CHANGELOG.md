@@ -9,6 +9,7 @@
 ### 보안
 
 - 소프트웨어 개발 수명주기 전체에 보안 통제를 추가하고 단계별로 정리한 문서([docs/security.md](docs/security.md))를 만들었습니다. CI에 필수 체크 `codeql`(정적 분석), `deps-audit`(의존성 취약점), `secrets`(시크릿 검사)가 생겼습니다. 시크릿이 발견되면 수정 에이전트를 부르지 않고 사람에게 넘깁니다. 프로덕션 배포는 Worker 번들과 웹 산출물의 빌드 출처와 SBOM을 증명합니다(배포 때 검증하지는 않습니다). 트리아지는 T2·T3 이슈에 위협 모델(STRIDE)을 작성하고, 구현·리뷰 에이전트가 이를 읽어 대응이 구현됐는지 확인합니다. 새 체크 세 개는 운영자가 main 브랜치 보호에 직접 추가해야 합니다. 새 권고가 관련 없는 PR의 `deps-audit`을 실패시킬 수 있으며, 예외는 T2 `auditConfig.ignoreGhsas`입니다.
+- 포럼 웹의 마크다운 정화 라이브러리 DOMPurify를 3.4.16에서 3.4.17로 올렸습니다. 새 `deps-audit` 체크가 3.4.16의 critical·high 취약점([GHSA-cg2g-xh64-v4q7](https://github.com/advisories/GHSA-cg2g-xh64-v4q7), [GHSA-mrv2-3pqr-j5jr](https://github.com/advisories/GHSA-mrv2-3pqr-j5jr))을 첫 실행에서 찾았습니다.
 
 ### 변경
 
