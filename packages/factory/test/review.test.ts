@@ -1,12 +1,58 @@
 import { describe, expect, it } from "vitest";
 import { createFakeAdapter, loadFakeScript } from "../src/agents/fake";
 import { TooManyFilesError } from "../src/github/port";
-import { latestVerdict } from "../src/report/comments";
+import { latestVerdict, renderTriageComment, type ThreatModel } from "../src/report/comments";
 import { runPhase } from "../src/stages/phased";
 import { heldForRisk, reviewStage, truncateDiff } from "../src/stages/review";
 import { BOT, makeTestDeps, openBotPr } from "./helpers";
 
+const TM: ThreatModel = {
+  assets: ["에이전트 토큰"],
+  threats: [
+    {
+      category: "spoofing",
+      threat: "다른 사람의 토큰으로 글을 쓴다",
+      mitigation: "토큰 소유자를 확인한다",
+    },
+  ],
+};
+
 describe("review stage", () => {
+  it("review prompt contains rendered threat model from triage comment", async () => {
+    const codex = createFakeAdapter(loadFakeScript("review-approve"), "codex");
+    const h = makeTestDeps({ adapters: { codex } });
+    const { pr, issue } = await openBotPr(h);
+    h.gh.addComment(
+      issue,
+      BOT,
+      renderTriageComment(
+        {
+          type: "feature",
+          duplicateOf: null,
+          riskTier: "T2",
+          acceptanceCriteria: ["a"],
+          summary: "s",
+          threatModel: TM,
+        },
+        { engine: "pi", model: "m" },
+      ),
+    );
+    await runPhase(reviewStage, "all", h.deps, { pr }, null);
+    const prompt = codex.calls[0]?.prompt ?? "";
+    expect(prompt).toContain("## 위협 모델");
+    expect(prompt).toContain(
+      "- [spoofing] 다른 사람의 토큰으로 글을 쓴다 → 대응: 토큰 소유자를 확인한다",
+    );
+  });
+
+  it("review prompt shows (없음) when triage lacks threatModel", async () => {
+    const codex = createFakeAdapter(loadFakeScript("review-approve"), "codex");
+    const h = makeTestDeps({ adapters: { codex } });
+    const { pr } = await openBotPr(h);
+    await runPhase(reviewStage, "all", h.deps, { pr }, null);
+    expect(codex.calls[0]?.prompt).toMatch(/<threat-model>\n\(없음\)\n<\/threat-model>/);
+  });
+
   it("reviews with a different engine, records the verdict as a COMMENT review and dispatches the gate", async () => {
     const codex = createFakeAdapter(loadFakeScript("review-approve"), "codex");
     const h = makeTestDeps({ adapters: { codex } });

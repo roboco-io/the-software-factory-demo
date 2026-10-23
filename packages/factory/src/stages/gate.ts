@@ -227,6 +227,19 @@ export async function runGate(deps: StageDeps, args: GateArgs): Promise<GateDeci
     pull.headSha,
   );
 
+  // 푸시된 이력에 남은 시크릿은 수정 에이전트가 지울 수 없다. 다른 체크의 실패와 섞여도 사람에게 넘긴다.
+  // requiredChecks 목록과 무관하게 secrets 실행 자체를 본다.
+  if (checkState(runs.find((r) => r.name === "secrets")) === "fail") {
+    await moveTo(
+      deps,
+      meta.issue,
+      "needs-human",
+      "gate",
+      `PR #${pull.number}의 \`secrets\` 체크가 실패했다. PR 커밋 범위에서 시크릿이 발견되어 사람이 시크릿을 폐기하고 이력을 정리해야 한다. 수정 에이전트는 호출하지 않는다.${runLink(deps.settings)}`,
+    );
+    await record(deps, stepRecord("gate", meta.issue, pull.number, false, "secrets", meta.round));
+    return "needs-human";
+  }
   if (checks.state === "fail") {
     if (checks.failing.includes("risk-tier")) {
       await moveTo(

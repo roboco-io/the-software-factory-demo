@@ -327,6 +327,11 @@ fix publish는 PR 브랜치를 한 커밋으로 다시 만든다(`reset --soft` 
 | `e2e` | Playwright 스모크(가입→글 작성→댓글)를 로컬 서버(wrangler dev + vite preview)에 실행. PR 프리뷰 대상 실행은 `e2e-preview`(필수 아님). 같은 프리뷰에 프로덕션 읽기 전용 스모크를 돌리는 `smoke-preview`(필수 아님)도 있다. 두 체크는 보호 규칙의 필수 체크가 아니지만, gate는 T0·T1 봇 PR을 병합하기 전에 프리뷰 배포·`e2e-preview`·`smoke-preview`를 기다린다. `smoke-preview`나 프리뷰 배포가 실패하면 에이전트가 고칠 수 없으므로 사람에게 넘기고, `e2e-preview`가 실패하면 수정 라운드를 보낸다(2026-10-21, PR #65 사례) | P1 |
 | `risk-tier` | 변경 경로로 등급 판정, `risk:T0-3` 라벨 부착, 구현 역할의 T3 수정 차단 | P2 |
 | `evidence` | 버그 PR: 변경·추가된 테스트를 base 커밋에서 실행해 실패, head에서 통과해야 함. 실행 대상은 Vitest(`*.test.ts`, `*.test.tsx`)이고 Playwright E2E는 실행하지 않는다. 판정은 Vitest JSON 보고서의 단언(assertion) 결과로 한다. `evidence-plan` job이 실패해도 `!cancelled()`로 건너뛰지 않는다 | P3 |
+| `codeql` | CodeQL 정적 분석(`security-extended`). `scripts/sarif-gate.mjs`가 보안 심각도 7.0 이상 결과가 있으면 실패시킨다. 결과 파일이 없으면 실패한다(2026-10-23) | SDLC 보안 |
+| `deps-audit` | `pnpm audit --audit-level=high`. 개발 의존성 포함. 새 권고가 관련 없는 PR을 실패시킬 수 있고, 예외는 T2 `auditConfig.ignoreGhsas`다(2026-10-23) | SDLC 보안 |
+| `secrets` | gitleaks로 PR 커밋 범위의 시크릿 검사. 실패하면 gate가 수정 에이전트 없이 `needs-human`으로 넘긴다(2026-10-23) | SDLC 보안 |
+
+세 보안 체크는 `requiredChecks`에 있으나 main 브랜치 보호에는 운영자가 수동으로 추가해야 한다. 단계별 통제 전체는 [docs/security.md](../../security.md)에 있다.
 
 RealWorld Hurl 스위트는 업스트림 리포의 특정 커밋을 고정(pin)해 가져온다. 업스트림 변경이 게이트를 흔들지 않게 하기 위해서다.
 

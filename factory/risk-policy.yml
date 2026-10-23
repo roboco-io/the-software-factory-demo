@@ -4,7 +4,9 @@
 # T3 규칙의 패턴은 대소문자를 구분하지 않고 비교한다(macOS 같은 대소문자 무시 파일시스템에서 Agents.md가 AGENTS.md로 읽히는 우회를 막는다).
 # 이 파일을 바꾸면 .github/CODEOWNERS도 함께 바꾼다.
 default: T2
-requiredChecks: [typecheck, lint, unit, forum-api, e2e, risk-tier, evidence, eval]
+# codeql(SAST), deps-audit(의존성 취약점), secrets(시크릿 검사)는 SDLC 보안 통제다. docs/security.md 참고.
+requiredChecks:
+  [typecheck, lint, unit, forum-api, e2e, risk-tier, evidence, eval, codeql, deps-audit, secrets]
 rules:
   - tier: T3
     patterns:

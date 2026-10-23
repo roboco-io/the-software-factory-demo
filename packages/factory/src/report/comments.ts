@@ -3,7 +3,32 @@ import type { Comment, Review } from "../github/port";
 import { TIERS } from "../policy/risk";
 import { cell, codeCell, inline, readMarker, sanitize, writeMarker } from "./text";
 
-export const TriageSchema = z.object({
+export const STRIDE_CATEGORIES = [
+  "spoofing",
+  "tampering",
+  "repudiation",
+  "information-disclosure",
+  "denial-of-service",
+  "elevation-of-privilege",
+] as const;
+
+// 트리아지가 T2·T3 이슈에 쓰는 STRIDE 위협 모델. 구현·리뷰 프롬프트가 읽는다.
+export const ThreatModelSchema = z.object({
+  assets: z.array(z.string().min(1).max(200)).min(1).max(10),
+  threats: z
+    .array(
+      z.object({
+        category: z.enum(STRIDE_CATEGORIES),
+        threat: z.string().min(1).max(500),
+        mitigation: z.string().min(1).max(500),
+      }),
+    )
+    .min(1)
+    .max(10),
+});
+export type ThreatModel = z.infer<typeof ThreatModelSchema>;
+
+export const TriageDataSchema = z.object({
   type: z.enum(["feature", "bug", "docs", "feedback"]),
   duplicateOf: z.number().int().positive().nullable(),
   riskTier: z.enum(TIERS),
@@ -11,6 +36,17 @@ export const TriageSchema = z.object({
   summary: z.string(),
   // 요청을 구현하면 기대값이 깨지는 보호(T3) 경로의 테스트·워크플로. 구현 에이전트는 바꿀 수 없다.
   contractChanges: z.array(z.string().min(1)).max(20).optional().catch(undefined),
+  threatModel: ThreatModelSchema.optional(),
+});
+// T2·T3 필수 규칙은 에이전트 출력 검증에만 쓴다. 저장된 코멘트는 TriageDataSchema로 읽는다.
+export const TriageSchema = TriageDataSchema.superRefine((t, ctx) => {
+  if ((t.riskTier === "T2" || t.riskTier === "T3") && !t.threatModel) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["threatModel"],
+      message: "T2·T3 이슈는 threatModel이 필요하다",
+    });
+  }
 });
 export type Triage = z.infer<typeof TriageSchema>;
 
@@ -89,6 +125,14 @@ export function openFindings(r: ReviewOutput): OpenFinding[] {
 const TRIAGE_DATA = "factory:triage-data";
 const VERDICT = "factory:verdict";
 
+export function renderThreatModel(tm: ThreatModel | undefined): string {
+  if (!tm) return "(없음)";
+  return [
+    `보호 대상: ${tm.assets.map(cell).join(", ")}`,
+    ...tm.threats.map((t) => `- [${t.category}] ${cell(t.threat)} → 대응: ${cell(t.mitigation)}`),
+  ].join("\n");
+}
+
 export function renderTriageComment(t: Triage, run: { engine: string; model: string }): string {
   return [
     "### 트리아지 결과",
@@ -112,6 +156,7 @@ export function renderTriageComment(t: Triage, run: { engine: string; model: str
           "",
         ]
       : []),
+    ...(t.threatModel ? ["**위협 모델**", "", renderThreatModel(t.threatModel), ""] : []),
     `<sub>${run.engine}/${run.model}. 구현을 시작하려면 리포 쓰기 권한자가 \`@factory go\`를 코멘트로 남긴다.</sub>`,
     writeMarker(TRIAGE_DATA, t),
   ].join("\n");
@@ -121,7 +166,7 @@ export function findTriage(comments: Comment[], botLogin: string): Triage | null
   for (let i = comments.length - 1; i >= 0; i--) {
     const c = comments[i]!;
     if (c.author !== botLogin) continue;
-    const t = readMarker(c.body, TRIAGE_DATA, TriageSchema);
+    const t = readMarker(c.body, TRIAGE_DATA, TriageDataSchema);
     if (t) return t;
   }
   return null;

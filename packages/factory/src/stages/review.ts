@@ -9,6 +9,7 @@ import {
   FINDING_CATEGORIES,
   ReviewSchema,
   findTriage,
+  renderThreatModel,
   latestVerdict,
   previousOpenFindings,
   renderReviewBody,
@@ -54,6 +55,8 @@ export interface ReviewPlan {
   authorEngine: EngineName;
   issueTitle: string;
   acceptanceCriteria: string[];
+  // 트리아지 위협 모델을 렌더한 문자열. 없으면 "(없음)".
+  threatModel: string;
   // 앞선 커밋의 판정이 남긴 미해결 지적. 이번 리뷰가 각 항목의 해소 여부를 답해야 승인할 수 있다.
   previous: OpenFinding[];
 }
@@ -200,6 +203,7 @@ export const reviewStage: PhasedStage<{ pr: number }, ReviewPlan, ReviewOutcome>
       authorEngine: meta.implementEngine,
       issueTitle: issue.title,
       acceptanceCriteria: triage?.acceptanceCriteria ?? [],
+      threatModel: renderThreatModel(triage?.threatModel),
       previous: previousOpenFindings(reviews, deps.settings.botLogin, pull.headSha),
     };
   },
@@ -237,6 +241,7 @@ export const reviewStage: PhasedStage<{ pr: number }, ReviewPlan, ReviewOutcome>
         plan.acceptanceCriteria.length > 0
           ? plan.acceptanceCriteria.map((c) => `- ${c}`).join("\n")
           : "(트리아지 수용 기준 없음)",
+      threatModel: plan.threatModel,
       diff,
       previousFindings:
         plan.previous.length > 0

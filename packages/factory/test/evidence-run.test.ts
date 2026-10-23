@@ -295,6 +295,37 @@ describe("runEvidence", () => {
     expect(seen).toEqual([]);
   });
 
+  it("does not write through an overlay target that is a symlink in the base tree", async () => {
+    // base 트리에서 apps/web/src/a.test.ts가 트리 밖 파일을 가리키는 심볼릭 링크다.
+    const outsideDir = mkdtempSync(path.join(tmpdir(), "evidence-outside-"));
+    const outside = path.join(outsideDir, "victim.txt");
+    writeFileSync(outside, "original\n");
+    const h = makeTestDeps({
+      settings: { env: { PATH: process.env.PATH, HOME: process.env.HOME } },
+    });
+    git(h.dir, "init", "-q", "-b", "main");
+    put(h.dir, SRC, "export const pages = 1;\n");
+    symlinkSync(outside, path.join(h.dir, "apps/web/src/a.test.ts"));
+    git(h.dir, "add", "-A");
+    git(h.dir, "commit", "-qm", "base");
+    const base = git(h.dir, "rev-parse", "HEAD");
+    git(h.dir, "rm", "-q", "apps/web/src/a.test.ts");
+    put(h.dir, "apps/web/src/a.test.ts", "// always-pass\n");
+    git(h.dir, "add", "-A");
+    git(h.dir, "commit", "-qm", "head");
+    const head = git(h.dir, "rev-parse", "HEAD");
+    const seen: Seen[] = [];
+    h.deps.spawn = fakeSpawn(h, seen);
+    const r = await runEvidence(
+      h.deps,
+      plan(base, head, { testFiles: ["apps/web/src/a.test.ts"] }),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain("안전하지 않은 테스트 파일 경로");
+    expect(readFileSync(outside, "utf8")).toBe("original\n");
+    expect(seen).toEqual([]);
+  });
+
   it("does not count a killed or timed-out base run as a reproduction", async () => {
     const { h, base, head } = setup();
     h.deps.spawn = fakeSpawn(h, [], { codes: { base: null } });
