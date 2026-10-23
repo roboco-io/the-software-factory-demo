@@ -1,8 +1,11 @@
 import {
+  closeSync,
   existsSync,
-  lstatSync,
+  constants as fsConstants,
+  fstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -298,10 +301,27 @@ export async function runEvidence(deps: StageDeps, plan: EvidencePlan): Promise<
       if (dirReal !== overlayReal && !dirReal.startsWith(`${overlayReal}${path.sep}`)) {
         return done(false, `안전하지 않은 테스트 파일 경로: ${file}(트리 밖을 가리킨다)`);
       }
-      if (existsSync(target) && !lstatSync(target).isFile()) {
+      // 확인과 쓰기 사이에 대상이 바뀌지 않도록, 심볼릭 링크를 따라가지 않고 연 뒤 연 파일을 확인한다.
+      let fd: number;
+      try {
+        fd = openSync(
+          target,
+          fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_TRUNC | fsConstants.O_NOFOLLOW,
+        );
+      } catch {
         return done(false, `안전하지 않은 테스트 파일 경로: ${file}(base에서 일반 파일이 아니다)`);
       }
-      writeFileSync(target, blob.stdout);
+      try {
+        if (!fstatSync(fd).isFile()) {
+          return done(
+            false,
+            `안전하지 않은 테스트 파일 경로: ${file}(base에서 일반 파일이 아니다)`,
+          );
+        }
+        writeFileSync(fd, blob.stdout);
+      } finally {
+        closeSync(fd);
+      }
     }
     for (const [dir, name] of [
       [overlay, "base+테스트"],
