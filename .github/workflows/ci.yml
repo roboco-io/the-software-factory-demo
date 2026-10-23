@@ -266,6 +266,11 @@ jobs:
           languages: javascript-typescript
           build-mode: none
           queries: security-extended
+          # 테스트 코드는 배포되지 않으므로 게이트에서 뺀다. 저장소 전체 스캔은 CodeQL 기본 설정이 맡는다.
+          config: |
+            paths-ignore:
+              - "**/test/**"
+              - "**/*.test.*"
       - uses: github/codeql-action/analyze@v4.39.1
         with:
           category: "/language:javascript-typescript"
@@ -284,8 +289,9 @@ jobs:
       - uses: actions/checkout@v7
         with: { persist-credentials: false }
       - uses: pnpm/action-setup@v6
+      # 의존성을 설치하지 않으므로 pnpm 캐시를 쓰지 않는다(저장소 경로가 없어 캐시 저장 단계가 실패한다).
       - uses: actions/setup-node@v7
-        with: { node-version-file: .nvmrc, cache: pnpm }
+        with: { node-version-file: .nvmrc }
       - run: pnpm audit --audit-level=high
   # 시크릿 검사. gitleaks-action은 조직 계정에서 유료 라이선스가 필요하므로 CLI 컨테이너 이미지를 쓴다.
   # PR은 base..head, push는 before..sha 범위의 모든 커밋을 검사한다(before가 전부 0이면 HEAD 커밋만).

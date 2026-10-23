@@ -53,6 +53,7 @@ describe("ci security jobs", () => {
       "build-mode": "none",
       queries: "security-extended",
     });
+    expect(String(init.with?.config)).toContain('"**/*.test.*"');
     const analyze = job.steps.find((s) => s.uses?.startsWith("github/codeql-action/analyze@"))!;
     expect(analyze.with).toMatchObject({ output: "sarif-results", upload: "never" });
     expect(runs(job)).toContain("node scripts/sarif-gate.mjs sarif-results");
@@ -79,6 +80,9 @@ describe("ci security jobs", () => {
     const job = ci.jobs["deps-audit"]!;
     expect(runs(job)).toContain("pnpm audit --audit-level=high");
     expect(job.permissions).toEqual({ contents: "read" });
+    // 설치 없이 감사만 하므로 pnpm 캐시를 켜면 캐시 저장 단계가 경로 오류로 job을 실패시킨다.
+    const node = job.steps.find((s) => s.uses?.startsWith("actions/setup-node@"))!;
+    expect(node.with).not.toHaveProperty("cache");
   });
 
   it("fail closed: persist-credentials false, no continue-on-error, no || true", () => {

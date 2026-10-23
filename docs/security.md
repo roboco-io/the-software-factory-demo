@@ -28,7 +28,7 @@ PR이 병합되기 전에 거치는 단계다. 필수 체크의 목록은 `facto
 
 2026-10-23에 `.github/workflows/ci.yml`에 검사 세 개를 추가하고 `requiredChecks`에 넣었다. 세 검사 모두 실패를 무시하는 단계가 없다.
 
-`codeql`은 정적 분석(SAST)이다. CodeQL의 `javascript-typescript` 분석을 `security-extended` 쿼리로 실행한다. 저장소의 CodeQL 기본 설정(default setup)이 켜져 있어 코드 스캐닝 경고는 기본 설정이 올리고, 기본 설정이 켜진 저장소는 워크플로의 업로드를 거부하므로 이 job은 결과를 올리지 않고 PR 게이트로만 쓴다(2026-10-23 확인). CodeQL 분석 단계는 탐지 결과가 있어도 성공하므로, `scripts/sarif-gate.mjs`가 결과 파일(SARIF)을 읽어 보안 심각도 7.0 이상인 결과, 또는 심각도가 없고 수준이 `error`인 결과가 있으면 job을 실패시킨다. 결과 파일이 없거나 읽을 수 없으면 종료 코드 2로 실패한다. 즉 검사가 조용히 건너뛰어지지 않는다. 억제 표시가 있는 결과는 무시한다.
+`codeql`은 정적 분석(SAST)이다. CodeQL의 `javascript-typescript` 분석을 `security-extended` 쿼리로 실행한다. 저장소의 CodeQL 기본 설정(default setup)이 켜져 있어 코드 스캐닝 경고는 기본 설정이 올리고, 기본 설정이 켜진 저장소는 워크플로의 업로드를 거부하므로 이 job은 결과를 올리지 않고 PR 게이트로만 쓴다(2026-10-23 확인). CodeQL 분석 단계는 탐지 결과가 있어도 성공하므로, `scripts/sarif-gate.mjs`가 결과 파일(SARIF)을 읽어 보안 심각도 7.0 이상인 결과, 또는 심각도가 없고 수준이 `error`인 결과가 있으면 job을 실패시킨다. 결과 파일이 없거나 읽을 수 없으면 종료 코드 2로 실패한다. 즉 검사가 조용히 건너뛰어지지 않는다. 억제 표시가 있는 결과는 무시한다. 테스트 코드(`**/test/**`, `**/*.test.*`)는 배포되지 않으므로 이 게이트의 분석 대상에서 뺀다. 테스트 코드를 포함한 저장소 전체는 CodeQL 기본 설정이 계속 스캔한다.
 
 `deps-audit`은 `pnpm audit --audit-level=high`를 전체 의존성에 실행한다. 개발 의존성도 시크릿이 있는 CI에서 실행되므로 범위에 넣었다.
 
