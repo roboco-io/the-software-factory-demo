@@ -58,7 +58,7 @@ main 병합 후 `.github/workflows/deploy.yml`이 프로덕션에 배포한다. 
 
 둘째, 빌드 출처와 SBOM 증명은 만들어지지만 배포나 런타임에서 검증하지 않는다. 증명을 확인하는 곳은 사람이 `gh attestation verify`를 실행하는 경우뿐이다. 그래서 현재의 증명은 사후 추적용 기록이고, 변조된 산출물의 배포를 막는 통제가 아니다.
 
-셋째, 새 필수 체크 세 개(`codeql`, `deps-audit`, `secrets`)는 `requiredChecks` 목록에 들어갔지만 main 브랜치 보호 규칙에는 아직 추가하지 않았다. 브랜치 보호는 코드가 아니라 저장소 설정이므로 운영자가 수동으로 추가해야 한다. 추가하기 전에는 GitHub이 이 세 체크를 병합 조건으로 강제하지 않는다. 팩토리 gate는 `requiredChecks`를 보므로 팩토리 PR에는 적용된다.
+셋째, GitHub이 병합 조건으로 강제하는 필수 체크는 코드가 아니라 저장소 설정(ruleset `main-protection`)에 있다. 2026-10-23에 새 필수 체크 세 개(`codeql`, `deps-audit`, `secrets`)를 이 ruleset에 추가해 `requiredChecks`와 같은 11개가 되었다([#120](https://github.com/roboco-io/the-software-factory-demo/issues/120)). 팩토리 gate는 `requiredChecks`를 읽으므로 두 목록이 어긋나도 테스트가 잡지 못한다. `requiredChecks`를 바꾸면 운영자가 ruleset도 함께 바꿔야 한다.
 
 넷째, `factory/security/gitleaks.toml`의 허용 목록은 로컬에서 시험하지 않았다. 작성 당시 docker를 쓰지 않고 `grep`으로 테스트 픽스처 토큰이 기본 규칙에 걸리지 않음을 확인했을 뿐이다. 오탐이 처음 생기면 허용 목록 경로를 추가해야 하며, 이 파일은 T3다.
 

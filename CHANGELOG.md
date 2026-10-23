@@ -6,6 +6,10 @@
 
 ## 미출시 (Unreleased)
 
+### 보안
+
+- main 브랜치의 병합 조건(저장소 ruleset `main-protection`)에 보안 검사 `codeql`, `deps-audit`, `secrets`를 필수 체크로 추가했습니다. 이제 사람이 연 PR도 세 검사를 통과해야 병합됩니다. 이전에는 팩토리 봇 PR에만 강제되었습니다([#120](https://github.com/roboco-io/the-software-factory-demo/issues/120)).
+
 ### 변경
 
 - 프로덕션 배포의 smoke 단계가 새 빌드 반영을 확인한 뒤 웹 읽기 전용 스모크(Playwright)까지 실행합니다. 실패하면 배포 실패로 처리되어 요청 이슈가 사람 확인 대기(`needs-human`)로 넘어갑니다. 이전에는 API 응답과 빌드 반영만 확인해서, 화면을 깨뜨린 배포가 다음 정기 스모크에서야 드러났습니다([#70](https://github.com/roboco-io/the-software-factory-demo/issues/70)).
