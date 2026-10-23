@@ -6,12 +6,18 @@ export function sanitize(text: string): string {
 }
 
 export function writeMarker(name: string, value: unknown): string {
-  const json = JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
+  // JSON.stringify는 U+2028/U+2029를 그대로 둔다. 줄 구분 문자로 취급하는 도구가 있으므로 이스케이프한다.
+  const json = JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
   return `<!-- ${name} ${json} -->`;
 }
 
 export function readMarker<T>(body: string, name: string, schema: z.ZodType<T>): T | null {
-  const re = new RegExp(`<!-- ${name} (\\{.*?\\}) -->`, "g");
+  // `.`은 U+2028/U+2029와 맞지 않는다. 이스케이프 전에 저장된 마커도 읽되, 마커가 줄을 넘지는 않게 한다.
+  const re = new RegExp(`<!-- ${name} (\\{[^\\n\\r]*?\\}) -->`, "g");
   const last = [...body.matchAll(re)].at(-1);
   if (!last?.[1]) return null;
   try {
