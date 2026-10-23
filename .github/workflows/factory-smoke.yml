@@ -99,6 +99,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v7
         with: { ref: main, persist-credentials: false }
@@ -117,10 +118,20 @@ jobs:
         with:
           app-id: ${{ secrets.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+      # 수동 실행(api_base 실패 주입 포함)은 검증 대상이 불확실하므로 정기 실행(schedule)의 성공만 기준으로 삼는다.
+      # 새 스모크 이슈에 "마지막 성공 이후 배포된 PR"을 적기 위한 기준 시각. 조회가 실패해도 보고는 해야 하므로 빈 값으로 넘긴다.
+      - id: last-success
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ts=$(gh run list --workflow factory-smoke.yml --branch main --event schedule --status success --limit 1 --json createdAt --jq '.[0].createdAt // ""' 2>/dev/null) || ts=""
+          echo "value=$ts" >> "$GITHUB_OUTPUT"
       # F6: checks가 취소·시간 초과로 끝나도 실패로 넘긴다. 스모크 실패가 이슈 없이 사라지지 않게 한다.
-      - run: pnpm -s factory smoke-report --result "$RESULT" --excerpt-file "$RUNNER_TEMP/smoke-in/smoke-excerpt.txt"
+      - run: pnpm -s factory smoke-report --result "$RESULT" --excerpt-file "$RUNNER_TEMP/smoke-in/smoke-excerpt.txt" --last-success "$LAST_SUCCESS"
         env:
           FACTORY_TOKEN: ${{ steps.app.outputs.token }}
           FACTORY_BOT_USER_ID: ${{ vars.FACTORY_BOT_USER_ID }}
           RESULT: ${{ needs.checks.result == 'success' && 'success' || 'failure' }}
           SMOKE_API_BASE: ${{ inputs.api_base }}
+          LAST_SUCCESS: ${{ steps.last-success.outputs.value }}

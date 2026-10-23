@@ -571,7 +571,7 @@ describe("P3 intake workflows", () => {
     const run = report.steps.find((s) => s.run?.includes("pnpm -s factory smoke-report"))!;
     expect(run.run).toContain('--excerpt-file "$RUNNER_TEMP/smoke-in/smoke-excerpt.txt"');
     // 권한 분리는 그대로다: report도 contents: read만 받는다.
-    expect(report.permissions).toEqual({ contents: "read" });
+    expect(report.permissions).toEqual({ contents: "read", actions: "read" });
   });
 
   it("factory-smoke.yml accepts an api_base override only under the production API, before any check runs", () => {
