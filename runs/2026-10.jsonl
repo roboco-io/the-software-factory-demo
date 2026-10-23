@@ -164,3 +164,4 @@
 {"ts":"2026-10-21T21:30:35.701Z","issue":114,"pr":null,"role":"triage","engine":"pi","model":"deepseek/deepseek-flash","ok":true,"turns":8,"costUsd":0.010473492,"durationMs":18033,"failureReason":null,"round":0}
 {"ts":"2026-10-21T22:44:04.824Z","issue":115,"pr":null,"role":"intake","engine":null,"model":null,"ok":true,"turns":0,"costUsd":null,"durationMs":0,"failureReason":null,"round":0}
 {"ts":"2026-10-21T22:46:17.606Z","issue":115,"pr":null,"role":"triage","engine":"pi","model":"deepseek/deepseek-flash","ok":true,"turns":14,"costUsd":0.018871284,"durationMs":32952,"failureReason":null,"round":0}
+{"ts":"2026-10-23T05:52:34.215Z","issue":120,"pr":null,"role":"triage","engine":"pi","model":"deepseek/deepseek-flash","ok":true,"turns":8,"costUsd":0.010006332,"durationMs":33785,"failureReason":null,"round":0}
