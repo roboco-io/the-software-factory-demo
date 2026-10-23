@@ -6,8 +6,12 @@
 
 ## 미출시 (Unreleased)
 
+## 2026-10-23
+
 ### 보안
 
+- 소프트웨어 개발 수명주기 전체에 보안 통제를 추가하고 단계별로 정리한 문서([docs/security.md](docs/security.md))를 만들었습니다. CI에 필수 체크 `codeql`(정적 분석), `deps-audit`(의존성 취약점), `secrets`(시크릿 검사)가 생겼습니다. 시크릿이 발견되면 수정 에이전트를 부르지 않고 사람에게 넘깁니다. 프로덕션 배포는 Worker 번들과 웹 산출물의 빌드 출처와 SBOM을 증명합니다(배포 때 검증하지는 않습니다). 트리아지는 T2·T3 이슈에 위협 모델(STRIDE)을 작성하고, 구현·리뷰 에이전트가 이를 읽어 대응이 구현됐는지 확인합니다. 새 체크 세 개는 운영자가 main 브랜치 보호에 직접 추가해야 합니다. 새 권고가 관련 없는 PR의 `deps-audit`을 실패시킬 수 있으며, 예외는 T2 `auditConfig.ignoreGhsas`입니다.
+- 포럼 웹의 마크다운 정화 라이브러리 DOMPurify를 3.4.16에서 3.4.17로 올렸습니다. 새 `deps-audit` 체크가 3.4.16의 critical·high 취약점([GHSA-cg2g-xh64-v4q7](https://github.com/advisories/GHSA-cg2g-xh64-v4q7), [GHSA-mrv2-3pqr-j5jr](https://github.com/advisories/GHSA-mrv2-3pqr-j5jr))을 첫 실행에서 찾았습니다.
 - main 브랜치의 병합 조건(저장소 ruleset `main-protection`)에 보안 검사 `codeql`, `deps-audit`, `secrets`를 필수 체크로 추가했습니다. 이제 사람이 연 PR도 세 검사를 통과해야 병합됩니다. 이전에는 팩토리 봇 PR에만 강제되었습니다([#120](https://github.com/roboco-io/the-software-factory-demo/issues/120)).
 
 ### 변경
@@ -15,13 +19,6 @@
 - 프로덕션 배포의 smoke 단계가 새 빌드 반영을 확인한 뒤 웹 읽기 전용 스모크(Playwright)까지 실행합니다. 실패하면 배포 실패로 처리되어 요청 이슈가 사람 확인 대기(`needs-human`)로 넘어갑니다. 이전에는 API 응답과 빌드 반영만 확인해서, 화면을 깨뜨린 배포가 다음 정기 스모크에서야 드러났습니다([#70](https://github.com/roboco-io/the-software-factory-demo/issues/70)).
 - 정기 스모크가 실패해 새 스모크 이슈를 열 때, 직전 성공 이후 main에 병합되어 배포된 PR과 요청 이슈, 병합 커밋을 본문에 적습니다. 병합된 PR이 없으면 배포 외 원인일 수 있다고 적습니다. 이전에는 실패 직전의 배포를 사람이 직접 찾아야 했습니다(#70).
 - 구현 에이전트가 파일을 바꾸지 않고 끝나면, 사람에게 넘기는 코멘트에 에이전트가 남긴 설명(예: 고칠 파일이 보호 경로라 바꿀 수 없다)을 함께 싣습니다. 이전에는 "파일을 바꾸지 않았다"는 고정 문구만 남아 이유를 알 수 없었습니다(#70).
-
-## 2026-10-23
-
-### 보안
-
-- 소프트웨어 개발 수명주기 전체에 보안 통제를 추가하고 단계별로 정리한 문서([docs/security.md](docs/security.md))를 만들었습니다. CI에 필수 체크 `codeql`(정적 분석), `deps-audit`(의존성 취약점), `secrets`(시크릿 검사)가 생겼습니다. 시크릿이 발견되면 수정 에이전트를 부르지 않고 사람에게 넘깁니다. 프로덕션 배포는 Worker 번들과 웹 산출물의 빌드 출처와 SBOM을 증명합니다(배포 때 검증하지는 않습니다). 트리아지는 T2·T3 이슈에 위협 모델(STRIDE)을 작성하고, 구현·리뷰 에이전트가 이를 읽어 대응이 구현됐는지 확인합니다. 새 체크 세 개는 운영자가 main 브랜치 보호에 직접 추가해야 합니다. 새 권고가 관련 없는 PR의 `deps-audit`을 실패시킬 수 있으며, 예외는 T2 `auditConfig.ignoreGhsas`입니다.
-- 포럼 웹의 마크다운 정화 라이브러리 DOMPurify를 3.4.16에서 3.4.17로 올렸습니다. 새 `deps-audit` 체크가 3.4.16의 critical·high 취약점([GHSA-cg2g-xh64-v4q7](https://github.com/advisories/GHSA-cg2g-xh64-v4q7), [GHSA-mrv2-3pqr-j5jr](https://github.com/advisories/GHSA-mrv2-3pqr-j5jr))을 첫 실행에서 찾았습니다.
 
 ### 수정
 
