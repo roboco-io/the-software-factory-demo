@@ -1,0 +1,4 @@
+kind: prompt-contains
+category: smoke
+file: AGENTS.md
+text: 프로덕션 스모크 실패를 막으려면 홈 화면, 목록 API 응답 형식, 라우트 경로를 바꿀 때
