@@ -72,8 +72,6 @@ export const EVENT_KIND_LABELS: Readonly<Record<string, Label>> = {
   },
 };
 
-const NEED_PERSON = "사람이 PR과 이 실행의 기록을 보고 이어서 처리해야 합니다.";
-
 /** Reason codes. The control plane stores only these fixed codes, never free text. */
 export const REASON_LABELS: Readonly<Record<string, ReasonLabel>> = {
   empty_change: {
@@ -183,7 +181,7 @@ export const REASON_LABELS: Readonly<Record<string, ReasonLabel>> = {
   },
   legacy_run: {
     title: "리뷰 기능 이전의 실행",
-    text: `리뷰 기능이 생기기 전에 열린 PR이거나 필요한 정보가 없는 실행입니다. ${NEED_PERSON}`,
+    text: `리뷰 기능이 생기기 전에 열린 PR이거나 필요한 정보가 없는 실행입니다.`,
     tone: "attention",
   },
   pr_closed: {
@@ -198,82 +196,82 @@ export const REASON_LABELS: Readonly<Record<string, ReasonLabel>> = {
   },
   base_not_default: {
     title: "기본 브랜치가 아닌 PR",
-    text: `PR의 대상 브랜치가 저장소의 기본 브랜치가 아니어서 정책을 적용할 수 없습니다. ${NEED_PERSON}`,
+    text: `PR의 대상 브랜치가 저장소의 기본 브랜치가 아니어서 정책을 적용할 수 없습니다.`,
     tone: "attention",
   },
   head_changed: {
     title: "PR 내용이 바뀜",
-    text: `팩토리가 만든 커밋이 아닌 다른 커밋이 PR 끝에 올라왔습니다. 리뷰한 내용과 다를 수 있어 병합하지 않았습니다. ${NEED_PERSON}`,
+    text: `팩토리가 만든 커밋이 아닌 다른 커밋이 PR 끝에 올라왔습니다. 리뷰한 내용과 다를 수 있어 병합하지 않았습니다.`,
     tone: "attention",
   },
   policy_missing: {
     title: "정책 파일 없음",
-    text: `대상 저장소의 기본 브랜치에 위험 정책 파일(.factory/policy.yml)이 없어 리뷰를 시작하지 않았습니다. ${NEED_PERSON}`,
+    text: `대상 저장소의 기본 브랜치에 위험 정책 파일(.factory/policy.yml)이 없어 리뷰를 시작하지 않았습니다.`,
     tone: "attention",
   },
   policy_invalid: {
     title: "정책 파일 형식 오류",
-    text: `위험 정책 파일의 형식이 올바르지 않아 리뷰를 시작하지 않았습니다. ${NEED_PERSON}`,
+    text: `위험 정책 파일의 형식이 올바르지 않아 리뷰를 시작하지 않았습니다.`,
     tone: "attention",
   },
   files_truncated: {
     title: "파일 목록이 잘렸을 수 있음",
-    text: `PR의 바뀐 파일 목록을 끝까지 확인하지 못해 위험 등급을 정할 수 없었습니다. ${NEED_PERSON}`,
+    text: `PR의 바뀐 파일 목록을 끝까지 확인하지 못해 위험 등급을 정할 수 없었습니다.`,
     tone: "attention",
   },
   diff_too_large: {
     title: "변경이 너무 커서 리뷰 불가",
-    text: `변경 내용이 리뷰어에게 전부 보여 줄 수 있는 크기를 넘었습니다. ${NEED_PERSON}`,
+    text: `변경 내용이 리뷰어에게 전부 보여 줄 수 있는 크기를 넘었습니다.`,
     tone: "attention",
   },
   review_failed: {
     title: "리뷰어 실패",
-    text: `리뷰 에이전트가 오류로 종료했습니다. ${NEED_PERSON}`,
+    text: `리뷰 에이전트가 오류로 종료했습니다.`,
     tone: "attention",
   },
   review_invalid: {
     title: "리뷰 결과가 유효하지 않음",
-    text: `리뷰 에이전트가 정해진 형식의 결과를 내지 않아 승인으로 치지 않았습니다. ${NEED_PERSON}`,
+    text: `리뷰 에이전트가 정해진 형식의 결과를 내지 않아 승인으로 치지 않았습니다.`,
     tone: "attention",
   },
   changes_requested: {
     title: "리뷰어가 변경을 요청함",
-    text: `다른 엔진의 리뷰어가 고쳐야 할 점을 지적했습니다. 자동 수정 반복은 없습니다. ${NEED_PERSON}`,
+    text: `다른 엔진의 리뷰어가 고쳐야 할 점을 지적했습니다. 자동 수정 반복은 없습니다.`,
     tone: "attention",
   },
   check_failed: {
     title: "필수 체크 실패",
-    text: `정책이 요구하는 체크가 성공하지 못해 병합하지 않았습니다. ${NEED_PERSON}`,
+    text: `정책이 요구하는 체크가 성공하지 못해 병합하지 않았습니다.`,
     tone: "attention",
   },
   checks_timeout: {
     title: "체크 시간 초과",
-    text: `필수 체크가 30분 안에 끝나지 않거나 나타나지 않았습니다. ${NEED_PERSON}`,
+    text: `필수 체크가 30분 안에 끝나지 않거나 나타나지 않았습니다.`,
     tone: "attention",
   },
   checks_permission_missing: {
     title: "체크 읽기 권한 없음",
-    text: `GitHub App에 체크 읽기 권한이 없어 체크 결과를 확인할 수 없었습니다. 운영자가 App 권한을 바꾸고 승인해야 합니다. ${NEED_PERSON}`,
+    text: `GitHub App에 체크 읽기 권한이 없어 체크 결과를 확인할 수 없었습니다.`,
     tone: "attention",
   },
   operator_changes_requested: {
     title: "운영자가 변경을 요청함",
-    text: `운영자가 PR에서 변경을 요청해 병합하지 않았습니다. ${NEED_PERSON}`,
+    text: `운영자가 PR에서 변경을 요청해 병합하지 않았습니다.`,
     tone: "attention",
   },
   approval_timeout: {
     title: "승인 대기 시간 초과",
-    text: `7일 안에 운영자의 승인이 없어 기다림을 끝냈습니다. ${NEED_PERSON}`,
+    text: `7일 안에 운영자의 승인이 없어 기다림을 끝냈습니다.`,
     tone: "attention",
   },
   merge_refused: {
     title: "GitHub가 병합을 거부함",
-    text: `병합 요청을 GitHub가 허용하지 않았습니다(예: 브랜치 보호 규칙). 팩토리는 규칙을 우회하지 않습니다. ${NEED_PERSON}`,
+    text: `병합 요청을 GitHub가 허용하지 않았습니다(예: 브랜치 보호 규칙). 팩토리는 규칙을 우회하지 않습니다.`,
     tone: "attention",
   },
   merge_conflict: {
     title: "병합 충돌",
-    text: `병합 시점에 PR 내용이 달라졌거나 충돌이 있어 병합하지 못했습니다. ${NEED_PERSON}`,
+    text: `병합 시점에 PR 내용이 달라졌거나 충돌이 있어 병합하지 못했습니다.`,
     tone: "attention",
   },
   stopped_by_operator: {
@@ -317,3 +315,103 @@ export const stateLabel = (state: string): Label =>
   STATE_LABELS[state] ?? FALLBACK;
 export const reasonLabel = (code: string): ReasonLabel | undefined =>
   REASON_LABELS[code];
+
+export interface NextStep {
+  action: string;
+  note?: string;
+}
+
+const MERGE_OR_CLOSE =
+  "내용이 괜찮으면 PR을 직접 병합하고, 변경이 필요 없으면 PR과 이슈를 닫으세요.";
+
+/** What a person does when a run has stopped with a pull request. */
+const STOPPED_ACTIONS: Readonly<Record<string, string>> = {
+  changes_requested: `PR의 리뷰 코멘트를 읽으세요. 지적이 맞으면 PR 브랜치를 고쳐서 직접 병합하고, 지적이 틀렸으면 그대로 직접 병합하세요. 변경이 필요 없으면 PR과 이슈를 닫으세요.`,
+  operator_changes_requested: `PR에 남긴 변경 요청을 반영해 PR 브랜치를 고친 뒤 직접 병합하거나, PR과 이슈를 닫으세요.`,
+  head_changed: `PR 끝에 올라온 커밋을 확인하세요. ${MERGE_OR_CLOSE}`,
+  check_failed: `PR의 체크 기록에서 실패 원인을 확인하고 PR 브랜치를 고친 뒤 직접 병합하세요. 변경이 필요 없으면 PR과 이슈를 닫으세요.`,
+  checks_timeout: `PR의 체크가 왜 끝나지 않았는지 확인하세요. 체크가 성공하면 PR을 직접 병합하고, 변경이 필요 없으면 PR과 이슈를 닫으세요.`,
+  checks_permission_missing: `GitHub App 설정에서 Checks 읽기 권한을 켜세요. 이 권한은 다음 실행부터 적용됩니다. 이 PR은 체크 결과를 직접 확인한 뒤 병합하거나 닫으세요.`,
+  policy_missing: `대상 저장소의 기본 브랜치에 .factory/policy.yml을 추가하세요. 이 파일은 다음 실행부터 적용됩니다. 이 PR은 직접 검토한 뒤 병합하거나 닫으세요.`,
+  policy_invalid: `대상 저장소의 .factory/policy.yml 형식을 고치세요. 이 파일은 다음 실행부터 적용됩니다. 이 PR은 직접 검토한 뒤 병합하거나 닫으세요.`,
+  base_not_default: `PR의 대상 브랜치가 의도한 브랜치인지 확인하세요. ${MERGE_OR_CLOSE}`,
+  files_truncated: `바뀐 파일을 GitHub에서 직접 검토하세요. ${MERGE_OR_CLOSE} 변경이 너무 크면 이슈를 작게 나누세요.`,
+  diff_too_large: `바뀐 파일을 GitHub에서 직접 검토하세요. ${MERGE_OR_CLOSE} 변경이 너무 크면 이슈를 작게 나누세요.`,
+  review_failed: `자동 리뷰가 없으므로 PR을 직접 검토하세요. ${MERGE_OR_CLOSE}`,
+  review_invalid: `자동 리뷰가 없으므로 PR을 직접 검토하세요. ${MERGE_OR_CLOSE}`,
+  approval_timeout: `PR을 다시 검토하세요. ${MERGE_OR_CLOSE}`,
+  merge_refused: `대상 저장소의 브랜치 보호 규칙을 확인하고, 규칙을 만족한 뒤 PR을 직접 병합하세요. 변경이 필요 없으면 PR과 이슈를 닫으세요.`,
+  merge_conflict: `PR 브랜치의 충돌을 해결한 뒤 직접 병합하세요. 변경이 필요 없으면 PR과 이슈를 닫으세요.`,
+  stopped_by_operator: `남아 있는 PR을 검토하세요. ${MERGE_OR_CLOSE}`,
+  pr_closed: `남은 조치는 없습니다. 변경이 아직 필요하면 새 이슈를 만들어 factory:go 라벨을 붙이세요.`,
+};
+
+const STOPPED_ACTION_DEFAULT = `PR과 이 실행의 기록을 검토하세요. ${MERGE_OR_CLOSE}`;
+
+const STOPPED_NOTE =
+  "이 실행은 이미 끝났습니다. PR을 승인해도 팩토리는 병합하지 않고, 같은 이슈에 factory:go 라벨을 다시 붙여도 새 실행이 시작되지 않습니다. 팩토리에 다시 맡기려면 새 이슈를 만들어 라벨을 붙이세요. PR이 이미 병합되었거나 닫혔다면 더 할 일이 없습니다.";
+
+/** What to change before a run that ended without a pull request starts again. */
+const BEFORE_RETRY: Readonly<Record<string, string>> = {
+  empty_change: "이슈에 바꿀 내용을 더 구체적으로 적으세요.",
+  too_many_files: "이슈의 범위를 줄이세요.",
+  total_too_large: "이슈의 범위를 줄이세요.",
+  file_too_large: "이슈의 범위를 줄이세요.",
+};
+
+const UNSAFE_CHANGE_REASONS: ReadonlySet<string> = new Set([
+  "forbidden_path",
+  "absolute_path",
+  "path_traversal",
+  "symlink",
+  "submodule",
+  "special_file",
+  "path_not_utf8",
+  "path_control_char",
+  "malformed_output",
+]);
+
+const UNSAFE_CHECK =
+  "이슈 내용을 읽고 에이전트에게 위험한 지시를 하지 않았는지 확인하세요. 위험한 지시가 있으면 다시 실행하지 마세요.";
+
+const ownValue = (
+  table: Readonly<Record<string, string>>,
+  key: string | null,
+): string | undefined =>
+  key !== null && Object.hasOwn(table, key) ? table[key] : undefined;
+
+/**
+ * The action a run's page asks of an operator, or null when nothing is left to do.
+ * The control plane refuses a new run for an issue whose run is `needs_human`
+ * and accepts one after `failed`, so the two states give different advice.
+ */
+export function describeNextStep(
+  state: string,
+  reasonCode: string | null,
+): NextStep | null {
+  if (state === "needs_human") {
+    if (reasonCode === "merged_outside_factory") return null;
+    if (reasonCode === "pr_closed") {
+      return { action: STOPPED_ACTIONS["pr_closed"]! };
+    }
+    return {
+      action: ownValue(STOPPED_ACTIONS, reasonCode) ?? STOPPED_ACTION_DEFAULT,
+      note: STOPPED_NOTE,
+    };
+  }
+  if (state === "failed") {
+    const first =
+      reasonCode !== null && UNSAFE_CHANGE_REASONS.has(reasonCode)
+        ? UNSAFE_CHECK
+        : ownValue(BEFORE_RETRY, reasonCode);
+    const retry =
+      first === undefined
+        ? "변경이 아직 필요하면 이슈에서 factory:go 라벨을 뗐다가 다시 붙이세요."
+        : `${first} 그다음 이슈에서 factory:go 라벨을 뗐다가 다시 붙이세요.`;
+    return {
+      action: retry,
+      note: "라벨을 다시 붙이면 새 실행이 시작됩니다. 운영자가 붙인 라벨만 실행을 시작합니다.",
+    };
+  }
+  return null;
+}

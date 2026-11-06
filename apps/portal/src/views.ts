@@ -18,6 +18,7 @@ import {
 import {
   EVENT_KIND_LABELS,
   REASON_LABELS,
+  describeNextStep,
   describeOutcome,
   stateLabel,
   type Tone,
@@ -425,6 +426,7 @@ export async function runView(ctx: ViewContext, id: string): Promise<View> {
   const detail: RunDetail = await ctx.api.run(id);
   const { run, events } = detail;
   const outcome = describeOutcome(run.state, run.reasonCode);
+  const nextStep = describeNextStep(run.state, run.reasonCode);
   const issue = githubLink(
     run.repo,
     "issues",
@@ -529,6 +531,17 @@ export async function runView(ctx: ViewContext, id: string): Promise<View> {
         { class: `outcome tone-${outcome.tone}` },
         h("h2", null, outcome.title),
         h("p", null, outcome.text),
+        nextStep === null
+          ? null
+          : h(
+              "p",
+              { class: "next-step" },
+              h("strong", null, "운영자가 할 일: "),
+              nextStep.action,
+            ),
+        nextStep?.note === undefined
+          ? null
+          : h("p", { class: "next-note" }, nextStep.note),
         run.reasonCode === null
           ? null
           : h(

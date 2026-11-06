@@ -375,6 +375,15 @@ ol.timeline li {
   margin-left: 6px;
 }
 
+.next-step {
+  margin-top: 0.6rem;
+}
+
+.next-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .reason {
   color: var(--muted);
   font-size: 0.9rem;

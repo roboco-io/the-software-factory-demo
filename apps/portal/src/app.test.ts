@@ -331,6 +331,29 @@ describe("run detail", () => {
     expect(root().querySelector(".outcome")?.textContent).toContain("필요 없");
   });
 
+  it("shows what an operator should do for a stopped run", async () => {
+    const detail: RunDetail = {
+      run: {
+        ...RUN.run,
+        state: "needs_human",
+        reasonCode: "changes_requested",
+      },
+      events: RUN.events,
+    };
+    await open("/runs/aaaaaaaaaaa1", fakeApi({ run: async () => detail }));
+    const next = root().querySelector(".outcome .next-step");
+    expect(next?.textContent).toContain("운영자가 할 일");
+    expect(next?.textContent).toContain("직접 병합");
+    expect(root().querySelector(".outcome .next-note")?.textContent).toContain(
+      "승인해도",
+    );
+  });
+
+  it("shows no next step for a run that is still moving", async () => {
+    await open("/runs/aaaaaaaaaaa1", fakeApi({ run: async () => RUN }));
+    expect(root().querySelector(".next-step")).toBeNull();
+  });
+
   it("renders data from the server only as text", async () => {
     const hostile =
       '<img src=x onerror="window.pwned=1"><script>window.pwned=1</script>';
