@@ -29,10 +29,10 @@
 ## 최초 설정 순서
 
 1. D1 데이터베이스 `software-factory`는 2026-11-06에 만들었고 ID는 `wrangler.jsonc`에 있다. 새 환경을 만들 때만 `pnpm exec wrangler d1 create`를 다시 실행한다. 마이그레이션은 배포 워크플로가 적용한다.
-2. 시험용 공개 저장소에 GitHub App을 설치한다. 저장소 권한은 Contents, Pull requests, Issues의 쓰기와 3단계를 위한 Checks의 읽기이고, 이벤트는 Issues를 구독한다. 3단계는 새 웹훅 이벤트를 요구하지 않는다. Checks 읽기 권한이 없으면 필수 체크를 읽을 수 없으므로, 리뷰가 끝난 실행은 `checks_permission_missing` 코드로 `needs_human`이 된다. 권한을 올리면 설치한 계정이 새 권한을 수락해야 적용된다. 웹훅 주소는 `https://<워커 주소>/api/github/webhook`, 콘텐츠 유형은 `application/json`이다.
+2. 시험용 공개 저장소에 GitHub App을 설치한다. 저장소 권한은 Contents, Pull requests, Issues의 쓰기와 3단계를 위한 Checks의 읽기이고, 이벤트는 Issues를 구독한다. 3단계는 새 웹훅 이벤트를 요구하지 않는다. check-runs API가 403을 돌려주면 리뷰가 끝난 실행은 `checks_permission_missing` 코드로 `needs_human`이 된다. 공개 저장소인 시험 저장소에서는 2026-11-06 실제 시험 때 Checks 권한 없이도 체크를 읽고 병합까지 진행했다. 공개 저장소라서 읽힌 것으로 추정하지만 원인은 확인하지 않았다. 비공개 저장소에서 403으로 멈추는지도 아직 시험하지 않았으므로, 비공개 저장소를 관리하기 전에 이 권한을 추가하고 확인한다. 권한을 올리면 설치한 계정이 새 권한을 수락해야 적용된다. 웹훅 주소는 `https://<워커 주소>/api/github/webhook`, 콘텐츠 유형은 `application/json`이다.
 3. 위 비밀 값 네 개를 설정하고, 변수 `GITHUB_APP_ID`, `OPERATOR_IDS`, `PROJECTS`를 채우고 `RUNS_ENABLED`를 `true`로 바꿔 커밋한다.
 4. main에 병합하면 deploy 워크플로가 D1 마이그레이션을 먼저 적용한 뒤 Worker와 컨테이너 이미지를 배포한다.
-5. 허용한 운영자가 시험 저장소의 열린 이슈에 `factory:go` 라벨을 붙인다. 성공하면 `factory/issue-<번호>-<실행 ID>` 브랜치와 `Refs #<번호>`를 본문에 담은 PR이 열리고, 이슈에 PR 링크 코멘트가 달린다.
+5. 허용한 운영자가 시험 저장소의 열린 이슈에 `factory:go` 라벨을 붙인다. 성공하면 `factory/issue-<번호>-<실행 ID>` 브랜치와 `Closes #<번호>`를 본문에 담은 PR이 열리고(병합되면 GitHub가 이슈를 닫는다), 이슈에 PR 링크 코멘트가 달린다.
 6. 3단계를 켜려면 시험 저장소의 기본 브랜치에 `.factory/policy.yml`을 사람이 PR로 추가한다. 형식은 `docs/examples/factory-policy.yml`에 있다. 이 파일이 없거나 형식이 틀리면 팩토리는 리뷰를 시작하지 않고 실행을 `needs_human`으로 끝낸다. 이 저장소의 작업은 시험 저장소를 건드리지 않는다.
 
 ## 동작 범위와 제한
@@ -90,7 +90,8 @@ PR의 등급은 바뀐 파일 중 가장 높은 등급이다. 어떤 규칙에�
 | 코드                               | 뜻                                                          |
 | ---------------------------------- | ----------------------------------------------------------- |
 | `legacy_run`                       | 리뷰 기능이 없던 때 열린 PR이거나 필요한 정보가 없는 실행   |
-| `pr_closed`                        | PR이 닫혔거나 다른 사람이 병합함                            |
+| `pr_closed`                        | PR이 병합되지 않은 채 닫힘                                  |
+| `merged_outside_factory`           | 사람이 팩토리를 거치지 않고 직접 병합함. 남은 조치는 없음   |
 | `base_not_default`                 | PR의 대상 브랜치가 기본 브랜치가 아님                       |
 | `head_changed`                     | PR 헤드가 팩토리가 만든 커밋과 달라짐                       |
 | `policy_missing`, `policy_invalid` | 정책 파일이 없거나 형식이 틀림                              |
@@ -113,9 +114,9 @@ PR의 등급은 바뀐 파일 중 가장 높은 등급이다. 어떤 규칙에�
 - GitHub App 설치 토큰 발급과 Git Data API 호출
 - 핀 고정한 Claude Code 2.1.318이 실제로 보내는 `anthropic-beta` 값과 `max_tokens`(바이너리 문자열 검사로 환경변수 이름만 확인함). 허용 목록에 없는 값은 제거되므로, 기능이 빠지면 목록을 조정한다.
 - 비루트 실행, DNS 이름 조회를 통한 외부 유출, 크레딧 차감은 0단계 결과의 미해결 항목 그대로다.
-- 3단계는 모두 가짜 GitHub, 가짜 샌드박스, 가짜 LLM으로만 시험했다. pi 1.5.0은 `max_output_tokens`를 모델의 기본 최대 출력(gpt-5.4-nano는 128000, 문맥 크기에 따라 더 작을 수 있음)으로 보내는 것으로 패키지 소스에서 읽었다. 출구 핸들러는 16000을 넘는 값을 거부하므로, 리뷰 샌드박스는 `PI_CODING_AGENT_DIR`의 `models.json`에 `modelOverrides`로 `maxTokens: 16000`을 써서 낮춘다. 이 설정을 pi가 실제로 받아들이는지는 실행해 보기 전에는 모른다. 받아들이지 않으면 요청이 403으로 거부되어 리뷰가 `review_failed`로 끝나며, 병합은 일어나지 않는다.
+- 3단계는 2026-11-06에 공개 시험 저장소 `roboco-io/factory-test-app`에서 실제로 실행했다. 확인한 경로는 T0 자동 병합, 승인 대기, 리뷰어의 `changes_requested`로 인한 병합 차단, 운영자 승인 후 병합, 사람의 직접 병합 뒤 실행 종료다. T3, 승인 후 헤드 변경, 체크 실패, 비공개 저장소의 경로는 실제로 시험하지 않았다.
+- pi 1.5.0은 위 시험에서 컨테이너 안에서 동작했고 출구 핸들러에 거부되지 않았다. 다만 실제 요청 본문은 기록하지 않으므로 `maxTokens` 조정이 적용됐는지는 직접 확인하지 못했다. 패키지 소스에 따르면 pi 1.5.0은 `max_output_tokens`를 모델의 기본 최대 출력(gpt-5.4-nano는 128000, 문맥 크기에 따라 더 작을 수 있음)으로 보내는 것으로 패키지 소스에서 읽었다. 출구 핸들러는 16000을 넘는 값을 거부하므로, 리뷰 샌드박스는 `PI_CODING_AGENT_DIR`의 `models.json`에 `modelOverrides`로 `maxTokens: 16000`을 써서 낮춘다. 이 값을 넘는 요청은 403으로 거부되어 리뷰가 `review_failed`로 끝나며, 병합은 일어나지 않는다.
 - pi가 실제로 보내는 요청 본문은 패키지 소스에서 읽었다(`store: false`, 함수 도구만, `previous_response_id`, `background` 없음, `stream: true`, `reasoning`, `include`, `prompt_cache_key` 등). 실제 네트워크 요청으로는 확인하지 못했다. 출구 핸들러는 위에 적은 필드만 거부하고 다른 필드는 막지 않는다.
-- 실제 GitHub의 check-runs, 리뷰, 병합 API의 응답 형태와 403 구분(권한 부족과 요율 제한)은 문서와 가짜 응답으로만 확인했다. 요율 제한 403은 `x-ratelimit-remaining: 0` 또는 `retry-after` 헤더로 구분한다.
-- 새 Dockerfile 단계(`@earendil-works/pi-coding-agent@1.5.0` 설치)는 `wrangler deploy --dry-run`의 이미지 빌드까지 통과했다. 컨테이너 안에서 pi를 실제로 실행하는 것은 확인하지 못했다.
+- 실제 GitHub의 check-runs, 리뷰, 병합 API의 성공 응답은 위 시험에서 확인했다. 403 구분(권한 부족과 요율 제한)은 문서와 가짜 응답으로만 확인했다. 요율 제한 403은 `x-ratelimit-remaining: 0` 또는 `retry-after` 헤더로 구분한다.
 - 필수 체크 이름은 체크 실행의 이름만 비교한다. 같은 이름의 체크 실행을 다른 앱이 만들 수 있는지는 저장소의 Checks 쓰기 권한 설정에 달려 있으며 여기서 막지 않는다.
 - Claude Code 2.1.318이 보내는 `tools` 배열의 형식은 확인하지 못했다. 그래서 `type`이 `custom`이 아닌 도구를 모두 거부하는 규칙은 넣지 않고, `web_search`로 시작하는 `type`만 거부한다. 다른 서버 측 도구(`web_fetch` 등)는 막지 않는다.
