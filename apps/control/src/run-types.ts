@@ -14,6 +14,11 @@ export const STATES = [
   "implementing",
   "publishing",
   "pr_opened",
+  "reviewing",
+  "awaiting_checks",
+  "awaiting_approval",
+  "merged",
+  "needs_human",
   "failed",
 ] as const;
 export type RunState = (typeof STATES)[number];
@@ -29,6 +34,25 @@ export const REASON_CODES = [
   "publish_failed",
   "internal_error",
   "cleanup_failed",
+  // Review and merge (stage 3).
+  "legacy_run",
+  "pr_closed",
+  "base_not_default",
+  "head_changed",
+  "policy_missing",
+  "policy_invalid",
+  "files_truncated",
+  "diff_too_large",
+  "review_failed",
+  "review_invalid",
+  "changes_requested",
+  "check_failed",
+  "checks_timeout",
+  "checks_permission_missing",
+  "operator_changes_requested",
+  "approval_timeout",
+  "merge_refused",
+  "merge_conflict",
 ] as const;
 export type ReasonCode = (typeof REASON_CODES)[number];
 

@@ -1,186 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
-import { ActiveRunConflict, type RunRepo } from "./d1-repo";
-import {
-  PublishRejected,
-  RUN_TIMEOUT_MS,
-  RunMachine,
-  type PublishInput,
-  type SandboxPort,
-} from "./run-machine";
-import {
-  REASON_CODES,
-  type ReasonCode,
-  type RunInput,
-  type RunState,
-} from "./run-types";
+import { describe, expect, it } from "vitest";
+import { PublishRejected, RUN_TIMEOUT_MS } from "./run-machine";
+import { REASON_CODES, type ReasonCode } from "./run-types";
 import type { TaskStatus } from "./sandbox-core";
+import { build, goodReport, input } from "./testing/machine-harness";
 
 const SECRETS = ["sk-ant-REAL-123456", "ghs_TOKEN_123456", "whsec_SECRET_123"];
-const input: RunInput = {
-  repo: "acme/demo",
-  issueNumber: 7,
-  title: "Add footer",
-  body: "Please add it.",
-  deliveryId: "delivery-1",
-};
-
-const goodReport = {
-  truncated: false,
-  entries: [
-    {
-      pathB64: btoa("src/footer.ts"),
-      status: "added",
-      type: "file",
-      mode: 0o100644,
-      size: 2,
-      contentB64: btoa("hi"),
-    },
-  ],
-};
-
-interface World {
-  now: number;
-  alarm: number | null;
-  store: Map<string, unknown>;
-  events: {
-    kind: string;
-    from: RunState | null;
-    to: RunState | null;
-    code: ReasonCode | null;
-  }[];
-  states: RunState[];
-  prNumbers: number[];
-  destroyed: number;
-  sandboxCalls: string[];
-  prompts: string[];
-  dbActive: { id: string; createdAt: number } | null;
-}
-
-// Producer fakes. The seam check swaps real sandbox and publisher behind these ports.
-function build(
-  over: {
-    task?: () => TaskStatus;
-    report?: () => unknown;
-    clone?: () => { ok: boolean; baseSha?: string };
-    publish?: (i: PublishInput) => Promise<{ prNumber: number; prUrl: string }>;
-    destroy?: () => Promise<void>;
-    activeRuns?: number;
-    failPutOnce?: boolean;
-  } = {},
-) {
-  const w: World = {
-    now: 1_000_000,
-    alarm: null,
-    store: new Map(),
-    events: [],
-    states: [],
-    prNumbers: [],
-    destroyed: 0,
-    sandboxCalls: [],
-    prompts: [],
-    dbActive: null,
-  };
-  const repo: RunRepo = {
-    async createRun(r, max) {
-      if (w.dbActive !== null) throw new ActiveRunConflict();
-      if ((over.activeRuns ?? 0) >= max) return "capacity_full";
-      w.dbActive = { id: r.id, createdAt: r.ts };
-      w.events.push({ kind: "created", from: null, to: "queued", code: null });
-      w.states.push("queued");
-      return "created";
-    },
-    async findActiveRun() {
-      return w.dbActive === null ? null : { ...w.dbActive, state: "queued" };
-    },
-    async transition(t) {
-      w.events.push({
-        kind: "transition",
-        from: t.from,
-        to: t.to,
-        code: t.code,
-      });
-      w.states.push(t.to);
-      if (t.to === "failed" || t.to === "pr_opened") w.dbActive = null;
-      if (t.prNumber !== undefined) w.prNumbers.push(t.prNumber);
-    },
-    async recordCleanup(e) {
-      w.events.push({ kind: "cleanup", from: null, to: null, code: e.code });
-    },
-  };
-  const sandbox: SandboxPort = {
-    async start() {
-      w.sandboxCalls.push("start");
-    },
-    async clone() {
-      w.sandboxCalls.push("clone");
-      return over.clone ? over.clone() : { ok: true, baseSha: "a".repeat(40) };
-    },
-    async startAgent(i) {
-      w.sandboxCalls.push("startAgent");
-      w.prompts.push(i.prompt);
-      return "started";
-    },
-    async taskStatus() {
-      return over.task ? over.task() : { state: "finished", exitCode: 0 };
-    },
-    async collectChanges() {
-      w.sandboxCalls.push("collect");
-      return over.report ? over.report() : goodReport;
-    },
-    async destroy() {
-      if (over.destroy) await over.destroy();
-      w.destroyed += 1;
-    },
-  };
-  const publish = vi.fn(
-    over.publish ??
-      (async () => ({
-        prNumber: 12,
-        prUrl: "https://github.com/acme/demo/pull/12",
-      })),
-  );
-  let ids = 0;
-  const machine = new RunMachine({
-    storage: {
-      async get<T>(k: string) {
-        return w.store.get(k) as T | undefined;
-      },
-      async put(k, v) {
-        if (over.failPutOnce === true) {
-          over.failPutOnce = false;
-          throw new Error("storage interrupted");
-        }
-        w.store.set(k, structuredClone(v));
-      },
-      async getAlarm() {
-        return w.alarm;
-      },
-      async setAlarm(at) {
-        w.alarm = at;
-      },
-      async deleteAlarm() {
-        w.alarm = null;
-      },
-    },
-    repo,
-    sandbox: () => sandbox,
-    publisher: { publish },
-    model: "claude-sonnet-5-5",
-    now: () => w.now,
-    newId: () => `run${++ids}`,
-  });
-  async function drain(max = 100) {
-    for (let i = 0; i < max && w.alarm !== null; i++) {
-      w.now = Math.max(w.now, w.alarm);
-      w.alarm = null;
-      await machine.alarm();
-    }
-  }
-  return { w, machine, publish, drain };
-}
 
 describe("RunMachine", () => {
-  it("takes an issue from queued to pr_opened and destroys the sandbox once", async () => {
+  it("takes an issue from queued to merged and destroys each sandbox once", async () => {
     const { w, machine, publish, drain } = build();
     expect(await machine.start(input)).toEqual({
       outcome: "started",
@@ -193,8 +20,11 @@ describe("RunMachine", () => {
       "implementing",
       "publishing",
       "pr_opened",
+      "reviewing",
+      "awaiting_checks",
+      "merged",
     ]);
-    expect(w.prNumbers).toEqual([12]);
+    expect(w.prNumbers).toEqual([40]);
     expect(publish).toHaveBeenCalledTimes(1);
     expect(publish.mock.calls[0]![0]).toMatchObject({
       repo: "acme/demo",
@@ -204,11 +34,17 @@ describe("RunMachine", () => {
       baseSha: "a".repeat(40),
     });
     expect(w.destroyed).toBe(1);
+    expect(w.reviewDestroyed).toBe(1);
     expect(w.alarm).toBeNull();
+    expect(w.events.filter((e) => e.kind === "cleanup")).toEqual([
+      { kind: "cleanup", from: null, to: null, code: null },
+      { kind: "cleanup", from: null, to: null, code: null },
+    ]);
+    // The merged run wrote its transition event like any other.
     expect(w.events.at(-1)).toEqual({
-      kind: "cleanup",
-      from: null,
-      to: null,
+      kind: "transition",
+      from: "awaiting_checks",
+      to: "merged",
       code: null,
     });
   });
@@ -278,7 +114,7 @@ describe("RunMachine", () => {
     await machine.start(input);
     await drain();
     expect(polls).toBe(4);
-    expect(w.states.at(-1)).toBe("pr_opened");
+    expect(w.states.at(-1)).toBe("merged");
     expect(w.sandboxCalls.filter((c) => c === "startAgent")).toHaveLength(1);
   });
 
@@ -372,13 +208,16 @@ describe("RunMachine", () => {
     const { w, machine, drain } = build({
       publish: async () => {
         if (++n === 1) throw new Error("transient");
-        return { prNumber: 5, prUrl: "https://github.com/acme/demo/pull/5" };
+        return {
+          prNumber: 40,
+          prUrl: "https://github.com/acme/demo/pull/40",
+        };
       },
     });
     await machine.start(input);
     await drain();
-    expect(w.states.at(-1)).toBe("pr_opened");
-    expect(w.prNumbers).toEqual([5]);
+    expect(w.states.at(-1)).toBe("merged");
+    expect(w.prNumbers).toEqual([40]);
   });
 
   it("retries cleanup when destroy fails, then records cleanup_failed", async () => {
@@ -462,7 +301,7 @@ describe("RunMachine", () => {
     expect(again).toEqual({ outcome: "started", runId: "run1" });
     expect(w.events.filter((e) => e.kind === "created")).toHaveLength(1);
     await drain();
-    expect(w.states.at(-1)).toBe("pr_opened");
+    expect(w.states.at(-1)).toBe("merged");
   });
 
   it("re-arms the alarm on re-delivery when the run was saved but the alarm was never set", async () => {
@@ -477,7 +316,7 @@ describe("RunMachine", () => {
     );
     expect(w.alarm).not.toBeNull();
     await drain();
-    expect(w.states.at(-1)).toBe("pr_opened");
+    expect(w.states.at(-1)).toBe("merged");
   });
 
   describe("agent start grace", () => {
@@ -493,7 +332,7 @@ describe("RunMachine", () => {
       });
       await machine.start(input);
       await drain();
-      expect(w.states.at(-1)).toBe("pr_opened");
+      expect(w.states.at(-1)).toBe("merged");
       expect(w.events.some((e) => e.code === "sandbox_lost")).toBe(false);
     });
 

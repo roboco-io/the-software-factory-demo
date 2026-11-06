@@ -43,6 +43,15 @@ export interface RunRepo {
   }): Promise<void>;
 }
 
+/** States in which a run is finished. A run in any other state is active. */
+const TERMINAL_SQL = "('merged', 'needs_human', 'failed')";
+/**
+ * Active runs that count against capacity: they hold a sandbox or are about to.
+ * A run in awaiting_approval waits for a person for up to days and holds no slot.
+ */
+const CAPACITY_SQL =
+  "('queued', 'cloning', 'implementing', 'publishing', 'pr_opened', 'reviewing', 'awaiting_checks')";
+
 const INSERT_EVENT =
   "INSERT INTO events (run_id, ts, kind, from_state, to_state, reason_code) VALUES (?, ?, ?, ?, ?, ?)";
 
@@ -71,7 +80,7 @@ export class D1RunRepo implements RunRepo {
           .prepare(
             `INSERT INTO runs (id, repo, issue_number, state, created_at, updated_at)
              SELECT ?, ?, ?, 'queued', ?, ?
-             WHERE (SELECT COUNT(*) FROM runs WHERE state NOT IN ('pr_opened', 'failed')) < ?`,
+             WHERE (SELECT COUNT(*) FROM runs WHERE state IN ${CAPACITY_SQL}) < ?`,
           )
           .bind(run.id, run.repo, run.issueNumber, run.ts, run.ts, maxActive),
         this.db
@@ -94,7 +103,7 @@ export class D1RunRepo implements RunRepo {
   async findActiveRun(repo: string, issueNumber: number) {
     const row = await this.db
       .prepare(
-        "SELECT id, created_at, state FROM runs WHERE repo = ? AND issue_number = ? AND state NOT IN ('pr_opened', 'failed')",
+        `SELECT id, created_at, state FROM runs WHERE repo = ? AND issue_number = ? AND state NOT IN ${TERMINAL_SQL}`,
       )
       .bind(repo, issueNumber)
       .first<{ id: string; created_at: number; state: RunState }>();

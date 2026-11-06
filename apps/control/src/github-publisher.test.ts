@@ -86,6 +86,7 @@ describe("publisher", () => {
       prNumber: 40,
       prUrl: "https://github.com/acme/demo/pull/40",
       branch: "factory/issue-7-run1",
+      headSha: gh.refs.get("refs/heads/factory/issue-7-run1"),
     });
     expect(gh.refs.get("refs/heads/factory/issue-7-run1")).toMatch(/^commit-/);
     expect(gh.prs).toHaveLength(1);
@@ -177,6 +178,15 @@ describe("publisher", () => {
     const result = await publisher.publish(req);
     expect(result.prNumber).toBe(40);
     expect(gh.prs).toHaveLength(1);
+  });
+
+  it("returns the head commit it created, and the existing one on a retry", async () => {
+    const { gh, publisher } = setup();
+    const first = await publisher.publish(req);
+    expect(first.headSha).toBe(gh.refs.get(`refs/heads/${first.branch}`));
+    expect(first.headSha).toMatch(/^commit-/);
+    const again = await publisher.publish(req);
+    expect(again.headSha).toBe(first.headSha);
   });
 
   it("never merges or touches anything outside the repo and app endpoints", async () => {

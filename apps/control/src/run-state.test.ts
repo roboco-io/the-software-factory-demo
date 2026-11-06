@@ -1,20 +1,33 @@
 import { describe, expect, it } from "vitest";
 import {
   IllegalTransitionError,
+  POST_PR_STATES,
   assertTransition,
   isTerminal,
 } from "./run-state";
 import { STATES, type RunState } from "./run-types";
 
+const FLOW: RunState[] = [
+  "queued",
+  "cloning",
+  "implementing",
+  "publishing",
+  "pr_opened",
+  "reviewing",
+  "awaiting_checks",
+];
 const LEGAL: [RunState, RunState][] = [
-  ["queued", "cloning"],
-  ["cloning", "implementing"],
-  ["implementing", "publishing"],
-  ["publishing", "pr_opened"],
-  ["queued", "failed"],
-  ["cloning", "failed"],
-  ["implementing", "failed"],
-  ["publishing", "failed"],
+  ...FLOW.slice(0, -1).map((s, i): [RunState, RunState] => [s, FLOW[i + 1]!]),
+  ["awaiting_checks", "awaiting_approval"],
+  ["awaiting_checks", "merged"],
+  ["awaiting_approval", "merged"],
+  // Any active state may stop with a fixed code.
+  ...[...FLOW, "awaiting_approval" as RunState].flatMap(
+    (s): [RunState, RunState][] => [
+      [s, "needs_human"],
+      [s, "failed"],
+    ],
+  ),
 ];
 
 describe("run state machine", () => {
@@ -30,7 +43,34 @@ describe("run state machine", () => {
       }
     }
   });
-  it("treats pr_opened and failed as terminal", () => {
-    expect(STATES.filter(isTerminal)).toEqual(["pr_opened", "failed"]);
+  it("treats merged, needs_human and failed as terminal", () => {
+    expect(STATES.filter(isTerminal)).toEqual([
+      "merged",
+      "needs_human",
+      "failed",
+    ]);
+  });
+  it("cannot skip review or checks on the way to merged", () => {
+    for (const from of [
+      "queued",
+      "publishing",
+      "pr_opened",
+      "reviewing",
+    ] as const) {
+      expect(() => assertTransition(from, "merged")).toThrow(
+        IllegalTransitionError,
+      );
+    }
+    expect(() => assertTransition("reviewing", "awaiting_approval")).toThrow(
+      IllegalTransitionError,
+    );
+  });
+  it("lists the states that exist after the pull request is open", () => {
+    expect(POST_PR_STATES).toEqual([
+      "pr_opened",
+      "reviewing",
+      "awaiting_checks",
+      "awaiting_approval",
+    ]);
   });
 });

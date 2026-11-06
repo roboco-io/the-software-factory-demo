@@ -11,9 +11,9 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"],
   },
-  // Secrets (GITHUB_WEBHOOK_SECRET, GITHUB_APP_PRIVATE_KEY, ANTHROPIC_API_KEY)
-  // are set with `wrangler secret put`. Do not add `secrets.required`: a deploy
-  // must not fail before the secrets exist. See docs/operations.md.
+  // Secrets (GITHUB_WEBHOOK_SECRET, GITHUB_APP_PRIVATE_KEY, ANTHROPIC_API_KEY,
+  // OPENAI_API_KEY) are set with `wrangler secret put`. Do not add `secrets.required`:
+  // a deploy must not fail before the secrets exist. See docs/operations.md.
   "vars": {
     // Non-secret settings. RUNS_ENABLED is the global kill switch: only "true" starts
     // runs. Empty OPERATOR_IDS or PROJECTS also means no run starts.
@@ -22,6 +22,7 @@
     "OPERATOR_IDS": "3435720",
     "PROJECTS": "roboco-io/factory-test-app",
     "IMPLEMENT_MODEL": "claude-sonnet-5-5",
+    "REVIEW_MODEL": "gpt-5.4-nano",
   },
   "d1_databases": [
     {

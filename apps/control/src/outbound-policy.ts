@@ -1,8 +1,16 @@
 import { isValidRepo } from "./repo";
 
+export type OutboundTarget = "anthropic" | "openai" | "github";
+
 export type OutboundDecision =
-  | { allow: false; reason: string }
-  | { allow: true; target: "anthropic" | "github" };
+  { allow: false; reason: string } | { allow: true; target: OutboundTarget };
+
+/**
+ * Which agent the sandbox runs. Each phase reaches one LLM provider and no other:
+ * the implement sandbox reaches only Anthropic, the review sandbox only OpenAI.
+ * A sandbox without a phase reaches neither.
+ */
+export type SandboxPhase = "implement" | "review";
 
 export interface OutboundRequest {
   method: string;
@@ -10,6 +18,7 @@ export interface OutboundRequest {
 }
 
 const ANTHROPIC_PATHS = new Set(["/v1/messages", "/v1/messages/count_tokens"]);
+const OPENAI_PATH = "/v1/responses";
 
 const deny = (reason: string): OutboundDecision => ({ allow: false, reason });
 
@@ -19,7 +28,7 @@ const deny = (reason: string): OutboundDecision => ({ allow: false, reason });
  */
 export function decideOutbound(
   request: OutboundRequest,
-  run: { repo?: string },
+  run: { repo?: string; phase?: SandboxPhase | undefined },
 ): OutboundDecision {
   let url: URL;
   try {
@@ -33,10 +42,23 @@ export function decideOutbound(
   if (url.port !== "") return deny("port_not_allowed");
 
   if (url.hostname === "api.anthropic.com") {
+    if (run.phase !== "implement") return deny("provider_not_allowed_in_phase");
     if (request.method === "POST" && ANTHROPIC_PATHS.has(url.pathname)) {
       return { allow: true, target: "anthropic" };
     }
     return deny("anthropic_request_not_allowed");
+  }
+
+  if (url.hostname === "api.openai.com") {
+    if (run.phase !== "review") return deny("provider_not_allowed_in_phase");
+    if (
+      request.method === "POST" &&
+      url.pathname === OPENAI_PATH &&
+      url.search === ""
+    ) {
+      return { allow: true, target: "openai" };
+    }
+    return deny("openai_request_not_allowed");
   }
 
   if (url.hostname === "github.com") {
@@ -71,5 +93,33 @@ export function injectAnthropicKey(headers: Headers, apiKey: string): Headers {
   const out = new Headers(headers);
   out.delete("authorization");
   out.set("x-api-key", apiKey);
+  return out;
+}
+
+/** The real key for a target. Each target has its own key: a phase can never get the other provider's. */
+export function selectKey(
+  target: OutboundTarget,
+  env: {
+    ANTHROPIC_API_KEY?: string | undefined;
+    OPENAI_API_KEY?: string | undefined;
+  },
+): string | undefined {
+  if (target === "anthropic") return env.ANTHROPIC_API_KEY || undefined;
+  if (target === "openai") return env.OPENAI_API_KEY || undefined;
+  return undefined;
+}
+
+/** Copies the headers, drops client-supplied credentials and account routing, and sets the real key. */
+export function injectOpenAIKey(headers: Headers, apiKey: string): Headers {
+  const out = new Headers(headers);
+  for (const name of [
+    "authorization",
+    "x-api-key",
+    "api-key",
+    "openai-organization",
+    "openai-project",
+  ])
+    out.delete(name);
+  out.set("authorization", `Bearer ${apiKey}`);
   return out;
 }

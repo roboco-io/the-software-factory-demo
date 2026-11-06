@@ -11,5 +11,8 @@
   "devDependencies": {
     "vitest": "^5.1.0",
     "wrangler": "^4.158.0"
+  },
+  "dependencies": {
+    "yaml": "^2.9.1"
   }
 }

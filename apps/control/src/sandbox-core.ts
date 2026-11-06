@@ -1,5 +1,11 @@
 import { isValidRepo } from "./repo";
 import { TRUST_ENV, buildAgentCommand } from "./agent-command";
+import {
+  PI_AGENT_DIR,
+  PI_MODELS_PATH,
+  buildReviewCommand,
+  piModelsConfig,
+} from "./review-command";
 
 export const REPO_DIR = "/workspace/repo";
 export const TASK_DIR = "/workspace/task";
@@ -81,6 +87,33 @@ for (const line of lines) {
 process.stdout.write(JSON.stringify({ truncated, entries }));
 `;
 
+/**
+ * Runs inside the container with node. Prints `{"ok":true,"text":...}` with the text of
+ * the last assistant message of a pi JSON-mode log, or `{"ok":false}`. Only a message
+ * that stopped normally counts. Tool results and user messages are never read as the
+ * answer. argv[1] is the log path.
+ */
+export const REVIEW_EXTRACT_SCRIPT = String.raw`
+const fs = require("node:fs");
+const MAX_LOG = 64 * 1024 * 1024, MAX_TEXT = 64 * 1024;
+const out = (v) => process.stdout.write(JSON.stringify(v));
+let raw;
+try {
+  if (fs.statSync(process.argv[1]).size > MAX_LOG) { out({ ok: false }); process.exit(0); }
+  raw = fs.readFileSync(process.argv[1], "utf8");
+} catch { out({ ok: false }); process.exit(0); }
+let last = null;
+for (const line of raw.split("\n")) {
+  if (line === "") continue;
+  let event;
+  try { event = JSON.parse(line); } catch { continue; }
+  if (event && event.type === "message_end" && event.message && event.message.role === "assistant") last = event.message;
+}
+if (last === null || last.stopReason !== "stop" || !Array.isArray(last.content)) { out({ ok: false }); process.exit(0); }
+const text = last.content.filter((c) => c && c.type === "text" && typeof c.text === "string").map((c) => c.text).join("");
+out(text.length === 0 || text.length > MAX_TEXT ? { ok: false } : { ok: true, text });
+`;
+
 export class SandboxController {
   constructor(private readonly container: ContainerPort) {}
 
@@ -115,6 +148,51 @@ export class SandboxController {
     return { ok: true, baseSha };
   }
 
+  /** Checks out exactly `sha` (a 40-hex commit) of the repository, detached. */
+  async cloneAt(repo: string, sha: string): Promise<{ ok: boolean }> {
+    if (!isValidRepo(repo)) throw new Error("invalid repository name");
+    if (!SHA_PATTERN.test(sha)) throw new Error("invalid commit");
+    await this.run(["rm", "-rf", REPO_DIR], "/workspace", {});
+    const steps: {
+      command: string[];
+      cwd: string;
+      env: Record<string, string>;
+    }[] = [
+      {
+        command: ["git", "init", "--quiet", "--", REPO_DIR],
+        cwd: "/workspace",
+        env: {},
+      },
+      {
+        command: [
+          "git",
+          "remote",
+          "add",
+          "origin",
+          `https://github.com/${repo}.git`,
+        ],
+        cwd: REPO_DIR,
+        env: {},
+      },
+      {
+        command: ["git", "fetch", "--depth", "1", "--no-tags", "origin", sha],
+        cwd: REPO_DIR,
+        env: { ...TRUST_ENV },
+      },
+      {
+        command: ["git", "checkout", "--quiet", "--detach", "FETCH_HEAD"],
+        cwd: REPO_DIR,
+        env: {},
+      },
+    ];
+    for (const step of steps) {
+      const r = await this.run(step.command, step.cwd, step.env);
+      if (r.exitCode !== 0) return { ok: false };
+    }
+    const head = await this.run(["git", "rev-parse", "HEAD"], REPO_DIR, {});
+    return { ok: head.exitCode === 0 && head.stdout.trim() === sha };
+  }
+
   async readTaskStatus(): Promise<TaskStatus> {
     const exit = await this.readOptional(`${TASK_DIR}/exit-code`);
     if (exit !== undefined)
@@ -144,6 +222,58 @@ export class SandboxController {
   }): Promise<"started" | "busy"> {
     if ((await this.readTaskStatus()).state === "running") return "busy";
     const { command, env } = buildAgentCommand(input);
+    await this.launch(command, env);
+    return "started";
+  }
+
+  /** Starts the pi reviewer, read-only, with its settings outside the repository. */
+  async startReview(input: {
+    prompt: string;
+    model: string;
+  }): Promise<"started" | "busy"> {
+    if ((await this.readTaskStatus()).state === "running") return "busy";
+    const { command, env } = buildReviewCommand(input);
+    await this.run(
+      [
+        "node",
+        "-e",
+        "const fs=require('node:fs');fs.mkdirSync(process.argv[1],{recursive:true});fs.writeFileSync(process.argv[2],process.argv[3])",
+        PI_AGENT_DIR,
+        PI_MODELS_PATH,
+        piModelsConfig(input.model),
+      ],
+      "/workspace",
+      {},
+    );
+    await this.launch(command, env);
+    return "started";
+  }
+
+  /** The text of the reviewer's final message, or undefined when there is no usable one. */
+  async readReviewText(): Promise<string | undefined> {
+    const result = await this.run(
+      ["node", "-e", REVIEW_EXTRACT_SCRIPT, `${TASK_DIR}/stdout.log`],
+      "/",
+      {},
+    );
+    if (result.exitCode !== 0) return undefined;
+    try {
+      const parsed = JSON.parse(result.stdout) as {
+        ok?: unknown;
+        text?: unknown;
+      };
+      return parsed.ok === true && typeof parsed.text === "string"
+        ? parsed.text
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async launch(
+    command: string[],
+    env: Record<string, string>,
+  ): Promise<void> {
     await this.run(["rm", "-rf", TASK_DIR], "/workspace", {});
     await this.run(["mkdir", "-p", TASK_DIR], "/workspace", {});
     await this.run(["touch", `${TASK_DIR}/started`], "/workspace", {});
@@ -155,7 +285,6 @@ export class SandboxController {
         background: true,
       },
     );
-    return "started";
   }
 
   /** Returns the raw JSON report. The caller validates it as untrusted data. */
