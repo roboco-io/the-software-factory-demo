@@ -239,6 +239,36 @@ describe("project page", () => {
     expect(button("더 보기")).toBeUndefined();
   });
 
+  it("shows the state beside the outcome only when it adds something", async () => {
+    await open(
+      "/projects/acme/demo",
+      fakeApi({
+        runs: async () => ({
+          runs: [
+            {
+              ...RUN.run,
+              id: "aaaaaaaaaaa3",
+              state: "merged",
+              reasonCode: null,
+            },
+            {
+              ...RUN.run,
+              id: "aaaaaaaaaaa4",
+              state: "needs_human",
+              reasonCode: "changes_requested",
+            },
+          ],
+          nextCursor: null,
+        }),
+      }),
+    );
+    const [merged, stopped] = [...root().querySelectorAll(".run-row .status")];
+    expect(merged!.querySelector(".muted")).toBeNull();
+    expect(stopped!.querySelector(".muted")?.textContent).toBe(
+      "사람의 확인 필요",
+    );
+  });
+
   it("shows an empty state and a not-found state", async () => {
     await open(
       "/projects/acme/demo",

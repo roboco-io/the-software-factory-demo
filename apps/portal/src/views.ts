@@ -184,6 +184,7 @@ export async function projectsView(ctx: ViewContext): Promise<View> {
 
 function runRow(run: RunSummary) {
   const outcome = describeOutcome(run.state, run.reasonCode);
+  const stateTitle = stateLabel(run.state).title;
   const issue = githubLink(
     run.repo,
     "issues",
@@ -204,8 +205,9 @@ function runRow(run: RunSummary) {
       "div",
       { class: "status" },
       h("strong", null, outcome.title),
-      " ",
-      h("span", { class: "muted" }, stateLabel(run.state).title),
+      ...(stateTitle === outcome.title
+        ? []
+        : [" ", h("span", { class: "muted" }, stateTitle)]),
     ),
     h(
       "time",
