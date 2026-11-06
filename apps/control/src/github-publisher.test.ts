@@ -79,7 +79,7 @@ function setup(
 }
 
 describe("publisher", () => {
-  it("creates a branch, one commit and a PR that refs (never closes) the issue, then comments", async () => {
+  it("creates a branch, one commit and a PR that closes the issue on merge, then comments", async () => {
     const { gh, publisher } = setup();
     const result = await publisher.publish(req);
     expect(result).toEqual({
@@ -92,11 +92,13 @@ describe("publisher", () => {
     expect(gh.prs).toHaveLength(1);
     const pr = gh.prs[0]!;
     expect(pr.head).toBe("factory/issue-7-run1");
-    expect(pr.body).toMatch(/^Refs #7$/m);
-    expect(pr.body).not.toMatch(/\b(closes|fixes|resolves)\b/i);
+    expect(pr.body).toMatch(/^Closes #7$/m);
     expect(pr.body).toContain("claude-sonnet-5-5");
     expect(pr.body).toMatch(/agent-generated/i);
     expect(gh.comments).toHaveLength(1);
+    // A low-risk change merges without a person, so the comment must not promise one.
+    expect(gh.comments[0]!.body).not.toMatch(/needs human review/i);
+    expect(gh.comments[0]!.body).toMatch(/risk policy/i);
     expect(gh.comments[0]!.body).toContain(
       "https://github.com/acme/demo/pull/40",
     );

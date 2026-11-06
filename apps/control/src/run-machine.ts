@@ -476,7 +476,8 @@ export class RunMachine {
         pr.headSha === run.headSha
       )
         return pr;
-      throw new StepFailure("pr_closed");
+      // A person merged it. No action is left, so the record must not read as a closed pull request.
+      throw new StepFailure(pr.merged ? "merged_outside_factory" : "pr_closed");
     }
     if (pr.headSha !== run.headSha) throw new StepFailure("head_changed");
     return pr;

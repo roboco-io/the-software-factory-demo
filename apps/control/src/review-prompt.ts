@@ -59,6 +59,7 @@ export function buildReviewPrompt(input: {
       "Your final message must be exactly one JSON object and nothing else: no prose before or after it and no code fence. Its shape is:",
       '{"verdict":"approve"|"changes_requested","summary":"<up to 2000 characters>","findings":[{"file":"<path>","severity":"info"|"low"|"medium"|"high"|"critical","message":"<up to 1000 characters>"}]}',
       'Use "approve" only when you found no high or critical problem. Use an empty findings array when there is nothing to report.',
+      "Write the summary and each message in English.",
       "",
       DATA_OPEN,
       `Title: ${title}`,
