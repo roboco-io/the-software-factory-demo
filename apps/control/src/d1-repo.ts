@@ -4,6 +4,7 @@ interface Statement {
   bind(...values: unknown[]): Statement;
   run(): Promise<{ meta: { changes: number } }>;
   first<T = Record<string, unknown>>(): Promise<T | null>;
+  all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
 }
 export interface D1Like {
   prepare(sql: string): Statement;

@@ -54,6 +54,8 @@ export const REASON_CODES = [
   "approval_timeout",
   "merge_refused",
   "merge_conflict",
+  // Portal (stage 4).
+  "stopped_by_operator",
 ] as const;
 export type ReasonCode = (typeof REASON_CODES)[number];
 

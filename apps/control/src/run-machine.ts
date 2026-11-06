@@ -158,6 +158,23 @@ interface StoredRun {
   mergeAttempted?: boolean;
 }
 
+/** What an operator's stop request did. */
+export type StopResult =
+  /** Recorded. The alarm applies it at its next tick. */
+  | "stop_requested"
+  /** The run is already in a final state. */
+  | "not_active"
+  /** The merge was already sent to GitHub; it can no longer be taken back. */
+  | "merge_attempted"
+  /** This object holds no run with that id. */
+  | "not_found";
+
+/**
+ * Storage key of a pending stop. It holds the id of the run to stop and lives apart from the
+ * run object, so an alarm that saves an older copy of the run cannot erase it.
+ */
+const STOP_KEY = "stop_requested";
+
 /** A failure with a fixed code that must not be retried. */
 class StepFailure extends Error {
   constructor(readonly code: ReasonCode) {
@@ -242,15 +259,75 @@ export class RunMachine {
       run.state = active.state;
     }
     await this.save(run);
+    // A request to stop an earlier run does not apply to this one.
+    await this.deps.storage.put(STOP_KEY, null);
     await this.deps.storage.setAlarm(now);
     return { outcome: "started", runId: run.id };
   }
 
+  /**
+   * An operator asks to stop the active run. This only records the request, in its own key,
+   * and wakes the alarm. The alarm is the only writer of run state: at its next tick it
+   * ends the run with fail(), exactly like any other stop. A publish or sandbox step that is
+   * running finishes first, so its pull request and sandbox are known when the run ends.
+   * Once the merge was attempted the request is refused: the merge cannot be taken back.
+   */
+  async stop(runId: string): Promise<StopResult> {
+    const run = await this.load();
+    if (run === undefined || run.id !== runId) return "not_found";
+    if (isTerminal(run.state)) return "not_active";
+    if (run.mergeAttempted === true) return "merge_attempted";
+    await this.deps.storage.put(STOP_KEY, runId);
+    await this.deps.storage.setAlarm(this.deps.now());
+    // An alarm may have written mergeAttempted while the request was being stored.
+    const after = await this.load();
+    if (after?.id === runId && after.mergeAttempted === true) {
+      // The request came too late. Leave nothing behind that a later tick could misread.
+      await this.deps.storage.put(STOP_KEY, null);
+      return "merge_attempted";
+    }
+    return "stop_requested";
+  }
+
+  private async stopRequested(run: StoredRun): Promise<boolean> {
+    return (
+      run.mergeAttempted !== true &&
+      (await this.deps.storage.get<string | null>(STOP_KEY)) === run.id
+    );
+  }
+
   async alarm(): Promise<void> {
+    try {
+      await this.runAlarm();
+    } catch (error) {
+      // The tick failed (for example D1 is down). Retry after the usual pause, never at once:
+      // an alarm set to now would spin. The original error is rethrown, and nothing here may hide it.
+      await this.wakeForStop(RETRY_MS).catch(() => undefined);
+      throw error;
+    }
+    await this.wakeForStop(0);
+  }
+
+  /**
+   * Whatever the tick did, including a retry pause or a long poll, a pending stop must not
+   * wait for the alarm it set: the alarm is brought forward to `delayMs` from now.
+   */
+  private async wakeForStop(delayMs: number): Promise<void> {
+    const run = await this.load();
+    if (run === undefined || isTerminal(run.state)) return;
+    if (await this.stopRequested(run))
+      await this.deps.storage.setAlarm(this.deps.now() + delayMs);
+  }
+
+  private async runAlarm(): Promise<void> {
     const run = await this.load();
     if (run === undefined) return;
     if (isTerminal(run.state)) {
       await this.settleTerminal(run);
+      return;
+    }
+    if (await this.stopRequested(run)) {
+      await this.fail(run, "stopped_by_operator");
       return;
     }
     await this.releaseUnneeded(run);
@@ -632,6 +709,12 @@ export class RunMachine {
         await this.scheduleApprovalPoll(run);
         return;
       case "merge": {
+        // Read the request and write the flag with nothing else awaited in between: a stop
+        // that lands after the flag is refused, one that landed before it ends the run here.
+        // After a failed merge call the flag is already set and the merge is retried: a request
+        // that arrives then was refused, so it must not end the run.
+        if (await this.stopRequested(run))
+          throw new StepFailure("stopped_by_operator");
         run.mergeAttempted = true;
         await this.save(run);
         const result = await this.deps.pulls.merge(

@@ -10,6 +10,7 @@ import {
   type PublisherPort,
   type ReviewSandboxPort,
   type SandboxPort,
+  type StopResult,
 } from "./run-machine";
 import type { RunInput } from "./run-types";
 import type { TaskStatus } from "./sandbox-core";
@@ -98,6 +99,11 @@ export class IssueRun extends DurableObject<ControlEnv> {
 
   start(input: RunInput) {
     return this.ctx.blockConcurrencyWhile(() => this.machine.start(input));
+  }
+
+  /** Records a request to stop the run with this id. The next alarm tick applies it. */
+  stop(runId: string): Promise<StopResult> {
+    return this.ctx.blockConcurrencyWhile(() => this.machine.stop(runId));
   }
 
   async alarm(): Promise<void> {
