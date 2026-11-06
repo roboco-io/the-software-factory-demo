@@ -17,10 +17,10 @@
   "vars": {
     // Non-secret settings. RUNS_ENABLED is the global kill switch: only "true" starts
     // runs. Empty OPERATOR_IDS or PROJECTS also means no run starts.
-    "GITHUB_APP_ID": "",
-    "RUNS_ENABLED": "false",
-    "OPERATOR_IDS": "",
-    "PROJECTS": "",
+    "GITHUB_APP_ID": "5639873",
+    "RUNS_ENABLED": "true",
+    "OPERATOR_IDS": "3435720",
+    "PROJECTS": "roboco-io/factory-test-app",
     "IMPLEMENT_MODEL": "claude-sonnet-5-5",
   },
   "d1_databases": [
