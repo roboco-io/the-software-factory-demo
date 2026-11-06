@@ -322,4 +322,18 @@ describe("webhook", () => {
     );
     expect(res.status).toBe(405);
   });
+  it("logs only the error class when starting a run fails", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { deps, start, release } = makeDeps();
+    const secretText = "sk-ant-api03-from-an-error-message";
+    start.mockRejectedValueOnce(new TypeError(secretText));
+    const res = await post(deps, payload());
+    expect(res.status).toBe(500);
+    expect(release).toHaveBeenCalledOnce();
+    const logged = log.mock.calls.flat().join(" ");
+    expect(logged).toContain("webhook_start_failed");
+    expect(logged).toContain("TypeError");
+    expect(logged).not.toContain(secretText);
+    log.mockRestore();
+  });
 });

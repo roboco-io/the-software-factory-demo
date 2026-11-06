@@ -1,3 +1,4 @@
+import { errorKind, logDiagnostic } from "./diagnostics";
 import type { RunInput } from "./run-types";
 import { isValidRepo } from "./repo";
 import { verifySignature } from "./signature";
@@ -160,7 +161,8 @@ export async function handleWebhook(
         ? result.runId
         : undefined;
     return json({ status: "accepted", runId }, 202);
-  } catch {
+  } catch (error) {
+    logDiagnostic("webhook_start_failed", { error: errorKind(error) });
     // Let GitHub redeliver: the delivery id is released so the retry is not dropped.
     await deps.deliveries.release(deliveryId);
     return json({ error: "internal_error" }, 500);

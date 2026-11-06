@@ -1,5 +1,6 @@
 import { ActiveRunConflict, type RunRepo } from "./d1-repo";
 import { validateChanges, type ValidChange } from "./changes";
+import { errorKind, logDiagnostic } from "./diagnostics";
 import { buildPrompt } from "./prompt";
 import { assertTransition, isTerminal } from "./run-state";
 import type { ReasonCode, RunInput, RunState } from "./run-types";
@@ -186,6 +187,12 @@ export class RunMachine {
         return;
       }
       run.attempts += 1;
+      logDiagnostic("run_step_error", {
+        runId: run.id,
+        state: run.state,
+        attempt: run.attempts,
+        error: errorKind(error),
+      });
       if (run.attempts >= MAX_STEP_ATTEMPTS) {
         await this.fail(
           run,
@@ -263,7 +270,11 @@ export class RunMachine {
         let report: unknown;
         try {
           report = await sandbox.collectChanges(run.baseSha);
-        } catch {
+        } catch (error) {
+          logDiagnostic("collect_changes_failed", {
+            runId: run.id,
+            error: errorKind(error),
+          });
           throw new StepFailure("sandbox_lost");
         }
         const checked = validateChanges(report);

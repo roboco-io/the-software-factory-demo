@@ -1,3 +1,5 @@
+import { logDiagnostic, safeLabel } from "./diagnostics";
+
 export const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 export const MAX_OUTPUT_TOKENS = 16000;
 
@@ -33,11 +35,10 @@ export function inspectAnthropicBody(
   run: { model: string },
   path: string,
 ): BodyDecision {
-  const deny = (reason: string): BodyDecision => ({
-    ok: false,
-    reason,
-    status: 403,
-  });
+  const deny = (reason: string): BodyDecision => {
+    logDiagnostic("outbound_body_denied", { reason });
+    return { ok: false, reason, status: 403 };
+  };
   if (!isRecord(body)) return deny("body_not_object");
   if (body.model !== run.model) return deny("model_not_allowed");
   if ("mcp_servers" in body) return deny("mcp_servers_not_allowed");
@@ -61,10 +62,14 @@ export function filterBetaHeader(headers: Headers): Headers {
   const out = new Headers(headers);
   const value = out.get("anthropic-beta");
   if (value === null) return out;
-  const kept = value
-    .split(",")
-    .map((v) => v.trim())
-    .filter((v) => BETA_ALLOWLIST.has(v));
+  const flags = value.split(",").map((v) => v.trim());
+  const kept = flags.filter((v) => BETA_ALLOWLIST.has(v));
+  const removed = flags.filter((v) => !BETA_ALLOWLIST.has(v));
+  if (removed.length > 0) {
+    logDiagnostic("beta_removed", {
+      flags: removed.slice(0, 20).map(safeLabel),
+    });
+  }
   if (kept.length === 0) out.delete("anthropic-beta");
   else out.set("anthropic-beta", kept.join(","));
   return out;
