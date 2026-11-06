@@ -49,6 +49,8 @@ export const CHANGES = JSON.stringify({
 export interface World {
   now: number;
   alarm: number | null;
+  /** For every setAlarm call, in order: the alarm time minus the clock at the moment of the call. */
+  alarmSets: number[];
   store: Map<string, unknown>;
   events: {
     kind: string;
@@ -92,6 +94,16 @@ export interface BuildOptions {
   repo?: RunRepo;
   /** Prefix for run ids, when several machines share one repository. */
   idPrefix?: string;
+  /** Awaited at the start of every check-runs call: lets a test act while the machine waits for GitHub. */
+  beforeListChecks?: () => Promise<void>;
+  /** Awaited after the merge request is sent and before GitHub answers. */
+  duringMerge?: () => Promise<void>;
+  /** Awaited inside every D1 transition before it is recorded: a slow D1. Receives the target state. */
+  /** Called after every storage write, with the key. Lets a test change storage between two of the machine's reads. */
+  afterPut?: (key: string) => void;
+  duringTransition?: (to: RunState) => Promise<void>;
+  /** Awaited at the start of sandbox.start: lets a test act while the sandbox is being created. */
+  beforeSandboxStart?: () => Promise<void>;
 }
 
 // Producer fakes. The seam check swaps real sandbox, publisher and GitHub client behind these ports.
@@ -99,6 +111,7 @@ export function build(over: BuildOptions = {}) {
   const w: World = {
     now: 1_000_000,
     alarm: null,
+    alarmSets: [],
     store: new Map(),
     events: [],
     states: [],
@@ -126,6 +139,7 @@ export function build(over: BuildOptions = {}) {
       return w.dbActive === null ? null : { ...w.dbActive, state: "queued" };
     },
     async transition(t) {
+      await over.duringTransition?.(t.to);
       w.events.push({
         kind: "transition",
         from: t.from,
@@ -143,6 +157,7 @@ export function build(over: BuildOptions = {}) {
   };
   const sandbox: SandboxPort = {
     async start() {
+      await over.beforeSandboxStart?.();
       w.sandboxCalls.push("start");
     },
     async clone() {
@@ -195,6 +210,23 @@ export function build(over: BuildOptions = {}) {
       },
     };
   };
+  const pulls = pullsFor(pullsWorld);
+  const listChecks = pulls.listChecks.bind(pulls);
+  const merge = pulls.merge.bind(pulls);
+  if (over.beforeListChecks) {
+    const hook = over.beforeListChecks;
+    pulls.listChecks = async (...a) => {
+      await hook();
+      return listChecks(...a);
+    };
+  }
+  if (over.duringMerge) {
+    const hook = over.duringMerge;
+    pulls.merge = async (...a) => {
+      await hook();
+      return merge(...a);
+    };
+  }
   const publish = vi.fn(
     over.publish ??
       (async () => ({
@@ -207,7 +239,9 @@ export function build(over: BuildOptions = {}) {
   const machine = new RunMachine({
     storage: {
       async get<T>(k: string) {
-        return w.store.get(k) as T | undefined;
+        // Like Durable Object storage, every read returns its own copy.
+        const v = w.store.get(k);
+        return v === undefined ? undefined : (structuredClone(v) as T);
       },
       async put(k, v) {
         if (over.failPutOnce === true) {
@@ -215,11 +249,13 @@ export function build(over: BuildOptions = {}) {
           throw new Error("storage interrupted");
         }
         w.store.set(k, structuredClone(v));
+        over.afterPut?.(k);
       },
       async getAlarm() {
         return w.alarm;
       },
       async setAlarm(at) {
+        w.alarmSets.push(at - w.now);
         w.alarm = at;
       },
       async deleteAlarm() {
@@ -235,7 +271,7 @@ export function build(over: BuildOptions = {}) {
         return { ...r, headSha: r.headSha ?? pullsWorld.pr.headSha };
       },
     },
-    pulls: pullsFor(pullsWorld),
+    pulls,
     operatorIds: over.operatorIds ?? [OPERATOR],
     model: "claude-sonnet-5-5",
     reviewModel: "gpt-5.4-nano",

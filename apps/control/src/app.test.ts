@@ -25,15 +25,15 @@ describe("control API", () => {
     expect(await res.json()).toEqual({ error: "not_found" });
   });
 
-  it("exposes no read API for runs yet", async () => {
-    for (const path of [
-      "/api/runs",
-      "/api/runs/1",
-      "/api/events",
-      "/api/github",
-    ]) {
+  it("exposes no path outside the route table", async () => {
+    for (const path of ["/api/runs", "/api/events", "/api/github", "/api/"]) {
       expect((await get(path)).status).toBe(404);
     }
+  });
+
+  it("answers 503 for a data route when the database is not bound", async () => {
+    expect((await get("/api/projects")).status).toBe(503);
+    expect((await get("/api/runs/abc123")).status).toBe(503);
   });
 
   it("answers 503 on the webhook when no secret is configured", async () => {

@@ -12,12 +12,22 @@
     "run_worker_first": ["/api/*"],
   },
   // Secrets (GITHUB_WEBHOOK_SECRET, GITHUB_APP_PRIVATE_KEY, ANTHROPIC_API_KEY,
-  // OPENAI_API_KEY) are set with `wrangler secret put`. Do not add `secrets.required`:
-  // a deploy must not fail before the secrets exist. See docs/operations.md.
+  // OPENAI_API_KEY, GITHUB_OAUTH_CLIENT_SECRET, SESSION_SECRET) are set with
+  // `wrangler secret put`. Do not add `secrets.required`: a deploy must not fail before
+  // the secrets exist. See docs/operations.md.
+  //
+  // Portal: the Worker serves /api/* itself (run_worker_first) and the portal files from
+  // ../portal/dist. Security headers for those files, including the Content-Security-Policy,
+  // come from apps/portal/public/_headers, which Vite copies into dist.
   "vars": {
     // Non-secret settings. RUNS_ENABLED is the global kill switch: only "true" starts
     // runs. Empty OPERATOR_IDS or PROJECTS also means no run starts.
     "GITHUB_APP_ID": "5639873",
+    // Client ID of the GitHub OAuth App for portal sign-in (a different app from the GitHub
+    // App above; it asks for no scopes). Empty until the OAuth App exists: login then
+    // answers 503 auth_not_configured and the read API keeps working. The client secret
+    // and SESSION_SECRET are secrets. See docs/operations.md.
+    "GITHUB_OAUTH_CLIENT_ID": "",
     "RUNS_ENABLED": "true",
     "OPERATOR_IDS": "3435720",
     "PROJECTS": "roboco-io/factory-test-app",

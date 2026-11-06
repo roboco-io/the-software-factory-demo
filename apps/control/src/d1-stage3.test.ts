@@ -16,7 +16,7 @@ const move = (repo: Repo, id: string, from: RunState, to: RunState) =>
 describe("stage 3 migration", () => {
   it("is a new file and keeps the applied ones", () => {
     const files = readMigrations();
-    expect(files).toHaveLength(4);
+    expect(files.length).toBeGreaterThanOrEqual(4);
     // The earlier migrations are untouched: the original state list has no stage 3 states.
     expect(files[0]).not.toContain("awaiting_approval");
   });
@@ -226,5 +226,39 @@ describe("D1RunRepo for review and merge", () => {
       await move(t.repo, "a", "queued", end);
       expect(await create(t.repo, "b", 2, 1), end).toBe("created");
     }
+  });
+});
+
+describe("stopped_by_operator migration", () => {
+  it("is the fifth migration and accepts the new code only after it", () => {
+    const files = readMigrations();
+    expect(files).toHaveLength(5);
+    const insert = `INSERT INTO runs VALUES ('r', 'acme/demo', 1, 'needs_human', 'stopped_by_operator', NULL, 1, 2);
+      INSERT INTO events (run_id, ts, kind, reason_code) VALUES ('r', 2, 'transition', 'stopped_by_operator')`;
+    const before = createTestD1(files.slice(0, 4));
+    expect(() => before.exec(insert)).toThrow(/CHECK/);
+    const after = createTestD1(files);
+    expect(() => after.exec(insert)).not.toThrow();
+  });
+
+  it("keeps rows and event ids and the append-only triggers", () => {
+    const files = readMigrations();
+    const t = createTestD1(files.slice(0, 4));
+    t.exec(`
+      INSERT INTO runs VALUES ('r', 'acme/demo', 1, 'failed', 'timeout', NULL, 1, 2);
+      INSERT INTO events (run_id, ts, kind, from_state, to_state, reason_code) VALUES
+        ('r', 1, 'created', NULL, 'queued', NULL),
+        ('r', 2, 'transition', 'queued', 'failed', 'timeout');
+    `);
+    const before = t.query("SELECT * FROM events ORDER BY id");
+    t.exec(files[4]!);
+    expect(t.query("SELECT * FROM events ORDER BY id")).toEqual(before);
+    expect(() => t.exec("UPDATE events SET ts = 9")).toThrow(/append-only/);
+    expect(() => t.exec("DELETE FROM events")).toThrow(/append-only/);
+    t.exec("INSERT INTO events (run_id, ts, kind) VALUES ('r', 3, 'cleanup')");
+    expect(t.query("SELECT MAX(id) AS m FROM events")).toEqual([{ m: 3 }]);
+    expect(
+      t.query("SELECT name FROM sqlite_master WHERE name = 'events_by_run'"),
+    ).toHaveLength(1);
   });
 });

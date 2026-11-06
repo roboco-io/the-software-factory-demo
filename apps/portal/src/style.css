@@ -1,0 +1,402 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1b1f24;
+  --muted: #5a6572;
+  --border: #d5dae1;
+  --accent: #1f5fbf;
+  --accent-text: #ffffff;
+  --ok: #1a7f37;
+  --info: #3b6ea5;
+  --wait: #9a6700;
+  --attention: #bc4c00;
+  --fail: #cf222e;
+  --danger: #cf222e;
+  --radius: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1318;
+    --surface: #181e26;
+    --text: #e6eaef;
+    --muted: #9aa6b4;
+    --border: #2d3641;
+    --accent: #6ea8ff;
+    --accent-text: #0b1220;
+    --ok: #4cc26b;
+    --info: #79a8de;
+    --wait: #e3b341;
+    --attention: #f0883e;
+    --fail: #ff7b72;
+    --danger: #ff7b72;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    16px/1.6 system-ui,
+    -apple-system,
+    "Apple SD Gothic Neo",
+    "Noto Sans KR",
+    sans-serif;
+  overflow-wrap: anywhere;
+}
+
+#app {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 0 16px 48px;
+}
+
+a {
+  color: var(--accent);
+}
+
+h1 {
+  font-size: 1.6rem;
+  line-height: 1.3;
+  margin: 1.2rem 0 0.6rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 0 0 0.6rem;
+}
+
+h3 {
+  font-size: 1rem;
+  margin: 0.1rem 0 0.2rem;
+}
+
+p {
+  margin: 0.4rem 0;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 0.3em;
+}
+
+.muted,
+.crumb,
+.note,
+time {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.lead {
+  font-size: 1.05rem;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.top > a {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.top nav {
+  display: flex;
+  gap: 16px;
+}
+
+.who {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.role-badge {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 12px;
+  font-size: 0.9rem;
+  background: var(--surface);
+}
+
+.role-operator {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+button,
+a.button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+a.button {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+button.link {
+  min-height: 0;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: 14px 0;
+}
+
+ul.cards,
+ul.plain,
+ol.flow,
+ol.steps,
+ol.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+ul.plain li {
+  margin: 0.4rem 0;
+}
+
+ul.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: 0 14px;
+}
+
+dl.counts {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  margin: 0;
+}
+
+dl.counts dt {
+  color: var(--muted);
+}
+
+dl.counts dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+
+ol.flow {
+  counter-reset: step;
+  display: grid;
+  gap: 10px;
+}
+
+ol.flow li {
+  counter-increment: step;
+  display: grid;
+  gap: 2px;
+  padding-left: 2.4rem;
+  position: relative;
+}
+
+ol.flow li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+}
+
+.message {
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 12px 0;
+  background: var(--surface);
+}
+
+.message.alert {
+  border-left-color: var(--fail);
+}
+
+.message.status {
+  border-left-color: var(--info);
+}
+
+.run-row {
+  display: grid;
+  gap: 4px;
+  border-left-width: 5px;
+}
+
+.outcome {
+  border: 1px solid var(--border);
+  border-left-width: 6px;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin: 14px 0;
+  background: var(--surface);
+}
+
+.outcome h2 {
+  margin-bottom: 0.2rem;
+}
+
+.tone-ok {
+  border-left-color: var(--ok);
+}
+.tone-info {
+  border-left-color: var(--info);
+}
+.tone-wait {
+  border-left-color: var(--wait);
+}
+.tone-attention {
+  border-left-color: var(--attention);
+}
+.tone-fail {
+  border-left-color: var(--fail);
+}
+
+.stop {
+  margin: 12px 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+ol.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 8px;
+}
+
+ol.steps li {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  display: grid;
+}
+
+ol.steps li.reached {
+  border-style: solid;
+  border-color: var(--ok);
+  color: var(--text);
+}
+
+ol.steps li.current {
+  background: var(--bg);
+  border-color: var(--accent);
+  border-width: 2px;
+  font-weight: 700;
+}
+
+ol.steps small {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.replay {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.replay-position {
+  margin-left: 4px;
+  color: var(--muted);
+}
+
+ol.timeline li {
+  border-left: 4px solid var(--border);
+  padding: 2px 0 8px 14px;
+  margin-left: 6px;
+}
+
+.reason {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.more {
+  margin: 12px 0;
+}
+
+@media (max-width: 480px) {
+  h1 {
+    font-size: 1.4rem;
+  }
+  .who {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  a.button {
+    transition: background-color 0.15s;
+  }
+}
