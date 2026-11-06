@@ -27,8 +27,7 @@
     {
       "binding": "DB",
       "database_name": "software-factory",
-      // PLACEHOLDER: replace with the id printed by `wrangler d1 create software-factory`.
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "db03024c-4138-4425-a518-472af3a56aea",
       "migrations_dir": "migrations",
     },
   ],

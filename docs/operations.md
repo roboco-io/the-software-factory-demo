@@ -26,7 +26,7 @@
 
 ## 최초 설정 순서
 
-1. `pnpm exec wrangler d1 create software-factory`를 실행하고 출력된 `database_id`를 `wrangler.jsonc`의 `REPLACE_WITH_D1_DATABASE_ID` 자리에 넣는다. 이 값이 자리표시자인 동안은 배포가 실패한다.
+1. D1 데이터베이스 `software-factory`는 2026-11-06에 만들었고 ID는 `wrangler.jsonc`에 있다. 새 환경을 만들 때만 `pnpm exec wrangler d1 create`를 다시 실행한다. 마이그레이션은 배포 워크플로가 적용한다.
 2. 시험용 공개 저장소에 GitHub App을 설치한다. 저장소 권한은 Contents, Pull requests, Issues의 쓰기이고, 이벤트는 Issues를 구독한다. 웹훅 주소는 `https://<워커 주소>/api/github/webhook`, 콘텐츠 유형은 `application/json`이다.
 3. 위 비밀 값 세 개를 설정하고, 변수 `GITHUB_APP_ID`, `OPERATOR_IDS`, `PROJECTS`를 채우고 `RUNS_ENABLED`를 `true`로 바꿔 커밋한다.
 4. main에 병합하면 deploy 워크플로가 D1 마이그레이션을 먼저 적용한 뒤 Worker와 컨테이너 이미지를 배포한다.
