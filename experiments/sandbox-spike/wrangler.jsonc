@@ -1,0 +1,26 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "sfd-sandbox-spike",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-11-05",
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": { "enabled": true },
+	"secrets": {
+		"required": ["SPIKE_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
+	},
+	"containers": [
+		{
+			"class_name": "AgentSandbox",
+			"scheduling_policy": "durable_object",
+			"images": {
+				"agent": { "dockerfile": "./Dockerfile" }
+			}
+		}
+	],
+	"durable_objects": {
+		"bindings": [{ "class_name": "AgentSandbox", "name": "SANDBOX" }]
+	},
+	"exports": {
+		"AgentSandbox": { "type": "durable-object", "storage": "sqlite" }
+	}
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@factory/control",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^5.1.0",
+    "wrangler": "^4.158.0"
+  }
+}

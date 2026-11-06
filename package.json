@@ -1,0 +1,25 @@
+{
+  "name": "software-factory-platform",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.25.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "build": "pnpm --filter @factory/portal build",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "eslint": "^10.14.0",
+    "prettier": "^3.9.10",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "wrangler": "^4.158.0"
+  }
+}
