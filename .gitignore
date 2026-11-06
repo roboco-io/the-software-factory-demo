@@ -6,3 +6,4 @@ dist/
 coverage/
 .claude/
 .superlite/
+apps/control/worker-configuration.d.ts

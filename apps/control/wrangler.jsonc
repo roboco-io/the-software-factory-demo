@@ -11,4 +11,43 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"],
   },
+  // Secrets (GITHUB_WEBHOOK_SECRET, GITHUB_APP_PRIVATE_KEY, ANTHROPIC_API_KEY)
+  // are set with `wrangler secret put`. Do not add `secrets.required`: a deploy
+  // must not fail before the secrets exist. See docs/operations.md.
+  "vars": {
+    // Non-secret settings. RUNS_ENABLED is the global kill switch: only "true" starts
+    // runs. Empty OPERATOR_IDS or PROJECTS also means no run starts.
+    "GITHUB_APP_ID": "",
+    "RUNS_ENABLED": "false",
+    "OPERATOR_IDS": "",
+    "PROJECTS": "",
+    "IMPLEMENT_MODEL": "claude-sonnet-5-5",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "software-factory",
+      "database_id": "db03024c-4138-4425-a518-472af3a56aea",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "containers": [
+    {
+      "class_name": "AgentSandbox",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "agent": { "dockerfile": "./container/Dockerfile" },
+      },
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "class_name": "IssueRun", "name": "ISSUE_RUN" },
+      { "class_name": "AgentSandbox", "name": "SANDBOX" },
+    ],
+  },
+  "exports": {
+    "IssueRun": { "type": "durable-object", "storage": "sqlite" },
+    "AgentSandbox": { "type": "durable-object", "storage": "sqlite" },
+  },
 }
