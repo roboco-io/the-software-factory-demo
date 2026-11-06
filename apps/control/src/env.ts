@@ -13,9 +13,11 @@ export interface ControlEnv {
   RUNS_ENABLED?: string;
   PROJECTS?: string;
   IMPLEMENT_MODEL?: string;
+  REVIEW_MODEL?: string;
   GITHUB_WEBHOOK_SECRET?: string;
   GITHUB_APP_PRIVATE_KEY?: string;
   ANTHROPIC_API_KEY?: string;
+  OPENAI_API_KEY?: string;
 }
 
 // Compile-time check that the bindings `wrangler types` generates fit ControlEnv.

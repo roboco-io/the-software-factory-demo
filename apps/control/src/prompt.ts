@@ -15,14 +15,14 @@ const CONTROLS = new RegExp(
  * Breaks anything that could read as a delimiter: the marker name in any case or
  * spacing, and runs of three or more angle brackets.
  */
-function neutralize(text: string): string {
+export function neutralize(text: string): string {
   return text
     .replace(CONTROLS, "")
     .replace(/[<>]{3,}/g, (run) => "(".repeat(run.length))
     .replace(/UNTRUSTED[\s_-]*ISSUE[\s_-]*DATA/gi, "untrusted issue data");
 }
 
-function cap(text: string, limit: number): string {
+export function cap(text: string, limit: number): string {
   const chars = [...text];
   return chars.length <= limit
     ? text

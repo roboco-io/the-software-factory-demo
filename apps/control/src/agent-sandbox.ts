@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { isValidModel } from "./agent-command";
 import type { ControlEnv } from "./env";
+import type { SandboxPhase } from "./outbound-policy";
 import { isValidRepo } from "./repo";
 import {
   SandboxController,
@@ -12,10 +13,12 @@ const INSTANCE_TYPE = "basic";
 const INACTIVITY_TIMEOUT_MS = 25 * 60 * 1000;
 const REPO_KEY = "repo";
 const MODEL_KEY = "model";
+const PHASE_KEY = "phase";
 
 /**
- * One container per run. The container starts without internet access: every HTTP
- * and HTTPS request goes to `Outbound`, which is bound to this run's repository.
+ * One container per sandbox id; the implement and the review phase use different
+ * ids. The container starts without internet access: every HTTP and HTTPS request
+ * goes to `Outbound`, which is bound to this sandbox's repository, model and phase.
  * No GitHub token and no LLM key is ever passed in.
  */
 export class AgentSandbox extends DurableObject<ControlEnv> {
@@ -58,15 +61,41 @@ export class AgentSandbox extends DurableObject<ControlEnv> {
     }
   }
 
+  /** Starts the implement-phase sandbox: it reaches Anthropic and the run's repository. */
   async start(repo: string, model: string): Promise<void> {
+    await this.bind("implement", repo, model);
+  }
+
+  /** Starts the review-phase sandbox: it reaches OpenAI and the run's repository. */
+  async startReviewSandbox(repo: string, model: string): Promise<void> {
+    await this.bind("review", repo, model);
+  }
+
+  private async bind(
+    phase: SandboxPhase,
+    repo: string,
+    model: string,
+  ): Promise<void> {
     if (!isValidRepo(repo)) throw new Error("invalid repository name");
     if (!isValidModel(model)) throw new Error("invalid model name");
+    const bound = this.ctx.storage.kv.get<string>(PHASE_KEY);
+    if (bound !== undefined && bound !== phase)
+      throw new Error("sandbox is bound to another phase");
     this.ctx.storage.kv.put(REPO_KEY, repo);
     this.ctx.storage.kv.put(MODEL_KEY, model);
+    this.ctx.storage.kv.put(PHASE_KEY, phase);
     await this.ensureRunning();
   }
 
+  private requirePhase(phase: SandboxPhase): void {
+    // A sandbox started before phases existed has no phase and was an implement sandbox.
+    const bound =
+      this.ctx.storage.kv.get<SandboxPhase>(PHASE_KEY) ?? "implement";
+    if (bound !== phase) throw new Error("sandbox is bound to another phase");
+  }
+
   async clone(repo: string) {
+    this.requirePhase("implement");
     await this.ensureRunning();
     if (repo !== this.ctx.storage.kv.get(REPO_KEY))
       throw new Error("repository is not bound to this run");
@@ -74,9 +103,33 @@ export class AgentSandbox extends DurableObject<ControlEnv> {
   }
 
   async startAgent(input: { prompt: string; model: string }) {
+    this.requirePhase("implement");
     if (!isValidModel(input.model)) throw new Error("invalid model name");
     await this.ensureRunning();
     return this.controller.startAgent(input);
+  }
+
+  /** Review phase: checks out the pinned pull request head. */
+  async cloneAt(repo: string, sha: string) {
+    this.requirePhase("review");
+    await this.ensureRunning();
+    if (repo !== this.ctx.storage.kv.get(REPO_KEY))
+      throw new Error("repository is not bound to this run");
+    return this.controller.cloneAt(repo, sha);
+  }
+
+  async startReview(input: { prompt: string; model: string }) {
+    this.requirePhase("review");
+    if (input.model !== this.ctx.storage.kv.get(MODEL_KEY))
+      throw new Error("model is not bound to this run");
+    await this.ensureRunning();
+    return this.controller.startReview(input);
+  }
+
+  async readReviewText(): Promise<string | undefined> {
+    this.requirePhase("review");
+    await this.ensureRunning();
+    return this.controller.readReviewText();
   }
 
   async taskStatus(): Promise<TaskStatus> {
@@ -85,6 +138,7 @@ export class AgentSandbox extends DurableObject<ControlEnv> {
   }
 
   async collectChanges(baseSha: string): Promise<unknown> {
+    this.requirePhase("implement");
     await this.ensureRunning();
     return this.controller.collectChanges(baseSha);
   }
@@ -107,6 +161,8 @@ export class AgentSandbox extends DurableObject<ControlEnv> {
   private async setUp(): Promise<void> {
     const repo = this.ctx.storage.kv.get<string>(REPO_KEY);
     const model = this.ctx.storage.kv.get<string>(MODEL_KEY);
+    const phase =
+      this.ctx.storage.kv.get<SandboxPhase>(PHASE_KEY) ?? "implement";
     if (repo === undefined || model === undefined)
       throw new Error("sandbox has no repository or model bound");
     if (!this.container.running) {
@@ -122,12 +178,14 @@ export class AgentSandbox extends DurableObject<ControlEnv> {
         this.ctx as unknown as {
           exports: {
             Outbound: (options: {
-              props: { repo: string; model: string };
+              props: { repo: string; model: string; phase: SandboxPhase };
             }) => unknown;
           };
         }
       ).exports;
-      const outbound = exportsObject.Outbound({ props: { repo, model } });
+      const outbound = exportsObject.Outbound({
+        props: { repo, model, phase },
+      });
       await this.container.interceptAllOutboundHttp(outbound as never);
       await this.container.interceptOutboundHttps("*", outbound as never);
       await this.container.setInactivityTimeout(INACTIVITY_TIMEOUT_MS);

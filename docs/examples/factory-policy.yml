@@ -1,0 +1,33 @@
+# Example risk policy. Copy it to `.factory/policy.yml` on the default branch of a
+# managed repository. The factory reads it from the default branch only, never from
+# a pull request branch. Any other key, a duplicate key, an alias or a second
+# document makes the policy invalid, and the run then waits for a person.
+
+# Names of the check runs that must exist and succeed at the pull request head
+# before it can merge. At least one is required.
+requiredChecks:
+  - test
+  - lint
+
+# Tiers that may merge without an approval from an operator. T3 never merges
+# automatically, even if it is listed here. Files under .github/ and .factory/ are
+# T3 or higher whatever the rules below say.
+autoMergeTiers: [T0, T1]
+
+# Ordered rules. The first rule that matches a file decides the file's tier, and
+# the pull request gets the highest tier of its files. A file that matches no rule
+# is T2. Matching ignores case. `**` crosses `/`; `*` and `?` do not.
+rules:
+  - tier: T0
+    patterns:
+      - "docs/**"
+      - "*.md"
+  - tier: T1
+    patterns:
+      - "**/*.test.ts"
+      - "tests/**"
+  - tier: T3
+    patterns:
+      - "migrations/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
