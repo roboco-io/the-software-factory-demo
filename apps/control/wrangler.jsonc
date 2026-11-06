@@ -27,7 +27,7 @@
     // App above; it asks for no scopes). Empty until the OAuth App exists: login then
     // answers 503 auth_not_configured and the read API keeps working. The client secret
     // and SESSION_SECRET are secrets. See docs/operations.md.
-    "GITHUB_OAUTH_CLIENT_ID": "",
+    "GITHUB_OAUTH_CLIENT_ID": "Ov23liX5hM3Y9qOhi6Gv",
     "RUNS_ENABLED": "true",
     "OPERATOR_IDS": "3435720",
     "PROJECTS": "roboco-io/factory-test-app",
