@@ -16,7 +16,7 @@ const move = (repo: Repo, id: string, from: RunState, to: RunState) =>
 describe("stage 3 migration", () => {
   it("is a new file and keeps the applied ones", () => {
     const files = readMigrations();
-    expect(files).toHaveLength(3);
+    expect(files).toHaveLength(4);
     // The earlier migrations are untouched: the original state list has no stage 3 states.
     expect(files[0]).not.toContain("awaiting_approval");
   });
@@ -86,6 +86,35 @@ describe("stage 3 migration", () => {
     expect(() =>
       exec(
         "INSERT INTO events (run_id, ts, kind, reason_code) VALUES ('r', 1, 'transition', 'the reviewer said ok')",
+      ),
+    ).toThrow();
+  });
+});
+
+describe("merged_outside_factory migration", () => {
+  it("keeps events and their ids, and events stay append-only", () => {
+    const migrations = readMigrations();
+    const t = createTestD1(migrations.slice(0, 3));
+    t.exec(
+      "INSERT INTO runs VALUES ('r', 'acme/demo', 1, 'needs_human', 'pr_closed', 2, 1, 1)",
+    );
+    t.exec(
+      "INSERT INTO events (id, run_id, ts, kind, reason_code) VALUES (41, 'r', 1, 'transition', 'pr_closed')",
+    );
+    expect(() =>
+      t.exec(
+        "INSERT INTO events (run_id, ts, kind, reason_code) VALUES ('r', 2, 'transition', 'merged_outside_factory')",
+      ),
+    ).toThrow();
+    t.exec(migrations[3]!);
+    t.exec(
+      "INSERT INTO events (run_id, ts, kind, reason_code) VALUES ('r', 2, 'transition', 'merged_outside_factory')",
+    );
+    expect(() => t.exec("UPDATE events SET ts = 9 WHERE id = 41")).toThrow();
+    expect(() => t.exec("DELETE FROM events WHERE id = 41")).toThrow();
+    expect(() =>
+      t.exec(
+        "INSERT INTO events (run_id, ts, kind, reason_code) VALUES ('r', 3, 'transition', 'free text')",
       ),
     ).toThrow();
   });

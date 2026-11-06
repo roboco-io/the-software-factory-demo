@@ -17,6 +17,14 @@ const base = {
 };
 
 describe("buildReviewPrompt", () => {
+  it("fixes the language of the review, whatever the issue is written in", () => {
+    const r = buildReviewPrompt(base);
+    if (!r.ok) throw new Error("expected a prompt");
+    expect(r.prompt).toContain(
+      "Write the summary and each message in English.",
+    );
+  });
+
   it("puts issue data and the diff in separate delimited blocks, each marker once", () => {
     const r = buildReviewPrompt(base);
     expect(r.ok).toBe(true);

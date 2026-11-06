@@ -619,7 +619,7 @@ describe("head SHA", () => {
     merged.pulls.pr.merged = true;
     merged.pulls.pr.state = "closed";
     await merged.tick();
-    expect(stop(merged.w)).toMatchObject({ code: "pr_closed" });
+    expect(stop(merged.w)).toMatchObject({ code: "merged_outside_factory" });
   });
 
   it("counts a merge as done when its answer was lost after GitHub merged", async () => {

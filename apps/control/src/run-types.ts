@@ -37,6 +37,7 @@ export const REASON_CODES = [
   // Review and merge (stage 3).
   "legacy_run",
   "pr_closed",
+  "merged_outside_factory",
   "base_not_default",
   "head_changed",
   "policy_missing",
