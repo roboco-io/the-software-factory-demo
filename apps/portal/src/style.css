@@ -198,7 +198,8 @@ button.link {
 ul.cards,
 ul.plain,
 ol.flow,
-ol.steps,
+ol.rail,
+ul.board-rows,
 ol.timeline {
   list-style: none;
   margin: 0;
@@ -280,8 +281,218 @@ ol.flow li::before {
 
 .run-row {
   display: grid;
-  gap: 4px;
+  gap: 10px;
   border-left-width: 5px;
+  margin: 10px 0;
+}
+
+.run-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.run-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.run-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.run-time {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.toolbar .legend {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+}
+
+/* On a narrow screen each row names its stages, so the header row is not needed. */
+.board-head {
+  display: none;
+}
+
+.board-stages {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.stage {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 1px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+/* The arrow between two stage names reads the order of the work. */
+.stage:not(:last-child)::after {
+  content: "→";
+  position: absolute;
+  right: -0.5em;
+  top: 0;
+  color: var(--muted);
+}
+
+.stage-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.stage-count.active {
+  color: var(--accent);
+}
+
+.stage-count.stopped {
+  color: var(--attention);
+}
+
+ol.rail {
+  --stop: var(--attention);
+  --mark: 26px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  min-width: 0;
+}
+
+ol.rail.tone-info {
+  --stop: var(--info);
+}
+
+ol.rail.tone-fail {
+  --stop: var(--fail);
+}
+
+ol.rail li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 2px;
+  min-width: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* The line coming into a stage, drawn behind its mark. */
+ol.rail li:not(:first-child)::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--mark) / 2 - 1px);
+  left: -50%;
+  width: 100%;
+  border-top: 2px solid var(--border);
+}
+
+ol.rail li.done::before {
+  border-top-color: var(--ok);
+}
+
+ol.rail li.current::before {
+  border-top-color: var(--accent);
+}
+
+ol.rail li.stopped::before {
+  border-top-color: var(--stop);
+}
+
+ol.rail li.skipped::before {
+  border-top-style: dashed;
+  border-top-color: var(--ok);
+}
+
+.rail-mark {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: var(--mark);
+  height: var(--mark);
+  box-sizing: border-box;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+ol.rail li.done .rail-mark {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: var(--surface);
+}
+
+ol.rail li.current .rail-mark {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+ol.rail li.stopped .rail-mark {
+  border-color: var(--stop);
+  background: var(--stop);
+  color: var(--surface);
+}
+
+ol.rail li.skipped .rail-mark {
+  border-style: dashed;
+}
+
+ol.rail li.done,
+ol.rail li.current,
+ol.rail li.stopped {
+  color: var(--text);
+}
+
+ol.rail li.current .rail-label,
+ol.rail li.stopped .rail-label {
+  font-weight: 700;
+}
+
+ol.rail small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+@media (min-width: 56rem) {
+  .board-head,
+  .run-row {
+    display: grid;
+    grid-template-columns: minmax(15rem, 2fr) minmax(0, 3fr);
+    gap: 16px;
+    align-items: center;
+  }
+
+  .board-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 8px 16px 8px 21px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.85rem;
+    align-items: start;
+  }
+
+  .board .rail-label {
+    display: none;
+  }
+}
+
+.delta {
+  font-size: 0.85rem;
 }
 
 .outcome {
@@ -321,39 +532,6 @@ ol.flow li::before {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-ol.steps {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
-  gap: 8px;
-}
-
-ol.steps li {
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  padding: 6px 8px;
-  color: var(--muted);
-  font-size: 0.9rem;
-  display: grid;
-}
-
-ol.steps li.reached {
-  border-style: solid;
-  border-color: var(--ok);
-  color: var(--text);
-}
-
-ol.steps li.current {
-  background: var(--bg);
-  border-color: var(--accent);
-  border-width: 2px;
-  font-weight: 700;
-}
-
-ol.steps small {
-  color: var(--muted);
-  font-weight: 400;
 }
 
 .replay {

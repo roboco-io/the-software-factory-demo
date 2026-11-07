@@ -20,6 +20,7 @@ const RUN: RunDetail = {
       implementUsd: null,
       reviewUsd: null,
     },
+    path: [],
     createdAt: 1_700_000_000_000,
     updatedAt: 1_700_000_500_000,
   },
@@ -653,7 +654,7 @@ describe("project page, console", () => {
     expect(root().querySelector(".summary")).toBeNull();
   });
 
-  it("attention runs sort first", async () => {
+  it("runs keep the API's newest-first order, even when an older one needs attention", async () => {
     const runs = async () => ({
       runs: [
         mk("aaaaaaaaaaa1", "merged"),
@@ -665,7 +666,71 @@ describe("project page, console", () => {
     const ids = [
       ...root().querySelectorAll("li.run-row a[href^='/runs/']"),
     ].map((a) => a.getAttribute("href"));
-    expect(ids).toEqual(["/runs/aaaaaaaaaaa2", "/runs/aaaaaaaaaaa1"]);
+    expect(ids).toEqual(["/runs/aaaaaaaaaaa1", "/runs/aaaaaaaaaaa2"]);
+  });
+
+  it("each run row shows where it stopped on the seven-stage rail", async () => {
+    const runs = async () => ({
+      runs: [
+        mk("aaaaaaaaaaa1", "needs_human", {
+          path: [
+            { state: "queued", at: 0 },
+            { state: "implementing", at: 60_000 },
+            { state: "reviewing", at: 120_000 },
+            { state: "needs_human", at: 180_000 },
+          ],
+        }),
+      ],
+      nextCursor: null,
+    });
+    await open("/projects/acme/demo", fakeApi({ runs }));
+    const cells = [...root().querySelectorAll("li.run-row ol.rail > li")];
+    expect(cells).toHaveLength(7);
+    expect(cells[3]!.getAttribute("aria-label")).toBe("리뷰: 멈춤, 1분");
+    expect(cells[3]!.classList.contains("stopped")).toBe(true);
+    expect(cells[6]!.getAttribute("aria-label")).toBe("병합: 도달 전");
+  });
+
+  it("the board header counts running and stopped runs per stage", async () => {
+    const runs = async () => ({
+      runs: [
+        mk("aaaaaaaaaaa1", "implementing", {
+          path: [{ state: "implementing", at: 0 }],
+        }),
+        mk("aaaaaaaaaaa2", "failed", {
+          path: [
+            { state: "implementing", at: 0 },
+            { state: "failed", at: 1 },
+          ],
+        }),
+      ],
+      nextCursor: null,
+    });
+    await open("/projects/acme/demo", fakeApi({ runs }));
+    const heads = [...root().querySelectorAll(".board-head .stage")];
+    expect(heads.map((x) => x.querySelector("strong")?.textContent)).toEqual([
+      "접수",
+      "구현",
+      "PR",
+      "리뷰",
+      "체크",
+      "승인",
+      "병합",
+    ]);
+    expect(heads[1]!.textContent).toContain("진행 1");
+    expect(heads[1]!.textContent).toContain("멈춤 1");
+    expect(heads[0]!.querySelector(".stage-count")).toBeNull();
+  });
+
+  it("the run page draws the same rail and it follows the replay", async () => {
+    await open("/runs/aaaaaaaaaaa1", fakeApi());
+    const rail = () => [...root().querySelectorAll("ol.rail > li")];
+    expect(rail()).toHaveLength(7);
+    expect(rail()[5]!.classList.contains("current")).toBe(true);
+    button("처음부터")!.click();
+    expect(root().querySelector("ol.rail > li.current")).toBeNull();
+    button("다음")!.click();
+    expect(rail()[0]!.classList.contains("current")).toBe(true);
   });
 
   it("attention filter", async () => {

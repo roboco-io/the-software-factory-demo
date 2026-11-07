@@ -31,8 +31,15 @@ import {
   isGithubAuthorize,
   moneyText,
   shortSha,
-  sortAttentionFirst,
 } from "./console-labels";
+import {
+  durationText,
+  stageCells,
+  stageCounts,
+  STAGES,
+  type StageCell,
+  type StageStatus,
+} from "./flow";
 import { createReplay } from "./replay";
 
 /** A rendered screen. `cleanup` stops anything that keeps running after the user leaves. */
@@ -197,7 +204,72 @@ export async function projectsView(ctx: ViewContext): Promise<View> {
   };
 }
 
-function runRow(run: RunSummary) {
+const STATUS_TEXT: Record<StageStatus, string> = {
+  done: "완료",
+  current: "진행 중",
+  stopped: "멈춤",
+  skipped: "거치지 않음",
+  todo: "도달 전",
+};
+const STATUS_MARK: Record<StageStatus, string> = {
+  done: "✓",
+  current: "●",
+  stopped: "!",
+  skipped: "–",
+  todo: "",
+};
+
+/** The seven stages in order, with where the run stands. Status is in text and a mark, not only in color. */
+function rail(cells: StageCell[], tone: Tone) {
+  return h(
+    "ol",
+    { class: `rail tone-${tone}`, "aria-label": "진행 단계" },
+    ...cells.map((cell) => {
+      const time = cell.ms === null ? null : durationText(cell.ms);
+      const name = `${cell.label}: ${STATUS_TEXT[cell.status]}${time === null ? "" : `, ${time}`}`;
+      return h(
+        "li",
+        { class: cell.status, "aria-label": name, title: name },
+        h(
+          "span",
+          { class: "rail-mark", "aria-hidden": "true" },
+          STATUS_MARK[cell.status],
+        ),
+        h("span", { class: "rail-label", "aria-hidden": "true" }, cell.label),
+        h("small", { "aria-hidden": "true" }, time ?? ""),
+      );
+    }),
+  );
+}
+
+function boardHead(runs: readonly RunSummary[], now: number) {
+  const counts = stageCounts(runs, now);
+  return h(
+    "div",
+    { class: "board-head" },
+    h("div", { class: "board-work" }, "실행 (최근 시작 순)"),
+    h(
+      "div",
+      { class: "board-stages" },
+      ...STAGES.map((stage, i) => {
+        const { active, stopped } = counts[i]!;
+        return h(
+          "div",
+          { class: "stage" },
+          h("strong", null, stage.label),
+          active > 0
+            ? h("span", { class: "stage-count active" }, `진행 ${active}`)
+            : null,
+          stopped > 0
+            ? h("span", { class: "stage-count stopped" }, `멈춤 ${stopped}`)
+            : null,
+        );
+      }),
+    ),
+  );
+}
+
+function runRow(run: RunSummary, now: number) {
   const outcome = describeOutcome(run.state, run.reasonCode);
   const stateTitle = stateLabel(run.state).title;
   const issue = githubLink(
@@ -206,31 +278,42 @@ function runRow(run: RunSummary) {
     run.issueNumber,
     `이슈 #${run.issueNumber}`,
   );
+  const started = formatTime(run.createdAt);
+  const end = TERMINAL.includes(run.state) ? run.updatedAt : now;
   return h(
     "li",
     { class: `card run-row tone-${outcome.tone}` },
     h(
       "div",
-      null,
-      link(runPath(run.id), run.title ?? `실행 ${run.id}`),
-      " ",
-      issue ?? `이슈 #${run.issueNumber}`,
-      run.tier === null ? null : " ",
-      run.tier === null ? null : h("span", { class: "tier" }, run.tier),
+      { class: "run-info" },
+      h(
+        "div",
+        { class: "run-name" },
+        link(runPath(run.id), run.title ?? `실행 ${run.id}`),
+      ),
+      h(
+        "div",
+        { class: "run-meta" },
+        issue ?? `이슈 #${run.issueNumber}`,
+        run.tier === null ? null : h("span", { class: "tier" }, run.tier),
+      ),
+      h(
+        "div",
+        { class: "status" },
+        h("strong", null, outcome.title),
+        ...(stateTitle === outcome.title
+          ? []
+          : [" ", h("span", { class: "muted" }, stateTitle)]),
+      ),
+      h(
+        "div",
+        { class: "run-time" },
+        "시작 ",
+        h("time", { datetime: started.iso }, started.text),
+        ` · 총 ${durationText(Math.max(0, end - run.createdAt))}`,
+      ),
     ),
-    h(
-      "div",
-      { class: "status" },
-      h("strong", null, outcome.title),
-      ...(stateTitle === outcome.title
-        ? []
-        : [" ", h("span", { class: "muted" }, stateTitle)]),
-    ),
-    h(
-      "time",
-      { datetime: formatTime(run.updatedAt).iso },
-      formatTime(run.updatedAt).text,
-    ),
+    rail(stageCells(run, now), outcome.tone),
   );
 }
 
@@ -266,17 +349,17 @@ export async function projectView(
     ),
   ]);
   let page = firstPage;
-  // Sorting and filtering work on the runs loaded so far; "더 보기" adds to them.
+  // The board counts and the filter work on the runs loaded so far; "더 보기" adds to them.
   const loaded: RunSummary[] = [...page.runs];
   let onlyAttention = false;
-  const list = h("ul", { class: "cards" });
+  const head = h("div");
+  const list = h("ul", { class: "board-rows" });
   const empty = h("div");
   const paintList = () => {
     const now = Date.now();
-    const shown = sortAttentionFirst(loaded, now).filter(
-      (r) => !onlyAttention || isAttention(r, now),
-    );
-    list.replaceChildren(...shown.map(runRow));
+    const shown = loaded.filter((r) => !onlyAttention || isAttention(r, now));
+    head.replaceChildren(boardHead(loaded, now));
+    list.replaceChildren(...shown.map((r) => runRow(r, now)));
     empty.replaceChildren(
       ...(shown.length === 0 && loaded.length > 0
         ? [messageBox("status", "주의가 필요한 실행이 없습니다.")]
@@ -335,8 +418,17 @@ export async function projectView(
       project === null ? null : summaryCards(project),
       loaded.length === 0
         ? messageBox("status", "아직 실행이 없습니다.")
-        : h("div", { class: "toolbar" }, filter),
-      list,
+        : h(
+            "div",
+            { class: "toolbar" },
+            filter,
+            h(
+              "p",
+              { class: "legend muted" },
+              "✓ 완료 · ● 진행 중 · ! 멈춤 · – 거치지 않음. 승인은 정책이 요구할 때만 거칩니다. 단계별 숫자는 불러온 실행 기준입니다.",
+            ),
+          ),
+      loaded.length === 0 ? null : h("div", { class: "board" }, head, list),
       empty,
       failure,
       more,
@@ -560,19 +652,7 @@ function stopControl(
   return { el: box, cleanup: halt };
 }
 
-const FLOW = [
-  "queued",
-  "cloning",
-  "implementing",
-  "publishing",
-  "pr_opened",
-  "reviewing",
-  "awaiting_checks",
-  "awaiting_approval",
-  "merged",
-];
-
-function eventItem(event: EventItem) {
+function eventItem(event: EventItem, previous: EventItem | undefined) {
   const reason =
     event.reasonCode === null ? undefined : REASON_LABELS[event.reasonCode];
   let title: string;
@@ -597,6 +677,13 @@ function eventItem(event: EventItem) {
     "li",
     { class: `tone-${tone}` },
     h("time", { datetime: time.iso }, time.text),
+    previous === undefined
+      ? null
+      : h(
+          "span",
+          { class: "delta muted" },
+          ` 이전 단계부터 ${durationText(Math.max(0, event.ts - previous.ts))}`,
+        ),
     h("h3", null, title),
     h("p", null, text),
     reason === undefined
@@ -628,7 +715,7 @@ export async function runView(ctx: ViewContext, id: string): Promise<View> {
     `PR #${run.prNumber}`,
   );
 
-  const steps = h("ol", { class: "steps", "aria-label": "진행 단계" });
+  const flow = h("div");
   const timeline = h("ol", { class: "timeline" });
   const controls = h("div", { class: "replay" });
   const position = h("span", {
@@ -652,30 +739,20 @@ export async function runView(ctx: ViewContext, id: string): Promise<View> {
   function paint() {
     const { shown, total, playing } = replay.state();
     const visible = events.slice(0, shown);
-    const reached = new Set(visible.map((e) => e.toState));
-    const current = visible.at(-1)?.toState ?? null;
-    const extra = ["needs_human", "failed"].filter((s) => reached.has(s));
-    steps.replaceChildren(
-      ...[...FLOW, ...extra].map((state) =>
-        h(
-          "li",
-          {
-            class: [
-              reached.has(state) ? "reached" : "",
-              state === current ? "current" : "",
-              state === "awaiting_approval" ? "optional" : "",
-            ]
-              .filter(Boolean)
-              .join(" "),
-          },
-          stateLabel(state).title,
-          state === "awaiting_approval"
-            ? h("small", null, "정책이 요구할 때만")
-            : null,
-        ),
+    const path = visible.flatMap((e) =>
+      e.toState === null ? [] : [{ state: e.toState, at: e.ts }],
+    );
+    // While replaying, an unfinished stage is timed up to the next event, not up to today.
+    const clock = events[shown]?.ts ?? Date.now();
+    flow.replaceChildren(
+      rail(
+        stageCells({ state: path.at(-1)?.state ?? "", path }, clock),
+        describeOutcome(path.at(-1)?.state ?? "", run.reasonCode).tone,
       ),
     );
-    timeline.replaceChildren(...visible.map(eventItem));
+    timeline.replaceChildren(
+      ...visible.map((e, i) => eventItem(e, visible[i - 1])),
+    );
     position.textContent = `${shown} / ${total}`;
     controls.replaceChildren(
       button("처음부터", () => replay.reset(), total === 0),
@@ -754,9 +831,9 @@ export async function runView(ctx: ViewContext, id: string): Promise<View> {
         h(
           "p",
           { class: "muted" },
-          "기록된 이벤트를 따라 이 실행이 지나온 단계입니다. 재생 버튼으로 처음부터 한 단계씩 다시 볼 수 있습니다.",
+          "접수부터 병합까지의 순서와 이 실행이 지나온 단계, 단계마다 걸린 시간입니다. 승인은 정책이 요구할 때만 거칩니다. 재생 버튼으로 처음부터 한 단계씩 다시 볼 수 있습니다.",
         ),
-        steps,
+        flow,
       ),
       section("재생", controls, timeline),
     ),
