@@ -1,0 +1,54 @@
+{"kind":"rule-block","agent":"coordinator","tool":"Agent","target":"Agent general-purpose"}
+{"file": "-", "line": 0, "context": "exit code 1: apps/portal test: Failed", "agent": "run_tests", "kind": "test-failure", "resolution": "open", "time": "12:58:25"}
+{"file": "docs/plans/2026-11-07-control-console.review.md", "line": 0, "context": "T6: change outside Owns blocked by commit_task; nothing committed", "agent": "commit_task", "kind": "exception", "resolution": "open", "time": "12:58:37"}
+{"file": "docs/plans/2026-11-07-control-console.review.md", "line": 0, "context": "T7: change outside Owns blocked by commit_task; nothing committed", "agent": "commit_task", "kind": "exception", "resolution": "open", "time": "12:58:41"}
+{"file": "apps/control/src/pricing.test.ts", "line": 1, "context": "sl run_tests --fast PATHS reported exit code 1 for apps/portal test with an empty log; ran the verify command directly", "agent": "T3", "kind": "workaround", "resolution": "Ran pnpm vitest on the single file; 4 passed", "confidence": "high", "time": "12:58:47"}
+{"file": "apps/control/src/d1-stage3.test.ts", "line": 19, "context": "0004 breaks stage3 tests: migration count 3 and positional INSERT with 8 values; file not owned by T1", "agent": "T1", "kind": "spec-ambiguity", "confidence": "high", "time": "12:58:47"}
+{"file": "apps/control/src/pricing.ts", "line": 1, "context": "T0 overwrote committed pricing.ts, session.ts, github-user.ts after a stale existence check; restored from HEAD", "agent": "T0", "kind": "exception", "resolution": "restored the three files from HEAD with git show; diff empty", "confidence": "high", "time": "12:59:54"}
+{"file": "src/outbound-meter.test.ts", "line": 100, "context": "Outbound metering > model response metered and recorded with phase and model: expected [] to have a length of 1 but got +0", "agent": "run_tests", "kind": "test-failure", "resolution": "open", "time": "13:00:01"}
+{"file": "src/outbound-meter.test.ts", "line": 156, "context": "Outbound metering > test_record_failure_logged_only: a rejecting recordUsage logs the kind and the response arrives: expected 'DENIED: provider_not_allowed_in_phase…' to be 'event: message_start\\ndat…", "agent": "run_tests", "kind": "test-failure", "resolution": "open", "time": "13:00:01"}
+{"file": "src/agent-command.test.ts", "line": 0, "context": "run_tests full: 5 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/app.test.ts", "line": 0, "context": "run_tests full: 7 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/auth-api.test.ts", "line": 0, "context": "run_tests full: 13 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/changes.test.ts", "line": 0, "context": "run_tests full: 60 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/config.test.ts", "line": 0, "context": "run_tests full: 3 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/console-api.test.ts", "line": 0, "context": "run_tests full: 8 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/d1-console.test.ts", "line": 0, "context": "run_tests full: 7 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/d1-repo.test.ts", "line": 0, "context": "run_tests full: 9 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/d1-stage3.test.ts", "line": 0, "context": "run_tests full: 7 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/decision.test.ts", "line": 0, "context": "run_tests full: 25 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/diagnostics.test.ts", "line": 0, "context": "run_tests full: 4 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/github-app.test.ts", "line": 0, "context": "run_tests full: 6 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/github-publisher.test.ts", "line": 0, "context": "run_tests full: 13 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/github-pulls.test.ts", "line": 0, "context": "run_tests full: 18 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/github-user.test.ts", "line": 0, "context": "run_tests full: 7 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/outbound-body.test.ts", "line": 0, "context": "run_tests full: 48 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/outbound-policy.test.ts", "line": 0, "context": "run_tests full: 64 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/policy.test.ts", "line": 0, "context": "run_tests full: 47 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/pricing.test.ts", "line": 0, "context": "run_tests full: 4 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/prompt.test.ts", "line": 0, "context": "run_tests full: 6 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/review-api.test.ts", "line": 0, "context": "run_tests full: 17 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/review-command.test.ts", "line": 0, "context": "run_tests full: 6 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/review-prompt.test.ts", "line": 0, "context": "run_tests full: 4 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/review-verdict.test.ts", "line": 0, "context": "run_tests full: 22 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/run-machine-console.test.ts", "line": 0, "context": "run_tests full: 6 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/run-machine-review.test.ts", "line": 0, "context": "run_tests full: 57 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/run-machine.test.ts", "line": 0, "context": "run_tests full: 26 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/run-query.test.ts", "line": 0, "context": "run_tests full: 13 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/run-state.test.ts", "line": 0, "context": "run_tests full: 4 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/sandbox-core.test.ts", "line": 0, "context": "run_tests full: 14 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/sandbox-review.test.ts", "line": 0, "context": "run_tests full: 13 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/session.test.ts", "line": 0, "context": "run_tests full: 11 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/signature.test.ts", "line": 0, "context": "run_tests full: 13 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/usage-meter.test.ts", "line": 0, "context": "run_tests full: 17 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "src/webhook.test.ts", "line": 0, "context": "run_tests full: 24 tests pass", "agent": "run_tests", "kind": "verified", "time": "13:00:01"}
+{"file": "", "line": 0, "context": "verified: seam T1↔T2", "agent": "pt_review", "kind": "verified", "time": "13:00:05"}
+{"file": "", "line": 0, "context": "verified: seam T10↔T11", "agent": "pt_review", "kind": "verified", "time": "13:00:58"}
+{"file": "apps/control/src/agent-sandbox-runid.test.ts", "line": 0, "context": "T10: change outside Owns blocked by commit_task; nothing committed", "agent": "commit_task", "kind": "exception", "resolution": "open", "time": "13:02:20"}
+{"file": "apps/control/src/agent-sandbox-runid.test.ts", "line": 0, "context": "T11: change outside Owns blocked by commit_task; nothing committed", "agent": "commit_task", "kind": "exception", "resolution": "open", "time": "13:02:20"}
+{"file": "", "line": 0, "context": "verified: seam T10↔T11", "agent": "pt_review", "kind": "verified", "time": "13:02:35"}
+{"file": "", "line": 0, "context": "verified: seam T10↔T11", "agent": "pt_review", "kind": "verified", "time": "13:02:35"}
+{"file": "", "line": 0, "context": "verified: seam T5↔T14", "agent": "pt_review", "kind": "verified", "time": "13:02:35"}
+{"file": "", "line": 0, "context": "verified: seam T8↔T14", "agent": "pt_review", "kind": "verified", "time": "13:02:35"}
+{"file": "", "line": 0, "context": "verified: seam T9↔T14", "agent": "pt_review", "kind": "verified", "time": "13:02:35"}
+{"file": "apps/control/src/testing/pulls-world.ts", "line": 0, "context": "T15: change outside Owns blocked by commit_task; nothing committed", "agent": "commit_task", "kind": "exception", "resolution": "open", "time": "13:03:48"}

@@ -1,0 +1,57 @@
+{
+  "projection_note": "projection: fixed forecast saved at lint 2026-11-07T12:56:47 (plan edited since)",
+  "headline": {
+    "wall_min": {
+      "projected": 5.173,
+      "actual": null
+    },
+    "cost_usd_agents": {
+      "projected": 1.810381,
+      "actual": 0
+    },
+    "task_min": {
+      "projected": 26.498,
+      "actual": 0
+    },
+    "agents": {
+      "projected": 15,
+      "actual": 0
+    }
+  },
+  "cost_split": {
+    "agents_usd": 0,
+    "rework_usd": 0,
+    "coordinator_usd": null,
+    "total_usd": 0.0
+  },
+  "concurrency": {
+    "peak": 0,
+    "projected_peak": 10
+  },
+  "critical_path": {
+    "actual": [],
+    "projected": ["T8", "T14", "T15"],
+    "projected_min": 5.173
+  },
+  "model_mix": {},
+  "coordinator_cost_by_model": null,
+  "quality": {
+    "tests": {
+      "passed": 610,
+      "failed": 2,
+      "skipped": 0,
+      "seconds": 2.4,
+      "mode": "full",
+      "failures": [
+        "src/outbound-meter.test.ts::Outbound metering > model response metered and recorded with phase and model: expected [] to have a length of 1 but got +0",
+        "src/outbound-meter.test.ts::Outbound metering > test_record_failure_logged_only: a rejecting recordUsage logs the kind and the response arrives: expected 'DENIED: provider_not_allowed_in_phase\u2026' to be"
+      ],
+      "skipped_tests": []
+    },
+    "first_time_pass": 0,
+    "first_time_n": 0,
+    "rework_dispatches": 0,
+    "open_incidents": 9
+  },
+  "tasks": []
+}
