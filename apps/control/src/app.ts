@@ -1,7 +1,10 @@
+import { handleAuth, type AuthDeps } from "./auth-api";
 import { parseList } from "./config";
 import { handleConsoleRead } from "./console-api";
 import { D1RunRepo, type D1Like } from "./d1-repo";
 import type { ControlEnv } from "./env";
+import { createUserGitHub, type UserGitHub } from "./github-user";
+import { handleReviewRequest, type ReviewDeps } from "./review-api";
 import { handleWebhook, type WebhookDeps } from "./webhook";
 
 const json = (
@@ -47,6 +50,7 @@ function webhookDeps(env: Partial<ControlEnv>): WebhookDeps {
   };
 }
 
+/** A database with no rows, used when the DB binding is missing. */
 const EMPTY_DB: D1Like = {
   prepare() {
     const stmt = {
@@ -60,21 +64,76 @@ const EMPTY_DB: D1Like = {
   batch: async () => [],
 } as never;
 
+const notConfigured = async (): Promise<never> => {
+  throw new Error("login not configured");
+};
+const DISABLED_GITHUB: UserGitHub = {
+  exchangeCode: notConfigured,
+  getUser: notConfigured,
+  getPullHead: notConfigured,
+  postReview: notConfigured,
+};
+
+export interface AppOptions {
+  fetch?: typeof fetch;
+  now?: () => number;
+}
+
+function consoleDeps(
+  request: Request,
+  env: Partial<ControlEnv>,
+  options: AppOptions,
+): { review: ReviewDeps; auth: AuthDeps } {
+  const clientId = env.GITHUB_OAUTH_CLIENT_ID || undefined;
+  const clientSecret = env.GITHUB_OAUTH_CLIENT_SECRET || undefined;
+  const loginReady = clientId !== undefined && clientSecret !== undefined;
+  const github = loginReady
+    ? createUserGitHub({ clientId, clientSecret, fetch: options.fetch })
+    : DISABLED_GITHUB;
+  const review: ReviewDeps = {
+    db: env.DB ?? EMPTY_DB,
+    publicRepos: parseList(env.PUBLIC_REPOS),
+    operatorIds: parseList(env.OPERATOR_IDS),
+    sessionSecret: env.SESSION_SECRET || undefined,
+    clientId: loginReady ? clientId : undefined,
+    github,
+    now: options.now ?? Date.now,
+    origin: new URL(request.url).origin,
+  };
+  return {
+    review,
+    auth: {
+      sessionSecret: review.sessionSecret,
+      clientId: review.clientId,
+      operatorIds: review.operatorIds,
+      github,
+      review,
+      now: review.now,
+      origin: review.origin,
+    },
+  };
+}
+
 export async function handleRequest(
   request: Request,
   env: Partial<ControlEnv> = {},
-  options: { now?: () => number } = {},
+  options: AppOptions = {},
 ): Promise<Response> {
   const { pathname } = new URL(request.url);
-  // Login arrives with the next change. Until then every visitor is anonymous.
-  if (pathname === "/api/session")
-    return json({ role: "anonymous", login: null, loginEnabled: false });
-  const read = await handleConsoleRead(request, {
-    db: env.DB ?? EMPTY_DB,
-    publicRepos: parseList(env.PUBLIC_REPOS),
-    now: options.now ?? Date.now,
-  });
-  if (read) return read;
+  if (pathname.startsWith("/api/") && pathname !== "/api/health") {
+    if (pathname !== "/api/github/webhook") {
+      const { review, auth } = consoleDeps(request, env, options);
+      const res =
+        (await handleConsoleRead(request, {
+          db: review.db,
+          publicRepos: review.publicRepos,
+          now: review.now,
+        })) ??
+        (await handleAuth(request, auth)) ??
+        (await handleReviewRequest(request, review));
+      if (res) return res;
+    }
+  }
   if (pathname === "/api/github/webhook")
     return handleWebhook(request, webhookDeps(env));
   if (pathname !== "/api/health") return json({ error: "not_found" }, 404);
