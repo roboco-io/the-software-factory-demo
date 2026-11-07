@@ -20,8 +20,15 @@ export interface RunView {
   tier: string | null;
   headSha: string | null;
   cost: RunCost;
+  /** The states the run entered, in order. Only states and times, the same facts its events show. */
+  path: PathStep[];
   createdAt: number;
   updatedAt: number;
+}
+
+export interface PathStep {
+  state: RunState;
+  at: number;
 }
 
 /**
@@ -107,7 +114,7 @@ const code = (value: unknown): ReasonCode | null =>
     ? (value as ReasonCode)
     : null;
 
-function runView(row: Row, cost: RunCost): RunView {
+function runView(row: Row, cost: RunCost, path: PathStep[]): RunView {
   return {
     id: String(row["id"]),
     repo: String(row["repo"]),
@@ -119,6 +126,7 @@ function runView(row: Row, cost: RunCost): RunView {
     tier: row["tier"] == null ? null : String(row["tier"]),
     headSha: row["head_sha"] == null ? null : String(row["head_sha"]),
     cost,
+    path,
     createdAt: Number(row["created_at"]),
     updatedAt: Number(row["updated_at"]),
   };
@@ -191,7 +199,7 @@ export class D1ReadRepo {
             )
             .bind(repo, after.createdAt, after.createdAt, after.id, limit + 1)
             .all<Row>();
-    return this.withCost(results);
+    return this.withDetails(results);
   }
 
   async getRun(id: string): Promise<RunView | null> {
@@ -199,27 +207,44 @@ export class D1ReadRepo {
       .prepare(`SELECT ${RUN_COLUMNS} FROM runs WHERE id = ?`)
       .bind(id)
       .first<Row>();
-    return row === null ? null : (await this.withCost([row]))[0]!;
+    return row === null ? null : (await this.withDetails([row]))[0]!;
   }
 
-  /** One usage query for the whole page. A page has at most 51 runs, under D1's 100 bound parameters. */
-  private async withCost(rows: Row[]): Promise<RunView[]> {
+  /** One usage query and one event query for the whole page. A page has at most 51 runs, under D1's 100 bound parameters. */
+  private async withDetails(rows: Row[]): Promise<RunView[]> {
     if (rows.length === 0) return [];
     const ids = rows.map((r) => String(r["id"]));
-    const { results } = await this.db
-      .prepare(
-        `SELECT run_id, phase, model, ${USAGE_SUMS} FROM run_usage WHERE run_id IN (${ids.map(() => "?").join(",")}) GROUP BY run_id, phase, model`,
-      )
-      .bind(...ids)
-      .all<Row>();
+    const marks = ids.map(() => "?").join(",");
+    const [usage, events] = await Promise.all([
+      this.db
+        .prepare(
+          `SELECT run_id, phase, model, ${USAGE_SUMS} FROM run_usage WHERE run_id IN (${marks}) GROUP BY run_id, phase, model`,
+        )
+        .bind(...ids)
+        .all<Row>(),
+      this.db
+        .prepare(
+          `SELECT run_id, to_state, ts FROM events WHERE run_id IN (${marks}) AND to_state IS NOT NULL ORDER BY id`,
+        )
+        .bind(...ids)
+        .all<Row>(),
+    ]);
     const byRun = new Map<string, Row[]>();
-    for (const u of results) {
+    for (const u of usage.results) {
       const key = String(u["run_id"]);
       byRun.set(key, [...(byRun.get(key) ?? []), u]);
     }
-    return rows.map((r) =>
-      runView(r, costOf(byRun.get(String(r["id"])) ?? [])),
-    );
+    const paths = new Map<string, PathStep[]>();
+    for (const e of events.results) {
+      const key = String(e["run_id"]);
+      const path = paths.get(key) ?? [];
+      path.push({ state: e["to_state"] as RunState, at: Number(e["ts"]) });
+      paths.set(key, path);
+    }
+    return rows.map((r) => {
+      const id = String(r["id"]);
+      return runView(r, costOf(byRun.get(id) ?? []), paths.get(id) ?? []);
+    });
   }
 
   /** Per repository: runs that need a person, and the summed cost (null if any model is unpriced). */

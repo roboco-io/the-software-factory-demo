@@ -34,6 +34,33 @@ const getJson = async (w: World, path: string) => {
 const MILLION = 1_000_000;
 
 describe("console read fields", () => {
+  it("run view lists the states it passed, in order, without other events", async () => {
+    const w = makeWorld();
+    run(w, "r1");
+    w.exec(
+      `INSERT INTO events (run_id, ts, kind, from_state, to_state, reason_code) VALUES
+       ('r1', 10, 'created', NULL, 'queued', NULL),
+       ('r1', 20, 'transition', 'queued', 'cloning', NULL),
+       ('r1', 25, 'cleanup', NULL, NULL, NULL),
+       ('r1', 30, 'transition', 'cloning', 'merged', NULL)`,
+    );
+    const page = await getJson(w, "/api/projects/acme/demo/runs");
+    expect(page["runs"][0].path).toEqual([
+      { state: "queued", at: 10 },
+      { state: "cloning", at: 20 },
+      { state: "merged", at: 30 },
+    ]);
+    const detail = await getJson(w, "/api/runs/r1");
+    expect(detail["run"].path).toHaveLength(3);
+  });
+
+  it("a run without events has an empty path", async () => {
+    const w = makeWorld();
+    run(w, "r1");
+    const page = await getJson(w, "/api/projects/acme/demo/runs");
+    expect(page["runs"][0].path).toEqual([]);
+  });
+
   it("run view has title tier headSha cost", async () => {
     const w = makeWorld();
     run(w, "r1");
