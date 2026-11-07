@@ -1,5 +1,6 @@
 import { parseList } from "./config";
-import { D1RunRepo } from "./d1-repo";
+import { handleConsoleRead } from "./console-api";
+import { D1RunRepo, type D1Like } from "./d1-repo";
 import type { ControlEnv } from "./env";
 import { handleWebhook, type WebhookDeps } from "./webhook";
 
@@ -46,11 +47,34 @@ function webhookDeps(env: Partial<ControlEnv>): WebhookDeps {
   };
 }
 
+const EMPTY_DB: D1Like = {
+  prepare() {
+    const stmt = {
+      bind: () => stmt,
+      all: async () => ({ results: [] }),
+      first: async () => null,
+      run: async () => ({ meta: { changes: 0 } }),
+    };
+    return stmt;
+  },
+  batch: async () => [],
+} as never;
+
 export async function handleRequest(
   request: Request,
   env: Partial<ControlEnv> = {},
+  options: { now?: () => number } = {},
 ): Promise<Response> {
   const { pathname } = new URL(request.url);
+  // Login arrives with the next change. Until then every visitor is anonymous.
+  if (pathname === "/api/session")
+    return json({ role: "anonymous", login: null, loginEnabled: false });
+  const read = await handleConsoleRead(request, {
+    db: env.DB ?? EMPTY_DB,
+    publicRepos: parseList(env.PUBLIC_REPOS),
+    now: options.now ?? Date.now,
+  });
+  if (read) return read;
   if (pathname === "/api/github/webhook")
     return handleWebhook(request, webhookDeps(env));
   if (pathname !== "/api/health") return json({ error: "not_found" }, 404);

@@ -12,6 +12,10 @@ export interface ControlEnv {
   OPERATOR_IDS?: string;
   RUNS_ENABLED?: string;
   PROJECTS?: string;
+  PUBLIC_REPOS?: string;
+  GITHUB_OAUTH_CLIENT_ID?: string;
+  GITHUB_OAUTH_CLIENT_SECRET?: string;
+  SESSION_SECRET?: string;
   IMPLEMENT_MODEL?: string;
   REVIEW_MODEL?: string;
   GITHUB_WEBHOOK_SECRET?: string;

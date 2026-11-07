@@ -66,6 +66,7 @@ export interface World {
   prompts: string[];
   reviewPrompts: string[];
   dbActive: { id: string; createdAt: number } | null;
+  facts: { runId: string; tier?: string; headSha?: string }[];
 }
 
 export interface BuildOptions {
@@ -111,6 +112,7 @@ export function build(over: BuildOptions = {}) {
     prompts: [],
     reviewPrompts: [],
     dbActive: null,
+    facts: [],
   };
   const pullsWorld = createWorld(over.pulls);
   const repo: RunRepo = {
@@ -139,6 +141,9 @@ export function build(over: BuildOptions = {}) {
     },
     async recordCleanup(e) {
       w.events.push({ kind: "cleanup", from: null, to: null, code: e.code });
+    },
+    async recordFacts(f) {
+      w.facts.push(f);
     },
   };
   const sandbox: SandboxPort = {

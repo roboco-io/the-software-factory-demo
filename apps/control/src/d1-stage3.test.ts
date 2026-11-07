@@ -16,7 +16,7 @@ const move = (repo: Repo, id: string, from: RunState, to: RunState) =>
 describe("stage 3 migration", () => {
   it("is a new file and keeps the applied ones", () => {
     const files = readMigrations();
-    expect(files).toHaveLength(3);
+    expect(files).toHaveLength(4);
     // The earlier migrations are untouched: the original state list has no stage 3 states.
     expect(files[0]).not.toContain("awaiting_approval");
   });
@@ -75,7 +75,7 @@ describe("stage 3 migration", () => {
   it("accepts every state and reason code, and still rejects free text", () => {
     const { exec } = setup();
     exec(
-      "INSERT INTO runs VALUES ('r', 'acme/demo', 1, 'queued', NULL, NULL, 1, 1)",
+      "INSERT INTO runs (id, repo, issue_number, state, reason_code, pr_number, created_at, updated_at) VALUES ('r', 'acme/demo', 1, 'queued', NULL, NULL, 1, 1)",
     );
     for (const state of STATES) exec(`UPDATE runs SET state = '${state}'`);
     for (const code of REASON_CODES)
