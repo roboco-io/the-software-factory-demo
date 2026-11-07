@@ -123,6 +123,7 @@ describe("GET /api/projects/:owner/:repo/runs", () => {
       tier: null,
       headSha: null,
       cost: NOT_MEASURED,
+      path: [],
       createdAt: 3000,
       updatedAt: 7000,
     });
@@ -199,6 +200,10 @@ describe("GET /api/runs/:id", () => {
         tier: null,
         headSha: null,
         cost: NOT_MEASURED,
+        path: [
+          { state: "queued", at: 1000 },
+          { state: "cloning", at: 1100 },
+        ],
         createdAt: 1000,
         updatedAt: 5000,
       },
@@ -307,6 +312,7 @@ describe("field allowlist", () => {
       "headSha",
       "id",
       "issueNumber",
+      "path",
       "prNumber",
       "reasonCode",
       "repo",

@@ -32,16 +32,6 @@ export function isAttention(
   );
 }
 
-/** Attention runs first; the order inside each group is kept. */
-export function sortAttentionFirst<
-  T extends { state: string; updatedAt: number },
->(runs: readonly T[], now: number): T[] {
-  return [
-    ...runs.filter((r) => isAttention(r, now)),
-    ...runs.filter((r) => !isAttention(r, now)),
-  ];
-}
-
 export const shortSha = (sha: string) => sha.slice(0, 7);
 
 /** True only for the GitHub OAuth authorize address, the one place the approval may send the browser. */

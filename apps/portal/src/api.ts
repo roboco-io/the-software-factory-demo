@@ -24,6 +24,10 @@ export interface RunCost {
   implementUsd: number | null;
   reviewUsd: number | null;
 }
+export interface PathStep {
+  state: string;
+  at: number;
+}
 export type ReviewAction = "approve" | "request_changes";
 export interface RunSummary {
   id: string;
@@ -36,6 +40,7 @@ export interface RunSummary {
   tier: string | null;
   headSha: string | null;
   cost: RunCost;
+  path: PathStep[];
   createdAt: number;
   updatedAt: number;
 }

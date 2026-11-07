@@ -5,7 +5,6 @@ import {
   isGithubAuthorize,
   moneyText,
   shortSha,
-  sortAttentionFirst,
 } from "./console-labels";
 
 const DAY = 86_400_000;
@@ -45,20 +44,6 @@ describe("attention", () => {
       isAttention({ state: "failed", updatedAt: now - 8 * DAY }, now),
     ).toBe(false);
     expect(isAttention({ state: "merged", updatedAt: now }, now)).toBe(false);
-  });
-  it("sorts attention first and keeps the order otherwise", () => {
-    const runs = [
-      { id: "a", state: "merged", updatedAt: now },
-      { id: "b", state: "awaiting_approval", updatedAt: now },
-      { id: "c", state: "queued", updatedAt: now },
-      { id: "d", state: "failed", updatedAt: now },
-    ];
-    expect(sortAttentionFirst(runs, now).map((r) => r.id)).toEqual([
-      "b",
-      "d",
-      "a",
-      "c",
-    ]);
   });
 });
 
