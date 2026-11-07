@@ -16,7 +16,25 @@ export interface AppOptions {
   api: Api;
   /** Starts the GitHub sign-in. Rejects with an ApiError when sign-in is not set up. */
   startLogin(): Promise<void>;
+  /** Sends the browser to an address outside the portal. Defaults to `window.location.assign`. */
+  navigate?(url: string): void;
 }
+
+const REVIEW_NOTICES: Record<string, ["alert" | "status", string]> = {
+  ok: [
+    "status",
+    "리뷰를 GitHub에 남겼습니다. 병합 여부는 프로그램이 다시 판정합니다.",
+  ],
+  stale: [
+    "alert",
+    "승인하는 사이 PR의 커밋이 바뀌어 리뷰를 남기지 않았습니다. 새 커밋을 확인한 뒤 다시 결정해 주세요.",
+  ],
+  denied: [
+    "alert",
+    "이 GitHub 계정에는 승인 권한이 없어 리뷰를 남기지 않았습니다.",
+  ],
+  failed: ["alert", "리뷰를 남기지 못했습니다. 잠시 뒤 다시 시도해 주세요."],
+};
 
 const ROLE_LABELS = {
   anonymous: "익명",
@@ -33,6 +51,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
 
   let me: Me = { role: "anonymous" };
   let banner: string | null = null;
+  let bannerKind: "alert" | "status" = "alert";
   let cleanup: (() => void) | undefined;
   let generation = 0;
   let alive = true;
@@ -63,7 +82,13 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
       paintBanner();
     });
     bannerSlot.replaceChildren(
-      h("div", { class: "message alert", role: "alert" }, banner, " ", close),
+      h(
+        "div",
+        { class: `message ${bannerKind}`, role: bannerKind },
+        banner,
+        " ",
+        close,
+      ),
     );
   }
 
@@ -133,7 +158,18 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
       h("p", { class: "muted", role: "status" }, "불러오는 중입니다..."),
     );
     const route = matchRoute(window.location.pathname);
-    const context: ViewContext = { api, me, reload: () => void render() };
+    const context: ViewContext = {
+      api,
+      me,
+      reload: () => void render(),
+      notify: (kind, text) => {
+        banner = text;
+        bannerKind = kind;
+        paintBanner();
+      },
+      navigate: (url) =>
+        (options.navigate ?? ((u) => window.location.assign(u)))(url),
+    };
     try {
       let view: View;
       switch (route.name) {
@@ -180,6 +216,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
   function go(path: string) {
     window.history.pushState(null, "", path);
     banner = null;
+    bannerKind = "alert";
     paintBanner();
     void render();
   }
@@ -204,6 +241,13 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
     banner =
       "로그인하지 못했습니다. 다시 시도해 주세요. 계속 실패하면 운영자에게 알려 주세요.";
     // Remove the marker so a reload does not show it again.
+    window.history.replaceState(null, "", window.location.pathname);
+  }
+  const reviewResult = new URLSearchParams(window.location.search).get(
+    "review",
+  );
+  if (reviewResult !== null && Object.hasOwn(REVIEW_NOTICES, reviewResult)) {
+    [bannerKind, banner] = REVIEW_NOTICES[reviewResult]!;
     window.history.replaceState(null, "", window.location.pathname);
   }
   paintBanner();

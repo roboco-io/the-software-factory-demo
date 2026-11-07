@@ -49,11 +49,11 @@ export type World = ReturnType<typeof makeWorld>;
 
 export function seedRuns(w: World) {
   w.exec(`
-    INSERT INTO runs VALUES ('aaaaaaaaaaa1', 'acme/demo', 7, 'awaiting_approval', NULL, 40, 1000, 5000);
-    INSERT INTO runs VALUES ('aaaaaaaaaaa2', 'acme/demo', 8, 'merged', NULL, 41, 2000, 6000);
-    INSERT INTO runs VALUES ('aaaaaaaaaaa3', 'acme/demo', 9, 'failed', 'agent_failed', NULL, 3000, 7000);
-    INSERT INTO runs VALUES ('aaaaaaaaaaa4', 'acme/other', 1, 'needs_human', 'merged_outside_factory', 5, 4000, 8000);
-    INSERT INTO runs VALUES ('aaaaaaaaaaa5', 'gone/repo', 1, 'implementing', NULL, NULL, 4500, 8500);
+    INSERT INTO runs (id, repo, issue_number, state, reason_code, pr_number, created_at, updated_at) VALUES ('aaaaaaaaaaa1', 'acme/demo', 7, 'awaiting_approval', NULL, 40, 1000, 5000);
+    INSERT INTO runs (id, repo, issue_number, state, reason_code, pr_number, created_at, updated_at) VALUES ('aaaaaaaaaaa2', 'acme/demo', 8, 'merged', NULL, 41, 2000, 6000);
+    INSERT INTO runs (id, repo, issue_number, state, reason_code, pr_number, created_at, updated_at) VALUES ('aaaaaaaaaaa3', 'acme/demo', 9, 'failed', 'agent_failed', NULL, 3000, 7000);
+    INSERT INTO runs (id, repo, issue_number, state, reason_code, pr_number, created_at, updated_at) VALUES ('aaaaaaaaaaa4', 'acme/other', 1, 'needs_human', 'merged_outside_factory', 5, 4000, 8000);
+    INSERT INTO runs (id, repo, issue_number, state, reason_code, pr_number, created_at, updated_at) VALUES ('aaaaaaaaaaa5', 'gone/repo', 1, 'implementing', NULL, NULL, 4500, 8500);
     INSERT INTO events (run_id, ts, kind, from_state, to_state, reason_code) VALUES
       ('aaaaaaaaaaa1', 1000, 'created', NULL, 'queued', NULL),
       ('aaaaaaaaaaa1', 1100, 'transition', 'queued', 'cloning', NULL),

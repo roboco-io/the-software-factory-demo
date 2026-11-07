@@ -30,6 +30,7 @@ export async function handleProjects(ctx: RouteContext): Promise<Response> {
   const repo = repoOf(ctx);
   if (repo === null) return unavailable();
   const counts = await repo.countsByRepo();
+  const stats = await repo.statsByRepo(Date.now());
   return json({
     projects: projectsOf(ctx).map((name) => ({
       repo: name,
@@ -39,6 +40,9 @@ export async function handleProjects(ctx: RouteContext): Promise<Response> {
         needs_human: 0,
         failed: 0,
       },
+      attention: stats.get(name)?.attention ?? 0,
+      costUsd:
+        stats.get(name)?.costUsd === undefined ? 0 : stats.get(name)!.costUsd,
     })),
   });
 }

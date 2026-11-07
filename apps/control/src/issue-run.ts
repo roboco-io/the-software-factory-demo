@@ -24,7 +24,7 @@ export class IssueRun extends DurableObject<ControlEnv> {
     const sandboxPort = (runId: string): SandboxPort => {
       const stub = env.SANDBOX.getByName(runId);
       return {
-        start: (repo, model) => stub.start(repo, model),
+        start: (repo, model) => stub.start(repo, model, runId),
         clone: (repo) => stub.clone(repo),
         startAgent: (input) => stub.startAgent(input),
         taskStatus: () => stub.taskStatus() as Promise<TaskStatus>,
@@ -36,7 +36,12 @@ export class IssueRun extends DurableObject<ControlEnv> {
     const reviewSandboxPort = (sandboxId: string): ReviewSandboxPort => {
       const stub = env.SANDBOX.getByName(sandboxId);
       return {
-        start: (repo, model) => stub.startReviewSandbox(repo, model),
+        start: (repo, model) =>
+          stub.startReviewSandbox(
+            repo,
+            model,
+            sandboxId.replace(/-review$/, ""),
+          ),
         cloneAt: (repo, sha) => stub.cloneAt(repo, sha),
         startReview: (input) => stub.startReview(input),
         taskStatus: () => stub.taskStatus() as Promise<TaskStatus>,

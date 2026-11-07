@@ -10,6 +10,7 @@ import {
   handleRuns,
   handleStop,
 } from "./portal-api";
+import { handleReviewStart } from "./review";
 import { hasRole, roleOf, type Role } from "./roles";
 import { SESSION_COOKIE, readCookie, verifySession } from "./session";
 import { handleWebhook, type WebhookDeps } from "./webhook";
@@ -139,6 +140,12 @@ export const ROUTES: readonly Route[] = [
     methods: ["POST"],
     minRole: "operator",
     handler: handleStop,
+  },
+  {
+    path: "/api/runs/:id/review",
+    methods: ["POST"],
+    minRole: "operator",
+    handler: handleReviewStart,
   },
 ];
 

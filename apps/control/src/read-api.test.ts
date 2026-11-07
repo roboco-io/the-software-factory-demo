@@ -2,7 +2,30 @@ import { describe, expect, it } from "vitest";
 import { handleRequest } from "./app";
 import { REASON_CODES, STATES } from "./run-types";
 import { D1ReadRepo } from "./read-repo";
-import { makeWorld, observerCookie, req, seedRuns } from "./testing/api-world";
+import {
+  makeWorld,
+  observerCookie,
+  req,
+  type World,
+} from "./testing/api-world";
+
+// Same data as the shared seedRuns, with column lists so later migrations cannot break it.
+function seedRuns(w: World) {
+  const cols =
+    "INSERT INTO runs (id, repo, issue_number, state, reason_code, pr_number, created_at, updated_at) VALUES";
+  w.exec(`
+    ${cols} ('aaaaaaaaaaa1', 'acme/demo', 7, 'awaiting_approval', NULL, 40, 1000, 5000);
+    ${cols} ('aaaaaaaaaaa2', 'acme/demo', 8, 'merged', NULL, 41, 2000, 6000);
+    ${cols} ('aaaaaaaaaaa3', 'acme/demo', 9, 'failed', 'agent_failed', NULL, 3000, 7000);
+    ${cols} ('aaaaaaaaaaa4', 'acme/other', 1, 'needs_human', 'merged_outside_factory', 5, 4000, 8000);
+    ${cols} ('aaaaaaaaaaa5', 'gone/repo', 1, 'implementing', NULL, NULL, 4500, 8500);
+    INSERT INTO events (run_id, ts, kind, from_state, to_state, reason_code) VALUES
+      ('aaaaaaaaaaa1', 1000, 'created', NULL, 'queued', NULL),
+      ('aaaaaaaaaaa1', 1100, 'transition', 'queued', 'cloning', NULL),
+      ('aaaaaaaaaaa1', 1200, 'cleanup', NULL, NULL, NULL),
+      ('aaaaaaaaaaa5', 4500, 'created', NULL, 'queued', NULL);
+  `);
+}
 
 const get = async (
   w: ReturnType<typeof makeWorld>,
@@ -13,6 +36,13 @@ const get = async (
   // Test helper: the shape is asserted by each test.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return { res, body: (await res.json()) as Record<string, any> };
+};
+
+const NOT_MEASURED = {
+  status: "not_measured",
+  totalUsd: null,
+  implementUsd: null,
+  reviewUsd: null,
 };
 
 describe("GET /api/me", () => {
@@ -43,10 +73,14 @@ describe("GET /api/projects", () => {
         {
           repo: "acme/demo",
           counts: { active: 1, merged: 1, needs_human: 0, failed: 1 },
+          attention: 1,
+          costUsd: 0,
         },
         {
           repo: "acme/other",
           counts: { active: 0, merged: 0, needs_human: 1, failed: 0 },
+          attention: 0,
+          costUsd: 0,
         },
       ],
     });
@@ -85,6 +119,10 @@ describe("GET /api/projects/:owner/:repo/runs", () => {
       state: "failed",
       reasonCode: "agent_failed",
       prNumber: null,
+      title: null,
+      tier: null,
+      headSha: null,
+      cost: NOT_MEASURED,
       createdAt: 3000,
       updatedAt: 7000,
     });
@@ -103,7 +141,7 @@ describe("GET /api/projects/:owner/:repo/runs", () => {
     const w = makeWorld();
     for (let i = 1; i <= 120; i++)
       w.exec(
-        `INSERT INTO runs VALUES ('r${String(i).padStart(4, "0")}', 'acme/demo', ${i}, 'merged', NULL, ${i}, ${1000 + Math.floor(i / 3)}, 9999)`,
+        `INSERT INTO runs (id, repo, issue_number, state, reason_code, pr_number, created_at, updated_at) VALUES ('r${String(i).padStart(4, "0")}', 'acme/demo', ${i}, 'merged', NULL, ${i}, ${1000 + Math.floor(i / 3)}, 9999)`,
       );
     const seen: string[] = [];
     let cursor: string | null = null;
@@ -157,6 +195,10 @@ describe("GET /api/runs/:id", () => {
         state: "awaiting_approval",
         reasonCode: null,
         prNumber: 40,
+        title: null,
+        tier: null,
+        headSha: null,
+        cost: NOT_MEASURED,
         createdAt: 1000,
         updatedAt: 5000,
       },
@@ -210,7 +252,7 @@ describe("field allowlist", () => {
   it("drops every column and property the allowlist does not name", async () => {
     const leaky = (row: Record<string, unknown>) => ({
       ...row,
-      title: "ISSUE TITLE",
+      issue_title: "ISSUE TITLE",
       body: "ISSUE BODY",
       agent_log: "RAW AGENT LOG",
       token: "ghs_SECRET",
@@ -253,17 +295,24 @@ describe("field allowlist", () => {
         return results[0] ?? null;
       },
     });
-    const db = { prepare: (): Stmt => stmt([rows.run]) };
+    const db = {
+      prepare: (sql: string): Stmt =>
+        stmt(sql.includes("run_usage") ? [] : [rows.run]),
+    };
     const repo = new D1ReadRepo(db as never);
     const run = await repo.getRun("aaaaaaaaaaa1");
     expect(Object.keys(run!).sort()).toEqual([
+      "cost",
       "createdAt",
+      "headSha",
       "id",
       "issueNumber",
       "prNumber",
       "reasonCode",
       "repo",
       "state",
+      "tier",
+      "title",
       "updatedAt",
     ]);
     db.prepare = () => stmt([rows.event]);
@@ -290,7 +339,7 @@ describe("field allowlist", () => {
   it("replaces an unknown reason code with null", async () => {
     const w = makeWorld();
     w.exec(
-      `INSERT INTO runs VALUES ('aaaaaaaaaaa1', 'acme/demo', 7, 'failed', 'some free text <b>', NULL, 1, 2)`,
+      `INSERT INTO runs (id, repo, issue_number, state, reason_code, pr_number, created_at, updated_at) VALUES ('aaaaaaaaaaa1', 'acme/demo', 7, 'failed', 'some free text <b>', NULL, 1, 2)`,
     );
     const { body } = await get(w, "/api/runs/aaaaaaaaaaa1");
     expect(body.run.reasonCode).toBeNull();

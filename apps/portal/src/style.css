@@ -409,3 +409,46 @@ ol.timeline li {
     transition: background-color 0.15s;
   }
 }
+
+dl.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.stat dt {
+  color: var(--muted, inherit);
+  font-size: 0.85rem;
+}
+
+.stat dd {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.stat-attention {
+  border-left: 5px solid var(--attention);
+}
+
+.toolbar {
+  margin: 8px 0;
+}
+
+.tier {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 6px;
+  font-size: 0.8rem;
+}
+
+.run-title {
+  font-size: 1.1rem;
+  margin: 0 0 8px;
+}
+
+.approve {
+  border-left: 5px solid var(--attention);
+  margin: 12px 0;
+}

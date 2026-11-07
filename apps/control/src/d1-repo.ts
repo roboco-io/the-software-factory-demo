@@ -22,7 +22,13 @@ export class ActiveRunConflict extends Error {
 export interface RunRepo {
   /** Inserts the run only if fewer than `maxActive` runs are active, atomically. */
   createRun(
-    run: { id: string; repo: string; issueNumber: number; ts: number },
+    run: {
+      id: string;
+      repo: string;
+      issueNumber: number;
+      ts: number;
+      title?: string;
+    },
     maxActive: number,
   ): Promise<"created" | "capacity_full">;
   findActiveRun(
@@ -41,6 +47,12 @@ export interface RunRepo {
     runId: string;
     ts: number;
     code: ReasonCode | null;
+  }): Promise<void>;
+  /** Sets tier and head_sha when given. Leaves unset fields. Adds no event. */
+  recordFacts(f: {
+    runId: string;
+    tier?: string;
+    headSha?: string;
   }): Promise<void>;
 }
 
@@ -71,7 +83,13 @@ export class D1RunRepo implements RunRepo {
   }
 
   async createRun(
-    run: { id: string; repo: string; issueNumber: number; ts: number },
+    run: {
+      id: string;
+      repo: string;
+      issueNumber: number;
+      ts: number;
+      title?: string;
+    },
     maxActive: number,
   ): Promise<"created" | "capacity_full"> {
     let results;
@@ -79,11 +97,19 @@ export class D1RunRepo implements RunRepo {
       results = await this.db.batch([
         this.db
           .prepare(
-            `INSERT INTO runs (id, repo, issue_number, state, created_at, updated_at)
-             SELECT ?, ?, ?, 'queued', ?, ?
+            `INSERT INTO runs (id, repo, issue_number, state, created_at, updated_at, title)
+             SELECT ?, ?, ?, 'queued', ?, ?, ?
              WHERE (SELECT COUNT(*) FROM runs WHERE state IN ${CAPACITY_SQL}) < ?`,
           )
-          .bind(run.id, run.repo, run.issueNumber, run.ts, run.ts, maxActive),
+          .bind(
+            run.id,
+            run.repo,
+            run.issueNumber,
+            run.ts,
+            run.ts,
+            run.title ?? null,
+            maxActive,
+          ),
         this.db
           .prepare(
             `INSERT INTO events (run_id, ts, kind, from_state, to_state, reason_code)
@@ -137,6 +163,47 @@ export class D1RunRepo implements RunRepo {
     code: ReasonCode | null;
   }): Promise<void> {
     await this.event(e.runId, e.ts, "cleanup", null, null, e.code).run();
+  }
+
+  async recordFacts(f: {
+    runId: string;
+    tier?: string;
+    headSha?: string;
+  }): Promise<void> {
+    await this.db
+      .prepare(
+        "UPDATE runs SET tier = COALESCE(?, tier), head_sha = COALESCE(?, head_sha) WHERE id = ?",
+      )
+      .bind(f.tier ?? null, f.headSha ?? null, f.runId)
+      .run();
+  }
+
+  async recordUsage(u: {
+    runId: string;
+    phase: string;
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
+    ts: number;
+  }): Promise<void> {
+    await this.db
+      .prepare(
+        `INSERT INTO run_usage (run_id, phase, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, ts)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        u.runId,
+        u.phase,
+        u.model,
+        u.inputTokens,
+        u.outputTokens,
+        u.cacheReadTokens,
+        u.cacheWriteTokens,
+        u.ts,
+      )
+      .run();
   }
 
   async claimDelivery(deliveryId: string, ts: number): Promise<boolean> {

@@ -2,6 +2,12 @@ import { errorKind, logDiagnostic } from "./diagnostics";
 import type { ControlEnv } from "./env";
 import { json, type RouteContext } from "./http";
 import {
+  completeReview,
+  readReviewCookie,
+  REVIEW_COOKIE,
+  reviewRedirect,
+} from "./review";
+import {
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
   clearCookie,
@@ -47,16 +53,20 @@ const notConfigured = () => json({ error: "auth_not_configured" }, 503);
 const random = (bytes: number) =>
   toBase64Url(crypto.getRandomValues(new Uint8Array(bytes)));
 
-export async function handleLogin(ctx: RouteContext): Promise<Response> {
-  const config = authConfig(ctx.env);
-  if (config === null) return notConfigured();
+/**
+ * Starts one OAuth round trip: a fresh state and PKCE verifier, the authorize address, and the
+ * `__Host-oauth` cookie to set. Plain sign-in passes no scope, so GitHub grants identity only.
+ */
+export async function startOAuth(
+  config: AuthConfig,
+  scope?: string,
+): Promise<{ location: string; state: string; cookie: string }> {
   const state = random(32);
   const verifier = random(48);
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(verifier),
   );
-  // No scope: the sign-in only identifies the user.
   const target = new URL(AUTHORIZE_URL);
   target.searchParams.set("client_id", config.clientId);
   target.searchParams.set("state", state);
@@ -65,19 +75,28 @@ export async function handleLogin(ctx: RouteContext): Promise<Response> {
     toBase64Url(new Uint8Array(digest)),
   );
   target.searchParams.set("code_challenge_method", "S256");
-  const headers = new Headers({
+  if (scope !== undefined) target.searchParams.set("scope", scope);
+  return {
     location: target.toString(),
+    state,
+    cookie: `${OAUTH_COOKIE}=${state}.${verifier}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${OAUTH_TTL_SECONDS}`,
+  };
+}
+
+export async function handleLogin(ctx: RouteContext): Promise<Response> {
+  const config = authConfig(ctx.env);
+  if (config === null) return notConfigured();
+  const start = await startOAuth(config);
+  const headers = new Headers({
+    location: start.location,
     "cache-control": "no-store",
   });
-  headers.append(
-    "set-cookie",
-    `${OAUTH_COOKIE}=${state}.${verifier}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${OAUTH_TTL_SECONDS}`,
-  );
+  headers.append("set-cookie", start.cookie);
   return new Response(null, { status: 302, headers });
 }
 
 /** Fixed reasons a sign-in can fail. They go to the log, never the address or the user. */
-type FailReason =
+export type FailReason =
   | "denied"
   | "bad_request"
   | "state_mismatch"
@@ -85,7 +104,7 @@ type FailReason =
   | "profile"
   | "unexpected";
 
-class LoginFailed extends Error {
+export class LoginFailed extends Error {
   constructor(readonly reason: FailReason) {
     super(reason);
   }
@@ -112,12 +131,13 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
  * numeric id and login. The token lives in this function's variables and nowhere else:
  * it is not stored, logged, returned or sent anywhere but GitHub's `/user`.
  */
-async function identify(
+export async function identify<T>(
   ctx: RouteContext,
   config: AuthConfig,
   code: string,
   verifier: string,
-): Promise<{ id: string; login: string }> {
+  use: (who: { id: string; login: string }, token: string) => Promise<T>,
+): Promise<T> {
   const exchange = await ctx.fetch(TOKEN_URL, {
     method: "POST",
     headers: { accept: "application/json", "content-type": "application/json" },
@@ -137,9 +157,10 @@ async function identify(
     granted["access_token"] === ""
   )
     throw new LoginFailed("token_exchange");
+  const token: string = granted["access_token"];
   const profile = await ctx.fetch(USER_URL, {
     headers: {
-      authorization: `Bearer ${granted["access_token"]}`,
+      authorization: `Bearer ${token}`,
       accept: "application/vnd.github+json",
       "user-agent": "software-factory-control",
       "x-github-api-version": "2022-11-28",
@@ -157,18 +178,27 @@ async function identify(
     !LOGIN.test(user["login"])
   )
     throw new LoginFailed("profile");
-  return { id: String(user["id"]), login: user["login"] };
+  return use({ id: String(user["id"]), login: user["login"] }, token);
 }
 
 export async function handleCallback(ctx: RouteContext): Promise<Response> {
   const config = authConfig(ctx.env);
   if (config === null) return notConfigured();
+  const cookieHeader = ctx.request.headers.get("cookie");
+  const review = await readReviewCookie(ctx, config);
   try {
     const query = ctx.url.searchParams;
-    if (query.has("error")) throw new LoginFailed("denied");
-    const code = query.get("code");
     const state = query.get("state");
-    const stored = readCookie(ctx.request.headers.get("cookie"), OAUTH_COOKIE);
+    const isReview =
+      review !== null &&
+      state !== null &&
+      constantTimeEqual(state, review.state);
+    if (query.has("error")) {
+      if (isReview) return reviewRedirect(review, "denied");
+      throw new LoginFailed("denied");
+    }
+    const code = query.get("code");
+    const stored = readCookie(cookieHeader, OAUTH_COOKIE);
     if (code === null || state === null || stored === undefined)
       throw new LoginFailed("bad_request");
     const [expected, verifier, ...rest] = stored.split(".");
@@ -183,12 +213,23 @@ export async function handleCallback(ctx: RouteContext): Promise<Response> {
       throw new LoginFailed("bad_request");
     if (!constantTimeEqual(state, expected))
       throw new LoginFailed("state_mismatch");
-    const user = await identify(ctx, config, code, verifier);
+    // The signed review cookie holds this very state: this round trip was started by a review.
+    if (isReview)
+      return await completeReview(ctx, config, review, code, verifier);
+    const user = await identify(
+      ctx,
+      config,
+      code,
+      verifier,
+      async (who) => who,
+    );
     const exp = Math.floor(ctx.now() / 1000) + SESSION_TTL_SECONDS;
     const value = await signSession(config.sessionSecret, { ...user, exp });
     const headers = new Headers({ location: "/", "cache-control": "no-store" });
     headers.append("set-cookie", sessionCookie(value));
     headers.append("set-cookie", clearCookie(OAUTH_COOKIE));
+    if (review !== null)
+      headers.append("set-cookie", clearCookie(REVIEW_COOKIE));
     return new Response(null, { status: 302, headers });
   } catch (error) {
     if (error instanceof LoginFailed) return failed(error.reason);

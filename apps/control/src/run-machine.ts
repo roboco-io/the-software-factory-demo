@@ -156,6 +156,9 @@ interface StoredRun {
   approvalStartedAt?: number;
   approvalPolls?: number;
   mergeAttempted?: boolean;
+  /** The last tier written to the repository, so polling writes it only when it changes. */
+  recordedTier?: string;
+  recordedHeadSha?: string;
 }
 
 /** What an operator's stop request did. */
@@ -242,6 +245,7 @@ export class RunMachine {
           repo: run.repo,
           issueNumber: run.issueNumber,
           ts: now,
+          title: run.title,
         },
         MAX_ACTIVE_RUNS,
       );
@@ -523,7 +527,9 @@ export class RunMachine {
       case "pr_opened": {
         // Check the policy and the file list before any money goes to the reviewer.
         const pr = await this.openPullRequest(run);
-        await this.evaluate(run, pr);
+        await this.recordHead(run);
+        const { tier } = await this.evaluate(run, pr);
+        await this.recordTier(run, tier);
         await this.transition(run, "reviewing", null);
         await this.deps.storage.setAlarm(this.deps.now());
         return;
@@ -582,6 +588,23 @@ export class RunMachine {
       policy: parsed.policy,
       tier: classifyPullRequest(listed.files, parsed.policy),
     };
+  }
+
+  /** Writes the pull request head once. A failure throws, so the step is retried. */
+  private async recordHead(run: StoredRun): Promise<void> {
+    if (run.headSha === undefined || run.recordedHeadSha === run.headSha)
+      return;
+    await this.deps.repo.recordFacts({ runId: run.id, headSha: run.headSha });
+    run.recordedHeadSha = run.headSha;
+    await this.save(run);
+  }
+
+  /** Writes the tier only when it differs from the last written one. */
+  private async recordTier(run: StoredRun, tier: Tier): Promise<void> {
+    if (run.recordedTier === tier) return;
+    await this.deps.repo.recordFacts({ runId: run.id, tier });
+    run.recordedTier = tier;
+    await this.save(run);
   }
 
   private async review(run: StoredRun): Promise<void> {
@@ -666,7 +689,10 @@ export class RunMachine {
       await this.deps.storage.deleteAlarm();
       return;
     }
+    // A run started before migration 0006 never recorded its head: do it once here.
+    await this.recordHead(run);
     const { policy, tier } = await this.evaluate(run, pr);
+    await this.recordTier(run, tier);
     const checks = await this.deps.pulls.listChecks(run.repo, run.headSha);
     const reviews = await this.deps.pulls.listReviews(run.repo, run.prNumber);
     const decision =

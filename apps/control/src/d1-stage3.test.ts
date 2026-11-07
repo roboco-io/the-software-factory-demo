@@ -75,7 +75,7 @@ describe("stage 3 migration", () => {
   it("accepts every state and reason code, and still rejects free text", () => {
     const { exec } = setup();
     exec(
-      "INSERT INTO runs VALUES ('r', 'acme/demo', 1, 'queued', NULL, NULL, 1, 1)",
+      "INSERT INTO runs (id, repo, issue_number, state, reason_code, pr_number, created_at, updated_at) VALUES ('r', 'acme/demo', 1, 'queued', NULL, NULL, 1, 1)",
     );
     for (const state of STATES) exec(`UPDATE runs SET state = '${state}'`);
     for (const code of REASON_CODES)
@@ -232,12 +232,12 @@ describe("D1RunRepo for review and merge", () => {
 describe("stopped_by_operator migration", () => {
   it("is the fifth migration and accepts the new code only after it", () => {
     const files = readMigrations();
-    expect(files).toHaveLength(5);
+    expect(files).toHaveLength(6);
     const insert = `INSERT INTO runs VALUES ('r', 'acme/demo', 1, 'needs_human', 'stopped_by_operator', NULL, 1, 2);
       INSERT INTO events (run_id, ts, kind, reason_code) VALUES ('r', 2, 'transition', 'stopped_by_operator')`;
     const before = createTestD1(files.slice(0, 4));
     expect(() => before.exec(insert)).toThrow(/CHECK/);
-    const after = createTestD1(files);
+    const after = createTestD1(files.slice(0, 5));
     expect(() => after.exec(insert)).not.toThrow();
   });
 

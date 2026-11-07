@@ -13,7 +13,18 @@ export interface Counts {
 export interface Project {
   repo: string;
   counts: Counts;
+  /** Runs that need a person now. */
+  attention: number;
+  /** Null when a run used a model without a known price. */
+  costUsd: number | null;
 }
+export interface RunCost {
+  status: "measured" | "not_measured" | "unknown";
+  totalUsd: number | null;
+  implementUsd: number | null;
+  reviewUsd: number | null;
+}
+export type ReviewAction = "approve" | "request_changes";
 export interface RunSummary {
   id: string;
   repo: string;
@@ -21,6 +32,10 @@ export interface RunSummary {
   state: string;
   reasonCode: string | null;
   prNumber: number | null;
+  title: string | null;
+  tier: string | null;
+  headSha: string | null;
+  cost: RunCost;
   createdAt: number;
   updatedAt: number;
 }
@@ -58,6 +73,8 @@ export interface Api {
   runs(repo: string, cursor?: string): Promise<RunsPage>;
   run(id: string): Promise<RunDetail>;
   stop(id: string): Promise<void>;
+  /** Starts the approval. Resolves with the address the browser must go to. */
+  review(id: string, action: ReviewAction, headSha: string): Promise<string>;
   logout(): Promise<void>;
 }
 
@@ -101,6 +118,19 @@ export function createApi(
       await call(`/api/runs/${encodeURIComponent(id)}/stop`, {
         method: "POST",
       });
+    },
+    review: async (id, action, headSha) => {
+      const body = await call<{ redirect?: unknown }>(
+        `/api/runs/${encodeURIComponent(id)}/review`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action, headSha }),
+        },
+      );
+      if (typeof body?.redirect !== "string")
+        throw new ApiError(200, "bad_response");
+      return body.redirect;
     },
     logout: async () => {
       await call("/api/auth/logout", { method: "POST" });
