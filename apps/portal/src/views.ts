@@ -5,6 +5,7 @@ import {
   type Me,
   type Project,
   type RunCost,
+  type TokenUsage,
   type RunDetail,
   type RunSummary,
 } from "./api";
@@ -29,7 +30,9 @@ import {
   costUsdText,
   isAttention,
   isGithubAuthorize,
+  costLine,
   moneyText,
+  tokenCount,
   shortSha,
 } from "./console-labels";
 import {
@@ -312,6 +315,7 @@ function runRow(run: RunSummary, now: number) {
         h("time", { datetime: started.iso }, started.text),
         ` · 총 ${durationText(Math.max(0, end - run.createdAt))}`,
       ),
+      h("div", { class: "run-cost" }, costLine(run.cost)),
     ),
     rail(stageCells(run, now), outcome.tone),
   );
@@ -542,20 +546,72 @@ function costSection(cost: RunCost) {
       : cost.status === "measured"
         ? "기록 없음"
         : moneyText({ status: cost.status, totalUsd: null });
+  const heading = h("h2", null, "모델 사용량과 비용");
+  if (cost.tokens === null)
+    return h(
+      "section",
+      { class: "card cost" },
+      heading,
+      h(
+        "dl",
+        { class: "counts" },
+        h("dt", null, "합계"),
+        h("dd", null, moneyText(cost)),
+        h("dt", null, "구현"),
+        h("dd", null, part(cost.implementUsd)),
+        h("dt", null, "리뷰"),
+        h("dd", null, part(cost.reviewUsd)),
+      ),
+    );
+  const { implement, review } = cost.tokens;
+  const row = (label: string, t: TokenUsage, money: string) =>
+    h(
+      "tr",
+      null,
+      h("td", null, label),
+      h("td", null, money),
+      h("td", null, tokenCount(t.inputTokens)),
+      h("td", null, tokenCount(t.outputTokens)),
+      h("td", null, tokenCount(t.cacheReadTokens)),
+      h("td", null, tokenCount(t.cacheWriteTokens)),
+    );
+  const total: TokenUsage = {
+    inputTokens: implement.inputTokens + review.inputTokens,
+    outputTokens: implement.outputTokens + review.outputTokens,
+    cacheReadTokens: implement.cacheReadTokens + review.cacheReadTokens,
+    cacheWriteTokens: implement.cacheWriteTokens + review.cacheWriteTokens,
+  };
   return h(
     "section",
     { class: "card cost" },
-    h("h2", null, "모델 사용 비용"),
+    heading,
     h(
-      "dl",
-      { class: "counts" },
-      h("dt", null, "합계"),
-      h("dd", null, moneyText(cost)),
-      h("dt", null, "구현"),
-      h("dd", null, part(cost.implementUsd)),
-      h("dt", null, "리뷰"),
-      h("dd", null, part(cost.reviewUsd)),
+      "div",
+      { class: "cost-scroll" },
+      h(
+        "table",
+        null,
+        h(
+          "thead",
+          null,
+          h(
+            "tr",
+            null,
+            ...["단계", "비용", "입력", "출력", "캐시 읽기", "캐시 쓰기"].map(
+              (name) => h("th", { scope: "col" }, name),
+            ),
+          ),
+        ),
+        h(
+          "tbody",
+          null,
+          row("구현", implement, part(cost.implementUsd)),
+          row("리뷰", review, part(cost.reviewUsd)),
+        ),
+        h("tfoot", null, row("합계", total, moneyText(cost))),
+      ),
     ),
+    h("p", { class: "muted" }, "비용은 토큰 수에 단가를 곱한 추정값입니다."),
   );
 }
 

@@ -78,6 +78,7 @@ describe("console read fields", () => {
         totalUsd: null,
         implementUsd: null,
         reviewUsd: null,
+        tokens: null,
       },
     });
   });
@@ -95,6 +96,28 @@ describe("console read fields", () => {
     expect(cost.totalUsd).toBeCloseTo(5.45);
   });
 
+  it("adds tokens up per phase, across models, with clone counted as implement", async () => {
+    const w = makeWorld();
+    run(w, "r1");
+    usage(w, "r1", "implement", "claude-sonnet-5-5", 100, 10);
+    usage(w, "r1", "clone", "gpt-5.4-nano", 1, 2);
+    const cost = (await getJson(w, "/api/runs/r1"))["run"].cost;
+    expect(cost.tokens).toEqual({
+      implement: {
+        inputTokens: 101,
+        outputTokens: 12,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      },
+      review: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      },
+    });
+  });
+
   it("test_unknown_model_not_zero: an unpriced model gives unknown and null", async () => {
     const w = makeWorld();
     run(w, "r1");
@@ -106,6 +129,20 @@ describe("console read fields", () => {
       totalUsd: null,
       implementUsd: null,
       reviewUsd: null,
+      tokens: {
+        implement: {
+          inputTokens: MILLION,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        },
+        review: {
+          inputTokens: 5,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        },
+      },
     });
     const p = (await getJson(w, "/api/projects"))["projects"][0];
     expect(p.costUsd).toBeNull();

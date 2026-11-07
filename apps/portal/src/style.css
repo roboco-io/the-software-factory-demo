@@ -309,6 +309,47 @@ ol.flow li::before {
   font-size: 0.85rem;
 }
 
+.run-cost {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* The table scrolls inside its card, so a narrow screen keeps the page itself from scrolling. */
+.cost-scroll {
+  overflow-x: auto;
+}
+
+.cost table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.cost th,
+.cost td {
+  padding: 4px 5px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Headings may wrap so the cost column stays in view at phone width. */
+.cost thead th {
+  white-space: normal;
+  word-break: keep-all;
+}
+
+.cost th:first-child,
+.cost td:first-child {
+  text-align: left;
+  padding-left: 0;
+}
+
+.cost tfoot td {
+  border-bottom: 0;
+  font-weight: 700;
+}
+
 .toolbar .legend {
   margin: 0.4rem 0 0;
   font-size: 0.85rem;
@@ -492,6 +533,7 @@ ol.rail small {
 }
 
 .delta {
+  display: inline-block;
   font-size: 0.85rem;
 }
 

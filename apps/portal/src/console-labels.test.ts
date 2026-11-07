@@ -3,13 +3,53 @@ import {
   costUsdText,
   isAttention,
   isGithubAuthorize,
+  costLine,
   moneyText,
+  tokenCount,
+  tokenCountShort,
+  tokenTotal,
   shortSha,
 } from "./console-labels";
 
 const DAY = 86_400_000;
 
+const USAGE = (i: number, o = 0, cr = 0, cw = 0) => ({
+  inputTokens: i,
+  outputTokens: o,
+  cacheReadTokens: cr,
+  cacheWriteTokens: cw,
+});
+
+describe("tokens", () => {
+  it("adds every kind of token", () => {
+    expect(tokenTotal(USAGE(1, 2, 3, 4))).toBe(10);
+  });
+  it("writes full and short counts", () => {
+    expect(tokenCount(1234567)).toBe("1,234,567");
+    expect(tokenCountShort(999)).toBe("999");
+    expect(tokenCountShort(9999)).toBe("9,999");
+    expect(tokenCountShort(12_345)).toBe("1.2만");
+    expect(tokenCountShort(250_000_000)).toBe("2.5억");
+  });
+  it("gives one line for a run in each cost status", () => {
+    const tokens = { implement: USAGE(10_000), review: USAGE(2_000) };
+    expect(costLine({ status: "measured", totalUsd: 0.47, tokens })).toBe(
+      "토큰 1.2만 · $0.47",
+    );
+    expect(costLine({ status: "unknown", totalUsd: null, tokens })).toBe(
+      "토큰 1.2만 · 비용 계산 불가",
+    );
+    expect(
+      costLine({ status: "not_measured", totalUsd: null, tokens: null }),
+    ).toBe("토큰과 비용 측정 전");
+  });
+});
+
 describe("moneyText", () => {
+  it("keeps a small amount from reading as zero", () => {
+    expect(moneyText({ status: "measured", totalUsd: 0.0008 })).toBe("$0.0008");
+    expect(moneyText({ status: "measured", totalUsd: 0.01 })).toBe("$0.01");
+  });
   it("names each cost status", () => {
     expect(moneyText({ status: "not_measured", totalUsd: null })).toBe(
       "측정 전",
