@@ -19,6 +19,7 @@ const RUN: RunDetail = {
       totalUsd: null,
       implementUsd: null,
       reviewUsd: null,
+      tokens: null,
     },
     path: [],
     createdAt: 1_700_000_000_000,
@@ -751,6 +752,37 @@ describe("project page, console", () => {
     expect(root().querySelectorAll("li.run-row")).toHaveLength(2);
   });
 
+  it("run row shows tokens and cost, and says when it was not measured", async () => {
+    const usage = {
+      inputTokens: 10_000,
+      outputTokens: 2_000,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    };
+    const runs = async () => ({
+      runs: [
+        mk("aaaaaaaaaaa1", "merged", {
+          cost: {
+            status: "measured",
+            totalUsd: 0.47,
+            implementUsd: 0.4,
+            reviewUsd: 0.07,
+            tokens: {
+              implement: usage,
+              review: { ...usage, inputTokens: 0, outputTokens: 0 },
+            },
+          },
+        }),
+        mk("aaaaaaaaaaa2", "merged"),
+      ],
+      nextCursor: null,
+    });
+    await open("/projects/acme/demo", fakeApi({ runs }));
+    const lines = [...root().querySelectorAll(".run-cost")];
+    expect(lines[0]!.textContent).toBe("토큰 1.2만 · $0.47");
+    expect(lines[1]!.textContent).toBe("토큰과 비용 측정 전");
+  });
+
   it("run row shows title and tier", async () => {
     const runs = async () => ({
       runs: [
@@ -799,6 +831,20 @@ describe("run page, console", () => {
         totalUsd: 0.5,
         implementUsd: 0.4,
         reviewUsd: 0.1,
+        tokens: {
+          implement: {
+            inputTokens: 1000,
+            outputTokens: 200,
+            cacheReadTokens: 30,
+            cacheWriteTokens: 4,
+          },
+          review: {
+            inputTokens: 500,
+            outputTokens: 60,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+          },
+        },
       },
     });
     await open("/runs/aaaaaaaaaaa1", fakeApi({ run: async () => run }));
@@ -806,6 +852,25 @@ describe("run page, console", () => {
     expect(t).toContain("$0.50");
     expect(t).toContain("$0.40");
     expect(t).toContain("$0.10");
+    const rows = [...root().querySelectorAll(".cost tbody tr, .cost tfoot tr")];
+    const cells = (r: Element) => [...r.children].map((c) => c.textContent);
+    expect(cells(rows[0]!)).toEqual([
+      "구현",
+      "$0.40",
+      "1,000",
+      "200",
+      "30",
+      "4",
+    ]);
+    expect(cells(rows[1]!)).toEqual(["리뷰", "$0.10", "500", "60", "0", "0"]);
+    expect(cells(rows[2]!)).toEqual([
+      "합계",
+      "$0.50",
+      "1,500",
+      "260",
+      "30",
+      "4",
+    ]);
     await open("/runs/aaaaaaaaaaa1", fakeApi());
     expect(root().querySelector(".cost")?.textContent).toContain("측정 전");
     const unknown = withRun({
@@ -814,10 +879,25 @@ describe("run page, console", () => {
         totalUsd: null,
         implementUsd: null,
         reviewUsd: null,
+        tokens: {
+          implement: {
+            inputTokens: 7,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+          },
+          review: {
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+          },
+        },
       },
     });
     await open("/runs/aaaaaaaaaaa1", fakeApi({ run: async () => unknown }));
     expect(root().querySelector(".cost")?.textContent).toContain("계산 불가");
+    expect(root().querySelectorAll(".cost tbody td")[2]?.textContent).toBe("7");
   });
 });
 

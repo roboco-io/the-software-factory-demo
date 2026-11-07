@@ -43,6 +43,7 @@ const NOT_MEASURED = {
   totalUsd: null,
   implementUsd: null,
   reviewUsd: null,
+  tokens: null,
 };
 
 describe("GET /api/me", () => {

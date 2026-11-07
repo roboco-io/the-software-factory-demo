@@ -18,11 +18,18 @@ export interface Project {
   /** Null when a run used a model without a known price. */
   costUsd: number | null;
 }
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+}
 export interface RunCost {
   status: "measured" | "not_measured" | "unknown";
   totalUsd: number | null;
   implementUsd: number | null;
   reviewUsd: number | null;
+  tokens: { implement: TokenUsage; review: TokenUsage } | null;
 }
 export interface PathStep {
   state: string;
