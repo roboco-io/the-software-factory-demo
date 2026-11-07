@@ -11,6 +11,15 @@ const RUN: RunDetail = {
     state: "awaiting_approval",
     reasonCode: null,
     prNumber: 40,
+    title: null,
+    tier: null,
+    headSha: "abcdef1234567890",
+    cost: {
+      status: "not_measured",
+      totalUsd: null,
+      implementUsd: null,
+      reviewUsd: null,
+    },
     createdAt: 1_700_000_000_000,
     updatedAt: 1_700_000_500_000,
   },
@@ -61,12 +70,18 @@ function fakeApi(
         {
           repo: "acme/demo",
           counts: { active: 1, merged: 2, needs_human: 3, failed: 4 },
+          attention: 5,
+          costUsd: 1.5,
         },
       ],
     }),
     runs: async () => ({ runs: [RUN.run], nextCursor: null }),
     run: async () => RUN,
     stop: async (id) => void calls.push(`stop:${id}`),
+    review: async (id, action, sha) => {
+      calls.push(`review:${id}:${action}:${sha}`);
+      return "https://github.com/login/oauth/authorize?state=s";
+    },
     logout: async () => void calls.push("logout"),
     ...over,
   };
@@ -78,9 +93,14 @@ const root = () => document.querySelector<HTMLElement>("#app")!;
 const flush = async () => {
   for (let i = 0; i < 60; i++) await Promise.resolve();
 };
-async function open(path: string, api: Api, startLogin = async () => {}) {
+async function open(
+  path: string,
+  api: Api,
+  startLogin = async () => {},
+  navigate: (url: string) => void = () => {},
+) {
   window.history.replaceState({}, "", path);
-  const app = mountApp(root(), { api, startLogin });
+  const app = mountApp(root(), { api, startLogin, navigate });
   await flush();
   return app;
 }
@@ -573,5 +593,305 @@ describe("navigation", () => {
     expect(root().querySelector("h1")?.textContent).toContain("프로젝트");
     await open("/nowhere", fakeApi());
     expect(text()).toContain("찾을 수 없습니다");
+  });
+});
+
+const OPERATOR: Me = { role: "operator", login: "boss" };
+const withRun = (over: Partial<RunDetail["run"]>): RunDetail => ({
+  ...RUN,
+  run: { ...RUN.run, ...over },
+});
+
+describe("project page, console", () => {
+  const mk = (id: string, state: string, over = {}) => ({
+    ...RUN.run,
+    id,
+    state,
+    issueNumber: Number(id.slice(-1)),
+    updatedAt: Date.now(),
+    ...over,
+  });
+
+  it("project page shows attention, active, merged and cost cards", async () => {
+    await open("/projects/acme/demo", fakeApi());
+    const cards = root().querySelector(".summary")?.textContent ?? "";
+    expect(cards).toContain("주의 필요");
+    expect(cards).toContain("5");
+    expect(cards).toContain("진행 중");
+    expect(cards).toContain("병합됨");
+    expect(cards).toContain("$1.50");
+    await open(
+      "/projects/acme/demo",
+      fakeApi({
+        projects: async () => ({
+          projects: [
+            {
+              repo: "acme/demo",
+              counts: { active: 0, merged: 0, needs_human: 0, failed: 0 },
+              attention: 0,
+              costUsd: null,
+            },
+          ],
+        }),
+      }),
+    );
+    expect(root().querySelector(".summary")?.textContent).toContain(
+      "계산 불가",
+    );
+  });
+
+  it("still lists runs when the project summary cannot be read", async () => {
+    await open(
+      "/projects/acme/demo",
+      fakeApi({
+        projects: async () => {
+          throw new ApiError(500, "error");
+        },
+      }),
+    );
+    expect(root().querySelector('a[href="/runs/aaaaaaaaaaa1"]')).not.toBeNull();
+    expect(root().querySelector(".summary")).toBeNull();
+  });
+
+  it("attention runs sort first", async () => {
+    const runs = async () => ({
+      runs: [
+        mk("aaaaaaaaaaa1", "merged"),
+        mk("aaaaaaaaaaa2", "awaiting_approval"),
+      ],
+      nextCursor: null,
+    });
+    await open("/projects/acme/demo", fakeApi({ runs }));
+    const ids = [
+      ...root().querySelectorAll("li.run-row a[href^='/runs/']"),
+    ].map((a) => a.getAttribute("href"));
+    expect(ids).toEqual(["/runs/aaaaaaaaaaa2", "/runs/aaaaaaaaaaa1"]);
+  });
+
+  it("attention filter", async () => {
+    const runs = async () => ({
+      runs: [
+        mk("aaaaaaaaaaa1", "merged"),
+        mk("aaaaaaaaaaa2", "awaiting_approval"),
+      ],
+      nextCursor: null,
+    });
+    await open("/projects/acme/demo", fakeApi({ runs }));
+    button("주의가 필요한 실행만")!.click();
+    expect(root().querySelectorAll("li.run-row")).toHaveLength(1);
+    expect(button("주의가 필요한 실행만")!.getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    button("주의가 필요한 실행만")!.click();
+    expect(root().querySelectorAll("li.run-row")).toHaveLength(2);
+  });
+
+  it("run row shows title and tier", async () => {
+    const runs = async () => ({
+      runs: [
+        mk("aaaaaaaaaaa1", "merged", { title: "로그인 고치기", tier: "T2" }),
+      ],
+      nextCursor: null,
+    });
+    await open("/projects/acme/demo", fakeApi({ runs }));
+    const row = root().querySelector("li.run-row")!;
+    expect(row.textContent).toContain("로그인 고치기");
+    expect(row.textContent).toContain("T2");
+  });
+
+  it("missing title keeps the issue number", async () => {
+    await open("/projects/acme/demo", fakeApi());
+    expect(root().querySelector("li.run-row")?.textContent).toContain(
+      "이슈 #7",
+    );
+  });
+
+  it("test_title_is_text: a title with markup is shown as text", async () => {
+    const evil = '<img src=x onerror="alert(1)"><script>1</script>';
+    const runs = async () => ({
+      runs: [mk("aaaaaaaaaaa1", "merged", { title: evil, tier: evil })],
+      nextCursor: null,
+    });
+    await open("/projects/acme/demo", fakeApi({ runs }));
+    expect(
+      root().querySelector("li.run-row img, li.run-row script"),
+    ).toBeNull();
+    expect(root().querySelector("li.run-row")?.textContent).toContain(evil);
+    await open(
+      "/runs/aaaaaaaaaaa1",
+      fakeApi({ run: async () => withRun({ title: evil }) }),
+    );
+    expect(root().querySelector("img, script")).toBeNull();
+    expect(text()).toContain(evil);
+  });
+});
+
+describe("run page, console", () => {
+  it("run page shows implement and review cost", async () => {
+    const run = withRun({
+      cost: {
+        status: "measured",
+        totalUsd: 0.5,
+        implementUsd: 0.4,
+        reviewUsd: 0.1,
+      },
+    });
+    await open("/runs/aaaaaaaaaaa1", fakeApi({ run: async () => run }));
+    const t = root().querySelector(".cost")?.textContent ?? "";
+    expect(t).toContain("$0.50");
+    expect(t).toContain("$0.40");
+    expect(t).toContain("$0.10");
+    await open("/runs/aaaaaaaaaaa1", fakeApi());
+    expect(root().querySelector(".cost")?.textContent).toContain("측정 전");
+    const unknown = withRun({
+      cost: {
+        status: "unknown",
+        totalUsd: null,
+        implementUsd: null,
+        reviewUsd: null,
+      },
+    });
+    await open("/runs/aaaaaaaaaaa1", fakeApi({ run: async () => unknown }));
+    expect(root().querySelector(".cost")?.textContent).toContain("계산 불가");
+  });
+});
+
+describe("approval", () => {
+  it("test_approve_operator_only: observer and anonymous see no button", async () => {
+    await open("/runs/aaaaaaaaaaa1", fakeApi({ user: OPERATOR }));
+    expect(button("승인")).toBeDefined();
+    expect(button("수정 요청")).toBeDefined();
+    expect(text()).toContain("abcdef1");
+    expect(text()).toContain("결정은 운영자 본인의 GitHub 리뷰로 기록됩니다.");
+    await open(
+      "/runs/aaaaaaaaaaa1",
+      fakeApi({ user: { role: "observer", login: "v" } }),
+    );
+    expect(button("승인")).toBeUndefined();
+    expect(button("수정 요청")).toBeUndefined();
+    await open("/runs/aaaaaaaaaaa1", fakeApi());
+    expect(button("승인")).toBeUndefined();
+  });
+
+  it("test_approve_only_awaiting: no box for other states or without a commit", async () => {
+    await open(
+      "/runs/aaaaaaaaaaa1",
+      fakeApi({
+        user: OPERATOR,
+        run: async () => withRun({ state: "reviewing" }),
+      }),
+    );
+    expect(button("승인")).toBeUndefined();
+    await open(
+      "/runs/aaaaaaaaaaa1",
+      fakeApi({
+        user: OPERATOR,
+        run: async () => withRun({ headSha: null }),
+      }),
+    );
+    expect(button("승인")).toBeUndefined();
+  });
+
+  it("redirect goes to the returned GitHub address only", async () => {
+    const navigate = vi.fn();
+    const api = fakeApi({ user: OPERATOR });
+    await open("/runs/aaaaaaaaaaa1", api, undefined, navigate);
+    button("승인")!.click();
+    await flush();
+    expect(api.calls).toContain("review:aaaaaaaaaaa1:approve:abcdef1234567890");
+    expect(navigate).toHaveBeenCalledWith(
+      "https://github.com/login/oauth/authorize?state=s",
+    );
+
+    const bad = vi.fn();
+    await open(
+      "/runs/aaaaaaaaaaa1",
+      fakeApi({ user: OPERATOR, review: async () => "https://evil.example/x" }),
+      undefined,
+      bad,
+    );
+    button("수정 요청")!.click();
+    await flush();
+    expect(bad).not.toHaveBeenCalled();
+    expect(root().querySelector('[role="alert"]')).not.toBeNull();
+  });
+
+  it("sends request_changes", async () => {
+    const api = fakeApi({ user: OPERATOR });
+    await open("/runs/aaaaaaaaaaa1", api);
+    button("수정 요청")!.click();
+    await flush();
+    expect(api.calls).toContain(
+      "review:aaaaaaaaaaa1:request_changes:abcdef1234567890",
+    );
+  });
+
+  it("test_head_changed_notice: explains a moved commit and reloads the run", async () => {
+    const run = vi.fn(async () => RUN);
+    await open(
+      "/runs/aaaaaaaaaaa1",
+      fakeApi({
+        user: OPERATOR,
+        run,
+        review: async () => {
+          throw new ApiError(409, "head_changed");
+        },
+      }),
+    );
+    const before = run.mock.calls.length;
+    button("승인")!.click();
+    await flush();
+    expect(text()).toContain("커밋이 바뀌었습니다");
+    expect(run.mock.calls.length).toBeGreaterThan(before);
+  });
+
+  it("explains not_awaiting_approval and other failures", async () => {
+    await open(
+      "/runs/aaaaaaaaaaa1",
+      fakeApi({
+        user: OPERATOR,
+        review: async () => {
+          throw new ApiError(409, "not_awaiting_approval");
+        },
+      }),
+    );
+    button("승인")!.click();
+    await flush();
+    expect(text()).toContain("승인을 기다리는 상태가 아닙니다");
+    await open(
+      "/runs/aaaaaaaaaaa1",
+      fakeApi({
+        user: OPERATOR,
+        review: async () => {
+          throw new ApiError(0, "network");
+        },
+      }),
+    );
+    button("승인")!.click();
+    await flush();
+    expect(text()).toContain("시작하지 못했습니다");
+  });
+});
+
+describe("review notice", () => {
+  it("test_review_notice_cleared_on_reload: shows a notice per result and removes the query", async () => {
+    const cases: [string, string][] = [
+      ["ok", "리뷰를 GitHub에 남겼습니다"],
+      ["stale", "커밋이 바뀌어"],
+      ["denied", "권한이 없어"],
+      ["failed", "리뷰를 남기지 못했습니다"],
+    ];
+    for (const [code, words] of cases) {
+      await open(`/runs/aaaaaaaaaaa1?review=${code}`, fakeApi());
+      expect(text()).toContain(words);
+      expect(window.location.search).toBe("");
+      expect(window.location.pathname).toBe("/runs/aaaaaaaaaaa1");
+    }
+  });
+
+  it("ignores an unknown value and shows no notice", async () => {
+    await open("/runs/aaaaaaaaaaa1?review=<b>x</b>", fakeApi());
+    expect(root().querySelector(".message")).toBeNull();
+    expect(root().querySelector("b")).toBeNull();
   });
 });

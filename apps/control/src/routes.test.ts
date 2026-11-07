@@ -60,7 +60,7 @@ describe("route table", () => {
       nonGet
         .filter((x) => x.route.minRole === "operator")
         .map((x) => x.route.path),
-    ).toEqual(["/api/runs/:id/stop"]);
+    ).toEqual(["/api/runs/:id/stop", "/api/runs/:id/review"]);
   });
 });
 
@@ -148,10 +148,27 @@ describe("every non-GET route (proof for AGENTS.md: observers cannot write)", ()
     it(`${method} ${route.path}: an operator with a same-origin request succeeds`, async () => {
       const w = makeWorld();
       seedRuns(w);
+      w.exec(`UPDATE runs SET head_sha = 'abc' WHERE id = 'aaaaaaaaaaa1'`);
+      const base = req(path, { method, cookie: await operatorCookie() });
+      // Each write route gets the valid body it needs; the refusals above use no body at all.
+      const reviewBody = JSON.stringify({ action: "approve", headSha: "abc" });
       const res = await handleRequest(
-        req(path, { method, cookie: await operatorCookie() }),
+        route.path === "/api/runs/:id/review"
+          ? new Request(base, {
+              body: reviewBody,
+              headers: new Headers([
+                ...base.headers,
+                ["content-type", "application/json"],
+              ]),
+            })
+          : base,
         w.env,
       );
+      if (route.path === "/api/runs/:id/review") {
+        expect(res.status).toBe(200);
+        expect(w.stopCalls).toEqual([]);
+        return;
+      }
       expect(res.status).toBe(202);
       expect(w.stopCalls).toEqual([
         { name: "acme/demo#7", runId: "aaaaaaaaaaa1" },

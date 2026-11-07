@@ -122,7 +122,7 @@ control Worker(`software-factory-control`)는 `/api/*` 요청을 직접 처리�
 
 ### GitHub OAuth App 만들기
 
-로그인은 기존 GitHub App(웹훅과 PR 작업용)과 별개인 **OAuth App**으로 처리한다. OAuth App은 사용자의 신원(숫자 ID와 로그인 이름)을 확인하는 데만 쓰며 권한 범위(scope)를 요청하지 않는다. GitHub 토큰은 저장하지 않는다. 사람이 다음 순서로 만든다.
+로그인은 기존 GitHub App(웹훅과 PR 작업용)과 별개인 **OAuth App**으로 처리한다. OAuth App은 일반 로그인에서 사용자의 신원(숫자 ID와 로그인 이름)을 확인하는 데만 쓰며 권한 범위(scope)를 요청하지 않는다. 예외는 운영자의 PR 승인 흐름 하나이며, 그 흐름은 `public_repo`를 요청한다(아래 "콘솔" 절). GitHub 토큰은 저장하지 않는다. 사람이 다음 순서로 만든다.
 
 1. GitHub의 Settings, Developer settings, OAuth Apps에서 New OAuth App을 선택한다. 이 저장소의 조직(`roboco-io`) 소유로 만들려면 조직의 설정에서 같은 메뉴를 쓴다.
 2. Application name은 임의로 정한다. Homepage URL에는 Worker 주소 `https://<Worker 주소>`를 적는다. Worker 주소는 `https://software-factory-control.<계정 서브도메인>.workers.dev` 형태이며, 배포 워크플로의 변수 `WORKERS_SUBDOMAIN`과 같은 서브도메인이다.
@@ -135,7 +135,7 @@ control Worker(`software-factory-control`)는 `/api/*` 요청을 직접 처리�
 
 ### 로그인 흐름
 
-`GET /api/auth/login`은 무작위 `state`와 PKCE `code_verifier`를 만들어 짧은 수명(10분)의 쿠키 `__Host-oauth`에 넣고, `state`와 `code_challenge`(S256)만 붙여 GitHub의 승인 화면으로 보낸다. `scope`는 보내지 않는다. 콜백 `GET /api/auth/callback`은 쿼리의 `state`와 쿠키의 `state`를 모든 바이트를 끝까지 비교하는 방식(처음 다른 곳에서 멈추지 않음)으로 확인하고, 일치하면 코드를 토큰으로 바꿔 GitHub의 `/user`를 한 번 호출한다. 응답에서 숫자 `id`와 `login`만 꺼내고 토큰은 버린다. 토큰은 저장, 로그, 응답 어디에도 남지 않는다. 응답 모양이 기대와 다르거나(숫자 ID가 아니거나 로그인 이름의 형식이 틀리는 등) 어떤 단계든 실패하면 `/?login=failed`로 이동하며, 실패 이유는 고정된 이름(`denied`, `bad_request`, `state_mismatch`, `token_exchange`, `profile`, `unexpected`)으로 로그에만 남긴다. 사용자 화면과 주소에는 이유가 나타나지 않는다.
+`GET /api/auth/login`은 무작위 `state`와 PKCE `code_verifier`를 만들어 짧은 수명(10분)의 쿠키 `__Host-oauth`에 넣고, `state`와 `code_challenge`(S256)만 붙여 GitHub의 승인 화면으로 보낸다. 로그인에서 `scope`는 보내지 않는다. 콜백 `GET /api/auth/callback`은 쿼리의 `state`와 쿠키의 `state`를 모든 바이트를 끝까지 비교하는 방식(처음 다른 곳에서 멈추지 않음)으로 확인하고, 일치하면 코드를 토큰으로 바꿔 GitHub의 `/user`를 한 번 호출한다. 응답에서 숫자 `id`와 `login`만 꺼내고 토큰은 버린다. 토큰은 저장, 로그, 응답 어디에도 남지 않는다. 응답 모양이 기대와 다르거나(숫자 ID가 아니거나 로그인 이름의 형식이 틀리는 등) 어떤 단계든 실패하면 `/?login=failed`로 이동하며, 실패 이유는 고정된 이름(`denied`, `bad_request`, `state_mismatch`, `token_exchange`, `profile`, `unexpected`)으로 로그에만 남긴다. 사용자 화면과 주소에는 이유가 나타나지 않는다.
 
 세션은 서버에 저장하지 않는다. `id`, `login`, 만료 시각 세 값을 HMAC-SHA256으로 서명한 문자열이 쿠키 `__Host-session`(HttpOnly, Secure, SameSite=Lax, Path=/, Domain 없음)에 담기며 7일 뒤 만료된다. 만료 시각은 서명된 내용 안에 있어 쿠키를 고쳐서 늘릴 수 없다. 로그아웃(`POST /api/auth/logout`)은 쿠키를 지우지만, 서버에 세션 목록이 없으므로 이미 복사된 쿠키는 만료 시각까지 유효하다. 즉시 모든 세션을 끊으려면 `SESSION_SECRET`을 바꾼다. 로그인은 GitHub 쪽에 승인 기록(OAuth App 권한 부여)을 남기며, 사용자는 GitHub 설정의 Applications에서 직접 취소할 수 있다. 우리 쪽에서는 이 기록을 지우지 않는다.
 
@@ -152,12 +152,13 @@ control Worker(`software-factory-control`)는 `/api/*` 요청을 직접 처리�
 | `/api/projects`                   | GET    | 익명      | `PROJECTS`의 저장소별 실행 수(진행 중, 병합됨, 사람 확인 필요, 실패)                                                              |
 | `/api/projects/:owner/:repo/runs` | GET    | 익명      | 그 저장소의 실행 목록. `PROJECTS`에 없으면 404. 새 것부터, `limit`(기본 20, 최대 50)과 `cursor`로 쪽 나누기                       |
 | `/api/runs/:id`                   | GET    | 익명      | 실행과 이벤트(순서대로). 모르는 ID이거나 저장소가 `PROJECTS`에서 빠졌으면 404                                                     |
-| `/api/runs/:id/stop`              | POST   | 운영자    | 활성 실행의 중지를 요청(202). 유일한 쓰기 API                                                                                     |
+| `/api/runs/:id/stop`              | POST   | 운영자    | 활성 실행의 중지를 요청(202)                                                                                                      |
+| `/api/runs/:id/review`            | POST   | 운영자    | 승인 또는 수정 요청을 시작한다. GitHub 승인 화면의 주소를 돌려준다(아래 "콘솔" 절)                                                |
 | `/api/auth/login`, `/callback`    | GET    | 익명      | 로그인 시작과 완료                                                                                                                |
 | `/api/auth/logout`                | POST   | 익명      | 내 쿠키만 지움. 이 경로와 웹훅만 운영자가 아니어도 POST할 수 있고, 시험이 이 두 경로 외에 낮은 역할의 쓰기 경로가 없음을 확인한다 |
 | `/api/github/webhook`             | POST   | 서명      | GitHub 웹훅. 세션이 아니라 HMAC 서명으로 확인한다                                                                                 |
 
-읽기 API의 응답 필드는 코드에서 하나씩 나열한 목록(`apps/control/src/read-repo.ts`)이며, 실행은 `id, repo, issueNumber, state, reasonCode, prNumber, createdAt, updatedAt`, 이벤트는 `id, ts, kind, fromState, toState, reasonCode`뿐이다. 저장된 사유 코드가 고정 코드 목록에 없으면 `null`로 바꿔 보낸다. 이슈 제목, 본문, 에이전트 출력, 토큰은 D1에 저장하지 않으므로 어떤 응답에도 나타나지 않는다.
+읽기 API의 응답 필드는 코드에서 하나씩 나열한 목록(`apps/control/src/read-repo.ts`)이며, 실행은 `id, repo, issueNumber, state, reasonCode, prNumber, title, tier, headSha, cost, createdAt, updatedAt`, 이벤트는 `id, ts, kind, fromState, toState, reasonCode`뿐이다. 저장된 사유 코드가 고정 코드 목록에 없으면 `null`로 바꿔 보낸다. 이슈 본문, 에이전트 출력, 토큰은 D1에 저장하지 않으므로 어떤 응답에도 나타나지 않는다. 이슈 제목은 콘솔 기능 이후 `title`로 저장되며 데이터로만 취급한다(포털은 텍스트 노드로만 그린다).
 
 상태를 바꾸는 요청(POST)은 `SameSite=Lax` 쿠키에 더해 `Origin` 헤더가 요청 주소의 출처와 정확히 같아야 한다. 헤더가 없거나 다르면 로그인한 운영자여도 403 `bad_origin`이다. 웹훅은 GitHub가 `Origin`을 보내지 않으므로 이 검사에서 빠지고 서명으로 확인한다.
 
@@ -198,6 +199,35 @@ API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requ
 - 배포된 Worker가 `_headers`를 적용하는 것. 같은 설정의 로컬 실행으로만 확인했다.
 - 실제 `workers.dev` 주소에서 `__Host-` 쿠키가 저장되고 로그인 뒤 역할이 바뀌는 것, Safari와 모바일 브라우저의 동작.
 - 실행 목록 조회는 `runs` 테이블에 `(repo, created_at)` 인덱스가 없어 저장소의 행을 훑는다. 현재 규모에서는 문제가 없다고 보지만 실측하지 않았다.
+
+## 콘솔: 승인, 비용 (4단계 이후)
+
+이 절은 2026-11-07 기준 코드가 하는 일을 적는다. 모두 가짜 GitHub와 메모리 D1로 시험했고 실제 서비스에서는 해 보지 않았다.
+
+### 승인과 수정 요청
+
+`POST /api/runs/:id/review`는 운영자만 호출할 수 있고, 본문은 `{"action": "approve" | "request_changes", "headSha": "<커밋>"}` 형식의 JSON이다. 실행이 `PROJECTS`의 저장소에 속하고 상태가 `awaiting_approval`이며 `headSha`가 저장된 PR 머리 커밋과 같을 때만 진행한다. 아니면 404, 409 `not_awaiting_approval`, 409 `head_changed`를 돌려준다. 진행하면 요청 내용(실행 ID, 동작, 커밋, 운영자 ID, 만료)을 서명한 쿠키 `__Host-review`(10분)에 담고, 로그인과 같은 PKCE 흐름의 GitHub 승인 화면 주소를 `{"redirect": ...}`로 돌려준다. 이때 요청하는 권한 범위가 `public_repo`다.
+
+운영자가 GitHub에서 허용하면 기존 콜백 `GET /api/auth/callback`이 `state`를 쿠키와 대조한 뒤 리뷰를 마무리한다. 로그인한 사람이 요청한 운영자와 같은지, 여전히 `OPERATOR_IDS`에 있는지, 실행이 여전히 승인 대기이며 머리 커밋이 같은지를 확인하고, GitHub에서 PR의 현재 머리 커밋을 다시 읽어 한 번 더 비교한다. 모두 맞으면 운영자의 토큰으로 PR 리뷰(`APPROVE` 또는 `REQUEST_CHANGES`)를 남긴다. 리뷰 본문은 코드에 고정된 문장이며 요청의 내용은 들어가지 않는다. 결과는 `/runs/<ID>?review=<결과>`로 이동해 알리며 결과는 `ok`, `stale`, `denied`, `failed` 중 하나다. 이유는 고정된 이름으로 로그에만 남는다.
+
+사용자 토큰은 이 콜백 요청 하나의 변수에만 있고 저장하지 않으며 로그, 응답, 주소에도 남기지 않는다. 승인 흐름에서만 `public_repo`를 요청하므로, 비공개 저장소의 PR에는 리뷰를 남기지 못하고 `failed`로 끝난다. 병합 여부는 이 API가 정하지 않는다. 남긴 리뷰를 3단계의 판정이 GitHub에서 읽어 반영한다.
+
+### 비용 측정과 표시
+
+출구 핸들러는 허용된 모델 응답을 둘로 나누어, 한쪽은 그대로 에이전트에 돌려주고 다른 쪽에서 토큰 수(입력, 출력, 캐시 읽기, 캐시 쓰기)를 읽어 D1의 `run_usage` 표에 단계와 모델별로 기록한다. 측정이나 기록이 실패해도 응답은 바뀌지 않고, 실패 종류만 로그에 남는다. 읽기 API는 실행마다 `cost`(`status`, `totalUsd`, `implementUsd`, `reviewUsd`)를, 프로젝트 목록은 저장소마다 `attention`(사람이 확인할 실행 수)과 `costUsd`를 돌려준다. `status`는 기록이 없으면 `not_measured`, 단가가 없는 모델이 있으면 `unknown`(합계는 `null`), 모두 단가가 있으면 `measured`다. `attention`은 `awaiting_approval` 실행과, 최근 7일 안에 바뀐 `needs_human` 또는 `failed` 실행의 수다.
+
+단가는 `apps/control/src/pricing.ts`에 있고 2026-11-07에 공급사 문서에서 읽었다(100만 토큰당 달러). `claude-sonnet-5-5`는 입력 2, 출력 10, 캐시 읽기 0.10, 캐시 쓰기 2.50이고, `gpt-5.4-nano`는 입력 0.20, 출력 1.25, 캐시 읽기 0.02, 캐시 쓰기 0.20이다. 공급사가 단가를 바꾸면 이 파일을 사람이 고쳐야 하며 자동으로 갱신하지 않는다. 월 예산 한도, 지출 예약, 엔진 전환은 이 단계에 없고 5단계 몫으로 남아 있다.
+
+### 마이그레이션 0006
+
+`apps/control/migrations/0006_console.sql`은 `runs` 표에 `title`, `tier`, `head_sha` 열을 더하고 `run_usage` 표와 `run_id` 인덱스를 만든다. 기존 행의 새 열은 `NULL`이다. 사람이 할 일은 배포 전에 이 파일이 배포 워크플로의 D1 마이그레이션 적용에 포함되는지 확인하고, 배포 뒤 프로덕션 D1에 적용됐는지 확인하는 것이다. 적용 결과는 아직 확인하지 않았다.
+
+### 확인하지 못한 것
+
+- 실제 저장소의 PR에 실제 운영자 계정으로 승인 또는 수정 요청을 남기는 것.
+- 조직이 OAuth App의 접근을 제한하는 경우(조직의 OAuth App 접근 제한)에 승인이 어떻게 실패하는지.
+- workerd에서 실제 모델 스트림을 읽어 토큰 수를 기록하는 것. 시험은 가짜 스트림으로 했다.
+- 프로덕션 D1에 0006을 적용한 결과.
 
 ## 실서비스에서 아직 확인하지 않은 것
 

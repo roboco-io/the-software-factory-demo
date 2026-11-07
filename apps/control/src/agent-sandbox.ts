@@ -14,6 +14,7 @@ const INACTIVITY_TIMEOUT_MS = 25 * 60 * 1000;
 const REPO_KEY = "repo";
 const MODEL_KEY = "model";
 const PHASE_KEY = "phase";
+const RUN_ID_KEY = "runId";
 
 /**
  * One container per sandbox id; the implement and the review phase use different
@@ -62,19 +63,24 @@ export class AgentSandbox extends DurableObject<ControlEnv> {
   }
 
   /** Starts the implement-phase sandbox: it reaches Anthropic and the run's repository. */
-  async start(repo: string, model: string): Promise<void> {
-    await this.bind("implement", repo, model);
+  async start(repo: string, model: string, runId?: string): Promise<void> {
+    await this.bind("implement", repo, model, runId);
   }
 
   /** Starts the review-phase sandbox: it reaches OpenAI and the run's repository. */
-  async startReviewSandbox(repo: string, model: string): Promise<void> {
-    await this.bind("review", repo, model);
+  async startReviewSandbox(
+    repo: string,
+    model: string,
+    runId?: string,
+  ): Promise<void> {
+    await this.bind("review", repo, model, runId);
   }
 
   private async bind(
     phase: SandboxPhase,
     repo: string,
     model: string,
+    runId?: string,
   ): Promise<void> {
     if (!isValidRepo(repo)) throw new Error("invalid repository name");
     if (!isValidModel(model)) throw new Error("invalid model name");
@@ -84,6 +90,9 @@ export class AgentSandbox extends DurableObject<ControlEnv> {
     this.ctx.storage.kv.put(REPO_KEY, repo);
     this.ctx.storage.kv.put(MODEL_KEY, model);
     this.ctx.storage.kv.put(PHASE_KEY, phase);
+    // Never keep a run id from an older start: an unmetered start must not bill the old run.
+    if (runId !== undefined) this.ctx.storage.kv.put(RUN_ID_KEY, runId);
+    else this.ctx.storage.kv.delete(RUN_ID_KEY);
     await this.ensureRunning();
   }
 
@@ -163,6 +172,11 @@ export class AgentSandbox extends DurableObject<ControlEnv> {
     const model = this.ctx.storage.kv.get<string>(MODEL_KEY);
     const phase =
       this.ctx.storage.kv.get<SandboxPhase>(PHASE_KEY) ?? "implement";
+    const storedRunId = this.ctx.storage.kv.get<unknown>(RUN_ID_KEY);
+    const runId =
+      typeof storedRunId === "string" && storedRunId !== ""
+        ? storedRunId
+        : undefined;
     if (repo === undefined || model === undefined)
       throw new Error("sandbox has no repository or model bound");
     if (!this.container.running) {
@@ -178,13 +192,23 @@ export class AgentSandbox extends DurableObject<ControlEnv> {
         this.ctx as unknown as {
           exports: {
             Outbound: (options: {
-              props: { repo: string; model: string; phase: SandboxPhase };
+              props: {
+                repo: string;
+                model: string;
+                phase: SandboxPhase;
+                runId?: string;
+              };
             }) => unknown;
           };
         }
       ).exports;
       const outbound = exportsObject.Outbound({
-        props: { repo, model, phase },
+        props: {
+          repo,
+          model,
+          phase,
+          ...(runId !== undefined ? { runId } : {}),
+        },
       });
       await this.container.interceptAllOutboundHttp(outbound as never);
       await this.container.interceptOutboundHttps("*", outbound as never);

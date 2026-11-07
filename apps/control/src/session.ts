@@ -136,3 +136,56 @@ export function readCookie(
   }
   return undefined;
 }
+
+/**
+ * Signs any JSON object for one named purpose. The purpose is part of what the MAC covers, so a
+ * value signed for one purpose never verifies for another, and never as a session
+ * (a session's MAC covers the bare payload).
+ */
+export async function signPayload(
+  secret: string,
+  purpose: string,
+  data: Record<string, unknown>,
+): Promise<string> {
+  const payload = toBase64Url(encoder.encode(JSON.stringify(data)));
+  const mac = await crypto.subtle.sign(
+    "HMAC",
+    await hmacKey(secret, "sign"),
+    encoder.encode(`${purpose}.${payload}`),
+  );
+  return `${payload}.${toBase64Url(new Uint8Array(mac))}`;
+}
+
+/** The object, or null for a missing secret, a malformed value, a wrong MAC or a payload that is not an object. */
+export async function verifyPayload(
+  secret: string | undefined,
+  purpose: string,
+  value: string | undefined,
+): Promise<Record<string, unknown> | null> {
+  if (secret === undefined || secret === "" || value === undefined) return null;
+  const parts = value.split(".");
+  if (parts.length !== 2) return null;
+  const [payload, mac] = parts as [string, string];
+  const macBytes = fromBase64Url(mac);
+  if (payload === "" || macBytes === null || macBytes.length !== 32)
+    return null;
+  const valid = await crypto.subtle.verify(
+    "HMAC",
+    await hmacKey(secret, "verify"),
+    macBytes,
+    encoder.encode(`${purpose}.${payload}`),
+  );
+  if (!valid) return null;
+  const bytes = fromBase64Url(payload);
+  if (bytes === null) return null;
+  try {
+    const data: unknown = JSON.parse(
+      new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes),
+    );
+    return typeof data === "object" && data !== null && !Array.isArray(data)
+      ? (data as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}

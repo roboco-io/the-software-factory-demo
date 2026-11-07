@@ -3,6 +3,8 @@ import {
   type Api,
   type EventItem,
   type Me,
+  type Project,
+  type RunCost,
   type RunDetail,
   type RunSummary,
 } from "./api";
@@ -23,6 +25,14 @@ import {
   stateLabel,
   type Tone,
 } from "./labels";
+import {
+  costUsdText,
+  isAttention,
+  isGithubAuthorize,
+  moneyText,
+  shortSha,
+  sortAttentionFirst,
+} from "./console-labels";
 import { createReplay } from "./replay";
 
 /** A rendered screen. `cleanup` stops anything that keeps running after the user leaves. */
@@ -37,6 +47,10 @@ export interface ViewContext {
   me: Me;
   /** Loads the screen again, for example after a stop. */
   reload(): void;
+  /** Shows a notice above the screen. It stays while the screen reloads. */
+  notify(kind: "alert" | "status", text: string): void;
+  /** Sends the browser to another address, for example GitHub's authorize page. */
+  navigate(url: string): void;
 }
 
 const TERMINAL = ["merged", "needs_human", "failed"];
@@ -198,9 +212,11 @@ function runRow(run: RunSummary) {
     h(
       "div",
       null,
-      link(runPath(run.id), `실행 ${run.id}`),
+      link(runPath(run.id), run.title ?? `실행 ${run.id}`),
       " ",
       issue ?? `이슈 #${run.issueNumber}`,
+      run.tier === null ? null : " ",
+      run.tier === null ? null : h("span", { class: "tier" }, run.tier),
     ),
     h(
       "div",
@@ -218,12 +234,66 @@ function runRow(run: RunSummary) {
   );
 }
 
+/** The four cards above a project's runs. The numbers come from the whole project, not from the loaded page. */
+function summaryCards(project: Project) {
+  const card = (label: string, value: string, cls = "") =>
+    h(
+      "div",
+      { class: `card stat ${cls}`.trim() },
+      h("dt", null, label),
+      h("dd", null, value),
+    );
+  return h(
+    "dl",
+    { class: "summary" },
+    card("주의 필요", String(project.attention), "stat-attention"),
+    card("진행 중", String(project.counts.active)),
+    card("병합됨", String(project.counts.merged)),
+    card("비용", costUsdText(project.costUsd)),
+  );
+}
+
 export async function projectView(
   ctx: ViewContext,
   repo: string,
 ): Promise<View> {
-  let page = await ctx.api.runs(repo);
-  const list = h("ul", { class: "cards" }, ...page.runs.map(runRow));
+  // The summary is extra: if it cannot be read the run list is still shown.
+  const [firstPage, project] = await Promise.all([
+    ctx.api.runs(repo),
+    ctx.api.projects().then(
+      ({ projects }) => projects.find((p) => p.repo === repo) ?? null,
+      () => null,
+    ),
+  ]);
+  let page = firstPage;
+  // Sorting and filtering work on the runs loaded so far; "더 보기" adds to them.
+  const loaded: RunSummary[] = [...page.runs];
+  let onlyAttention = false;
+  const list = h("ul", { class: "cards" });
+  const empty = h("div");
+  const paintList = () => {
+    const now = Date.now();
+    const shown = sortAttentionFirst(loaded, now).filter(
+      (r) => !onlyAttention || isAttention(r, now),
+    );
+    list.replaceChildren(...shown.map(runRow));
+    empty.replaceChildren(
+      ...(shown.length === 0 && loaded.length > 0
+        ? [messageBox("status", "주의가 필요한 실행이 없습니다.")]
+        : []),
+    );
+  };
+  const filter = h(
+    "button",
+    { type: "button", "aria-pressed": "false" },
+    "주의가 필요한 실행만",
+  );
+  filter.addEventListener("click", () => {
+    onlyAttention = !onlyAttention;
+    filter.setAttribute("aria-pressed", String(onlyAttention));
+    paintList();
+  });
+  paintList();
   const more = h("div", { class: "more" });
   const failure = h("div");
   const paintMore = () => {
@@ -236,7 +306,8 @@ export async function projectView(
       ctx.api.runs(repo, cursor).then(
         (next) => {
           page = next;
-          list.append(...next.runs.map(runRow));
+          loaded.push(...next.runs);
+          paintList();
           failure.replaceChildren();
           paintMore();
         },
@@ -261,9 +332,12 @@ export async function projectView(
       null,
       h("p", { class: "crumb" }, link("/projects", "프로젝트")),
       h("h1", null, repo),
-      page.runs.length === 0
+      project === null ? null : summaryCards(project),
+      loaded.length === 0
         ? messageBox("status", "아직 실행이 없습니다.")
-        : list,
+        : h("div", { class: "toolbar" }, filter),
+      list,
+      empty,
       failure,
       more,
     ),
@@ -278,6 +352,120 @@ const STOP_ERRORS: Record<string, string> = {
   unauthenticated: "로그인이 끝났습니다. 다시 로그인해 주세요.",
   forbidden: "운영자만 실행을 중지할 수 있습니다.",
 };
+
+const REVIEW_ERRORS: Record<string, string> = {
+  unauthenticated: "로그인이 끝났습니다. 다시 로그인해 주세요.",
+  forbidden: "운영자만 승인하거나 수정을 요청할 수 있습니다.",
+  not_found: "이 실행을 찾을 수 없습니다.",
+};
+
+/**
+ * The approval box for an operator on a run that waits for approval. It names the commit the
+ * operator is looking at; the server refuses when the PR has moved on. The decision itself is
+ * made on GitHub with the operator's own sign-in, so a click only starts that sign-in.
+ */
+function approveControl(
+  ctx: ViewContext,
+  id: string,
+  headSha: string,
+): HTMLElement {
+  const box = h("div", { class: "approve card" });
+  const notice = h("div");
+  const approve = h("button", { type: "button" }, "승인");
+  const changes = h("button", { type: "button", class: "danger" }, "수정 요청");
+  const send = (action: "approve" | "request_changes") => {
+    approve.disabled = true;
+    changes.disabled = true;
+    notice.replaceChildren();
+    ctx.api.review(id, action, headSha).then(
+      (redirect) => {
+        if (isGithubAuthorize(redirect)) ctx.navigate(redirect);
+        else {
+          approve.disabled = false;
+          changes.disabled = false;
+          notice.replaceChildren(
+            messageBox(
+              "alert",
+              "승인을 시작하지 못했습니다. 다시 시도해 주세요.",
+            ),
+          );
+        }
+      },
+      (error: unknown) => {
+        const code = error instanceof ApiError ? error.code : "";
+        if (code === "head_changed") {
+          ctx.notify(
+            "alert",
+            "그 사이 PR의 커밋이 바뀌었습니다. 새 커밋을 확인한 뒤 다시 결정해 주세요.",
+          );
+          ctx.reload();
+          return;
+        }
+        if (code === "not_awaiting_approval") {
+          ctx.notify(
+            "alert",
+            "이 실행은 지금 승인을 기다리는 상태가 아닙니다. 현재 상태를 다시 불러왔습니다.",
+          );
+          ctx.reload();
+          return;
+        }
+        approve.disabled = false;
+        changes.disabled = false;
+        notice.replaceChildren(
+          messageBox(
+            "alert",
+            REVIEW_ERRORS[code] ??
+              "승인을 시작하지 못했습니다. 잠시 뒤 다시 시도해 주세요.",
+          ),
+        );
+      },
+    );
+  };
+  approve.addEventListener("click", () => send("approve"));
+  changes.addEventListener("click", () => send("request_changes"));
+  box.append(
+    h("h2", null, "승인 대기"),
+    h(
+      "p",
+      null,
+      "검토한 커밋: ",
+      h("code", null, shortSha(headSha)),
+      ". GitHub로 한 번 더 로그인해 리뷰를 남깁니다.",
+    ),
+    h(
+      "p",
+      { class: "muted" },
+      "결정은 운영자 본인의 GitHub 리뷰로 기록됩니다.",
+    ),
+    h("div", { class: "actions" }, approve, changes),
+    notice,
+  );
+  return box;
+}
+
+function costSection(cost: RunCost) {
+  const part = (value: number | null) =>
+    value !== null
+      ? moneyText({ status: "measured", totalUsd: value })
+      : cost.status === "measured"
+        ? "기록 없음"
+        : moneyText({ status: cost.status, totalUsd: null });
+  return h(
+    "section",
+    { class: "card cost" },
+    h("h2", null, "모델 사용 비용"),
+    h(
+      "dl",
+      { class: "counts" },
+      h("dt", null, "합계"),
+      h("dd", null, moneyText(cost)),
+      h("dt", null, "구현"),
+      h("dd", null, part(cost.implementUsd)),
+      h("dt", null, "리뷰"),
+      h("dd", null, part(cost.reviewUsd)),
+    ),
+  );
+}
 
 const STOP_POLL_MS = 3000;
 const STOP_POLL_MAX = 20;
@@ -502,6 +690,12 @@ export async function runView(ctx: ViewContext, id: string): Promise<View> {
   const active = !TERMINAL.includes(run.state);
   const stop =
     ctx.me.role === "operator" && active ? stopControl(ctx, run.id) : null;
+  const approve =
+    ctx.me.role === "operator" &&
+    run.state === "awaiting_approval" &&
+    run.headSha !== null
+      ? approveControl(ctx, run.id, run.headSha)
+      : null;
   return {
     title: `실행 ${run.id}`,
     cleanup: () => {
@@ -519,6 +713,7 @@ export async function runView(ctx: ViewContext, id: string): Promise<View> {
         link(projectPath(run.repo), run.repo),
       ),
       h("h1", null, `실행 ${run.id}`),
+      run.title === null ? null : h("p", { class: "run-title" }, run.title),
       h(
         "p",
         { class: "links" },
@@ -551,7 +746,9 @@ export async function runView(ctx: ViewContext, id: string): Promise<View> {
               h("code", null, run.reasonCode),
             ),
       ),
+      approve,
       stop?.el,
+      costSection(run.cost),
       section(
         "흐름",
         h(
