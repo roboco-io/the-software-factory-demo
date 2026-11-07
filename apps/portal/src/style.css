@@ -384,17 +384,34 @@ ol.flow li::before {
   color: var(--muted);
 }
 
-.stage-count {
+/* The per-stage counts are small buttons; the tap area stays 32px tall even though the text is small. */
+button.stage-count {
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: none;
   font-size: 0.75rem;
   font-weight: 700;
 }
 
+.stage-count.active[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.stage-count.stopped[aria-pressed="true"] {
+  background: var(--attention);
+  color: var(--surface);
+}
+
 .stage-count.active {
   color: var(--accent);
+  border-color: var(--accent);
 }
 
 .stage-count.stopped {
   color: var(--attention);
+  border-color: var(--attention);
 }
 
 ol.rail {
@@ -630,26 +647,57 @@ ol.timeline li {
   }
 }
 
-dl.summary {
+.summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
   gap: 10px;
   margin: 12px 0;
 }
 
-.stat dt {
+/* A summary card that is a button keeps the card look, not the button look. */
+button.stat {
+  display: block;
+  min-height: 0;
+  padding: 12px 14px;
+  text-align: left;
+  font: inherit;
+}
+
+button.stat:hover {
+  border-color: var(--accent);
+}
+
+button.stat[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.stat-label {
+  display: block;
   color: var(--muted, inherit);
   font-size: 0.85rem;
 }
 
-.stat dd {
-  margin: 0;
+.stat-value {
+  display: block;
   font-size: 1.4rem;
   font-weight: 700;
 }
 
 .stat-attention {
   border-left: 5px solid var(--attention);
+}
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.filter-bar > button[aria-pressed="true"]:not(.link) {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .toolbar {

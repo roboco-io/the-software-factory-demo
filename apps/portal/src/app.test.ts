@@ -752,6 +752,72 @@ describe("project page, console", () => {
     expect(root().querySelectorAll("li.run-row")).toHaveLength(2);
   });
 
+  it("a stage's 멈춤 count is a button that shows only runs stopped there", async () => {
+    const runs = async () => ({
+      runs: [
+        mk("aaaaaaaaaaa1", "implementing", {
+          path: [{ state: "implementing", at: 0 }],
+        }),
+        mk("aaaaaaaaaaa2", "failed", {
+          path: [
+            { state: "implementing", at: 0 },
+            { state: "failed", at: 1 },
+          ],
+        }),
+      ],
+      nextCursor: null,
+    });
+    await open("/projects/acme/demo", fakeApi({ runs }));
+    const stopped = () =>
+      root().querySelector<HTMLButtonElement>("button.stage-count.stopped")!;
+    expect(stopped().textContent).toBe("멈춤 1");
+    stopped().click();
+    const ids = () =>
+      [...root().querySelectorAll("li.run-row a[href^='/runs/']")].map((a) =>
+        a.getAttribute("href"),
+      );
+    expect(ids()).toEqual(["/runs/aaaaaaaaaaa2"]);
+    expect(stopped().getAttribute("aria-pressed")).toBe("true");
+    expect(text()).toContain("구현 단계에서 멈춘 실행");
+    stopped().click();
+    expect(ids()).toHaveLength(2);
+    button("진행 1")!.click();
+    expect(ids()).toEqual(["/runs/aaaaaaaaaaa1"]);
+    button("전체 보기")!.click();
+    expect(ids()).toHaveLength(2);
+  });
+
+  it("summary cards are buttons that filter the list; cost is not", async () => {
+    const runs = async () => ({
+      runs: [
+        mk("aaaaaaaaaaa1", "merged"),
+        mk("aaaaaaaaaaa2", "awaiting_approval"),
+        mk("aaaaaaaaaaa3", "implementing"),
+      ],
+      nextCursor: null,
+    });
+    await open("/projects/acme/demo", fakeApi({ runs }));
+    const card = (label: string) =>
+      [...root().querySelectorAll<HTMLButtonElement>(".summary button")].find(
+        (b) => b.textContent?.includes(label),
+      );
+    const rows = () => root().querySelectorAll("li.run-row").length;
+    expect(card("비용")).toBeUndefined();
+    card("병합됨")!.click();
+    expect(rows()).toBe(1);
+    expect(card("병합됨")!.getAttribute("aria-pressed")).toBe("true");
+    card("진행 중")!.click();
+    expect(rows()).toBe(2);
+    expect(card("병합됨")!.getAttribute("aria-pressed")).toBe("false");
+    card("주의 필요")!.click();
+    expect(rows()).toBe(1);
+    expect(button("주의가 필요한 실행만")!.getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    card("주의 필요")!.click();
+    expect(rows()).toBe(3);
+  });
+
   it("run row shows tokens and cost, and says when it was not measured", async () => {
     const usage = {
       inputTokens: 10_000,
