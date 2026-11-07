@@ -1,5 +1,5 @@
 import type { D1Like } from "./d1-repo";
-import { costUsd } from "./pricing";
+import { costUsd, type TokenUsage } from "./pricing";
 import {
   REASON_CODES,
   type EventKind,
@@ -40,6 +40,8 @@ export interface RunCost {
   totalUsd: number | null;
   implementUsd: number | null;
   reviewUsd: number | null;
+  /** Null when no usage was recorded. Known even when a price is not, so it survives "unknown". */
+  tokens: { implement: TokenUsage; review: TokenUsage } | null;
 }
 
 export interface ProjectStats {
@@ -74,8 +76,8 @@ const NOT_MEASURED: RunCost = {
   totalUsd: null,
   implementUsd: null,
   reviewUsd: null,
+  tokens: null,
 };
-const UNKNOWN: RunCost = { ...NOT_MEASURED, status: "unknown" };
 
 const USAGE_SUMS =
   "SUM(input_tokens) AS i, SUM(output_tokens) AS o, SUM(cache_read_tokens) AS cr, SUM(cache_write_tokens) AS cw";
@@ -87,21 +89,47 @@ const tokens = (row: Row) => ({
   cacheWriteTokens: Number(row["cw"]),
 });
 
+const NO_TOKENS: TokenUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
+};
+
+const addTokens = (a: TokenUsage, b: TokenUsage): TokenUsage => ({
+  inputTokens: a.inputTokens + b.inputTokens,
+  outputTokens: a.outputTokens + b.outputTokens,
+  cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
+  cacheWriteTokens: a.cacheWriteTokens + b.cacheWriteTokens,
+});
+
 function costOf(rows: Row[]): RunCost {
   if (rows.length === 0) return NOT_MEASURED;
   let implementUsd = 0;
   let reviewUsd = 0;
+  let priced = true;
+  let implement = NO_TOKENS;
+  let review = NO_TOKENS;
   for (const row of rows) {
-    const usd = costUsd(String(row["model"]), tokens(row));
-    if (usd === null) return UNKNOWN;
-    if (row["phase"] === "review") reviewUsd += usd;
-    else implementUsd += usd;
+    const used = tokens(row);
+    const usd = costUsd(String(row["model"]), used);
+    if (usd === null) priced = false;
+    if (row["phase"] === "review") {
+      reviewUsd += usd ?? 0;
+      review = addTokens(review, used);
+    } else {
+      implementUsd += usd ?? 0;
+      implement = addTokens(implement, used);
+    }
   }
+  const counted = { implement, review };
+  if (!priced) return { ...NOT_MEASURED, status: "unknown", tokens: counted };
   return {
     status: "measured",
     totalUsd: implementUsd + reviewUsd,
     implementUsd,
     reviewUsd,
+    tokens: counted,
   };
 }
 
