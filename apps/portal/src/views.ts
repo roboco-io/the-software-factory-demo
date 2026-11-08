@@ -87,7 +87,8 @@ function section(title: string, ...children: Child[]) {
   return h("section", { class: "card" }, h("h2", null, title), ...children);
 }
 
-export function homeView(me: Me): View {
+export async function homeView(ctx: ViewContext): Promise<View> {
+  const projects = await projectList(ctx);
   const steps: [string, string][] = [
     [
       "이슈 접수",
@@ -107,7 +108,7 @@ export function homeView(me: Me): View {
     ],
   ];
   return {
-    title: "Software Factory",
+    title: "프로젝트",
     el: h(
       "section",
       null,
@@ -117,6 +118,7 @@ export function homeView(me: Me): View {
         { class: "lead" },
         "이슈 하나가 AI 에이전트의 구현과 리뷰를 거쳐 병합되기까지의 과정을 그대로 관찰하는 포털입니다. 각 단계는 고정된 사유 코드와 함께 기록되고, 이 화면은 그 기록을 한국어로 풀어 보여 줍니다.",
       ),
+      section("프로젝트", projects),
       section(
         "이슈 하나는 이렇게 흐릅니다",
         h(
@@ -154,12 +156,6 @@ export function homeView(me: Me): View {
           "이 화면에는 에이전트의 원문 로그나 비밀 값이 나타나지 않습니다. 기록에는 고정된 코드만 남기 때문입니다.",
         ),
       ),
-      h(
-        "p",
-        null,
-        link("/projects", "프로젝트 보기"),
-        me.role === "anonymous" ? " 로그인 없이도 볼 수 있습니다." : "",
-      ),
     ),
   };
 }
@@ -177,34 +173,30 @@ type RunSummaryCounts = {
   failed: number;
 };
 
-export async function projectsView(ctx: ViewContext): Promise<View> {
+/** Project cards with run counts by outcome. Shown on the home screen. */
+async function projectList(ctx: ViewContext) {
   const { projects } = await ctx.api.projects();
-  const body =
-    projects.length === 0
-      ? messageBox("status", "등록된 프로젝트가 없습니다.")
-      : h(
-          "ul",
-          { class: "cards" },
-          ...projects.map((p) =>
+  return projects.length === 0
+    ? messageBox("status", "등록된 프로젝트가 없습니다.")
+    : h(
+        "ul",
+        { class: "cards" },
+        ...projects.map((p) =>
+          h(
+            "li",
+            { class: "card" },
+            h("h2", null, link(projectPath(p.repo), p.repo)),
             h(
-              "li",
-              { class: "card" },
-              h("h2", null, link(projectPath(p.repo), p.repo)),
-              h(
-                "dl",
-                { class: "counts" },
-                ...COUNT_LABELS.flatMap(([key, label]) => [
-                  h("dt", null, label),
-                  h("dd", null, String(p.counts[key])),
-                ]),
-              ),
+              "dl",
+              { class: "counts" },
+              ...COUNT_LABELS.flatMap(([key, label]) => [
+                h("dt", null, label),
+                h("dd", null, String(p.counts[key])),
+              ]),
             ),
           ),
-        );
-  return {
-    title: "프로젝트",
-    el: h("section", null, h("h1", null, "프로젝트"), body),
-  };
+        ),
+      );
 }
 
 const STATUS_TEXT: Record<StageStatus, string> = {
@@ -417,7 +409,7 @@ export async function projectView(
     el: h(
       "section",
       null,
-      h("p", { class: "crumb" }, link("/projects", "프로젝트")),
+      h("p", { class: "crumb" }, link("/", "프로젝트")),
       h("h1", null, repo),
       project === null ? null : summaryCards(project),
       loaded.length === 0
@@ -841,7 +833,7 @@ export async function runView(ctx: ViewContext, id: string): Promise<View> {
       h(
         "p",
         { class: "crumb" },
-        link("/projects", "프로젝트"),
+        link("/", "프로젝트"),
         " / ",
         link(projectPath(run.repo), run.repo),
       ),

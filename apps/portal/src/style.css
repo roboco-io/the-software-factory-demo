@@ -116,11 +116,6 @@ time {
   text-decoration: none;
 }
 
-.top nav {
-  display: flex;
-  gap: 16px;
-}
-
 .who {
   margin-left: auto;
   display: flex;

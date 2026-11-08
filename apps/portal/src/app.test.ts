@@ -136,7 +136,29 @@ describe("home", () => {
     for (const word of ["구현", "교차 리뷰", "프로그램", "사람"])
       expect(t).toContain(word);
     expect(root().querySelectorAll("ol.flow > li")).toHaveLength(4);
-    expect(root().querySelector('a[href="/projects"]')).not.toBeNull();
+  });
+
+  it("lists the projects on the same page, before the explanation", async () => {
+    await open("/", fakeApi());
+    const link = root().querySelector<HTMLAnchorElement>(
+      'a[href="/projects/acme/demo"]',
+    );
+    expect(link).not.toBeNull();
+    const flow = root().querySelector("ol.flow")!;
+    expect(
+      link!.compareDocumentPosition(flow) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(root().querySelector('a[href="/projects"]')).toBeNull();
+  });
+
+  it("still opens the same page from the old /projects address", async () => {
+    await open("/projects", fakeApi());
+    expect(root().querySelector("h1")?.textContent).toContain(
+      "Software Factory",
+    );
+    expect(
+      root().querySelector('a[href="/projects/acme/demo"]'),
+    ).not.toBeNull();
   });
 });
 
@@ -624,7 +646,7 @@ describe("replay", () => {
     await open("/runs/aaaaaaaaaaa1", fakeApi());
     vi.useFakeTimers();
     button("재생")!.click();
-    root().querySelector<HTMLAnchorElement>('a[href="/projects"]')!.click();
+    root().querySelector<HTMLAnchorElement>('.crumb a[href="/"]')!.click();
     await flush();
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -632,11 +654,13 @@ describe("replay", () => {
 
 describe("navigation", () => {
   it("handles in-app links without reloading, and shows a not-found page", async () => {
-    await open("/", fakeApi());
-    root().querySelector<HTMLAnchorElement>('a[href="/projects"]')!.click();
+    await open("/projects/acme/demo", fakeApi());
+    root().querySelector<HTMLAnchorElement>('.crumb a[href="/"]')!.click();
     await flush();
-    expect(window.location.pathname).toBe("/projects");
-    expect(root().querySelector("h1")?.textContent).toContain("프로젝트");
+    expect(window.location.pathname).toBe("/");
+    expect(root().querySelector("h1")?.textContent).toContain(
+      "Software Factory",
+    );
     await open("/nowhere", fakeApi());
     expect(text()).toContain("찾을 수 없습니다");
   });

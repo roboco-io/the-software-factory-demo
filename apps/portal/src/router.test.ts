@@ -4,7 +4,7 @@ import { matchRoute } from "./router";
 describe("matchRoute", () => {
   it("matches the screens", () => {
     expect(matchRoute("/")).toEqual({ name: "home" });
-    expect(matchRoute("/projects")).toEqual({ name: "projects" });
+    expect(matchRoute("/projects")).toEqual({ name: "home" });
     expect(matchRoute("/projects/acme/demo")).toEqual({
       name: "project",
       repo: "acme/demo",
@@ -16,7 +16,7 @@ describe("matchRoute", () => {
   });
 
   it("ignores a trailing slash and rejects malformed paths", () => {
-    expect(matchRoute("/projects/")).toEqual({ name: "projects" });
+    expect(matchRoute("/projects/")).toEqual({ name: "home" });
     for (const path of [
       "/nope",
       "/runs",

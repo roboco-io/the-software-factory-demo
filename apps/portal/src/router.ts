@@ -1,6 +1,5 @@
 export type Route =
   | { name: "home" }
-  | { name: "projects" }
   | { name: "project"; repo: string }
   | { name: "run"; id: string }
   | { name: "notFound" };
@@ -15,7 +14,8 @@ export function matchRoute(pathname: string): Route {
   if (trimmed === "/") return { name: "home" };
   const parts = trimmed.split("/").slice(1);
   if (parts[0] === "projects") {
-    if (parts.length === 1) return { name: "projects" };
+    // The project list moved onto the home screen; the old address still opens it.
+    if (parts.length === 1) return { name: "home" };
     const [, owner, name] = parts;
     if (
       parts.length === 3 &&
