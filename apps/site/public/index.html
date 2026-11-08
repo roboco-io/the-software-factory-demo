@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>소프트웨어 팩토리</title>
+    <meta
+      name="description"
+      content="이슈에 라벨을 붙이면 AI 에이전트가 구현하고, 다른 모델이 리뷰하고, 정책이 병합을 판정하는 소프트웨어 팩토리 플랫폼."
+    />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module">
+      import { conveyorTarget } from "./redirect.js";
+      const target = conveyorTarget(location);
+      if (target) location.replace(target);
+    </script>
+  </head>
+  <body>
+    <main>
+      <div class="eyebrow">roboco-io / the-software-factory-demo</div>
+      <h1>이슈에서 병합까지, 사람은 판단만 합니다</h1>
+      <p class="lead">
+        소프트웨어 팩토리는 여러 저장소의 이슈를 받아 AI 에이전트가 구현하고,
+        다른 모델이 리뷰하고, 저장소가 정한 정책으로 병합 여부를 판정하는
+        플랫폼입니다. 실행은 GitHub Actions가 아니라 Cloudflare 위의 제어 평면과
+        격리된 샌드박스 컨테이너에서 이루어집니다.
+      </p>
+      <div class="links">
+        <a href="https://software-factory-control.roboco.workers.dev"
+          ><strong>포털</strong
+          ><span
+            >실행 흐름과 예산을 봅니다. GitHub 로그인이 필요합니다.</span
+          ></a
+        >
+        <a href="/conveyor/"
+          ><strong>conveyor</strong
+          ><span>팩토리가 관리하는 예제 앱(포럼)입니다.</span></a
+        >
+        <a href="https://github.com/roboco-io/the-software-factory-demo"
+          ><strong>소스 저장소</strong
+          ><span>제어 평면과 포털 코드, 설계 문서가 있습니다.</span></a
+        >
+        <a href="https://github.com/roboco-io/the-software-factory"
+          ><strong>책</strong
+          ><span>이 플랫폼의 바탕이 된 생각을 정리한 책입니다.</span></a
+        >
+      </div>
+
+      <h2>실행 하나가 흘러가는 순서</h2>
+      <ol class="flow">
+        <li>
+          운영자가 관리 대상 저장소의 이슈에 <code>factory:go</code> 라벨을
+          붙입니다.
+        </li>
+        <li>
+          GitHub App이 이 이벤트를 제어 평면(Cloudflare Worker)으로 보냅니다.
+          제어 평면은 서명, 운영자 여부, 등록된 저장소인지를 확인한 뒤 실행을
+          만듭니다.
+        </li>
+        <li>
+          샌드박스 컨테이너에서 구현 에이전트가 코드를 고치고 PR을 엽니다.
+          컨테이너에는 GitHub 토큰과 LLM 키를 넣지 않습니다.
+        </li>
+        <li>
+          구현과 다른 엔진의 리뷰어가 PR을 검토하고, 저장소의 필수 체크가
+          돕니다.
+        </li>
+        <li>
+          제어 평면이 위험 등급, 체크 결과, 리뷰 결과, 운영자 승인을 보고 병합을
+          판정합니다.
+        </li>
+      </ol>
+
+      <h2>위험 등급과 병합 규칙</h2>
+      <p>
+        등급은 대상 저장소의 <code>.factory/policy.yml</code>이 파일 경로별로
+        정합니다. 어느 규칙에도 맞지 않는 경로는 T2로 보고,
+        <code>.github/</code>와 <code>.factory/</code>는 정책과 관계없이 T3
+        이상입니다.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>등급</th>
+            <th>예</th>
+            <th>병합</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>T0</td>
+            <td>문서</td>
+            <td rowspan="3">정책이 허용하면 체크와 리뷰 통과 뒤 자동 병합</td>
+          </tr>
+          <tr>
+            <td>T1</td>
+            <td>화면 구성 요소</td>
+          </tr>
+          <tr>
+            <td>T2</td>
+            <td>일반 코드</td>
+          </tr>
+          <tr>
+            <td>T3</td>
+            <td>인증, 마이그레이션, 워크플로, 정책</td>
+            <td>항상 운영자 승인 필요</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>예산</h2>
+      <p>
+        Anthropic과 OpenAI 계정은 각각 월 $50 상한을 둡니다. 지출은 잔액 API가
+        아니라 호출별 토큰 사용량으로 계산한 추정치입니다. Claude 예산이
+        소진되면 다른 엔진으로 구현을 넘기고, 두 계정이 모두 소진되면 새 실행을
+        멈춥니다.
+      </p>
+
+      <footer>
+        이 주소는 예전에 conveyor 포럼 앱이 쓰던 주소입니다. 예전 conveyor
+        링크로 들어오면
+        <a href="/conveyor/">/conveyor/</a>의 같은 화면으로 자동으로 옮겨
+        갑니다.
+      </footer>
+    </main>
+  </body>
+</html>
