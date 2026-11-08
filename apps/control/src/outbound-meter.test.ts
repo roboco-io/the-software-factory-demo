@@ -34,6 +34,8 @@ vi.mock("./d1-repo", async (orig) => {
 // These tests are about metering. The budget check has its own tests (outbound-budget.test.ts).
 vi.mock("./outbound-budget", () => ({
   checkCallBudget: async () => ({ allow: true }),
+  acquireCallSlot: async () => 1,
+  releaseCallSlot: async () => undefined,
 }));
 
 import { Outbound } from "./outbound";

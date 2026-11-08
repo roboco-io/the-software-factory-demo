@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ENGINE_CAPACITY_POLL_MS,
   ENGINE_POLL_MS,
   ENGINE_WAIT_TIMEOUT_MS,
   REVIEW_TIMEOUT_MS,
@@ -212,5 +213,39 @@ describe("stage 5: a run that hit its spending limit", () => {
     await drain();
     expect(w.states.at(-1)).toBe("needs_human");
     expect(w.events.some((e) => e.code === "budget_exceeded")).toBe(true);
+  });
+});
+
+describe("stage 5 review fixes", () => {
+  it("stays in awaiting_engine while the review slots are full, then starts the review", async () => {
+    const budget = fakeBudget();
+    budget.spent.anthropic = 50;
+    let busy = 2;
+    const { w, machine, tick, drain, storedRun } = build({
+      budget,
+      pulls: { files: T2_FILES },
+      busySlots: () => busy,
+    });
+    await machine.start(input);
+    for (let i = 0; i < 8 && storedRun().state !== "awaiting_engine"; i++)
+      await tick();
+    budget.spent.anthropic = 0;
+    await tick();
+    expect(storedRun().state).toBe("awaiting_engine");
+    expect(w.reviewCalls).toEqual([]);
+    expect(w.alarm! - w.now).toBe(ENGINE_CAPACITY_POLL_MS);
+    busy = 1;
+    await drain();
+    expect(w.reviewModels).toEqual(["claude-haiku-5-5"]);
+  });
+
+  it("writes the chosen reviewer to D1 even when the first write fails", async () => {
+    const { w, machine, drain } = build({ failFactsOnce: true });
+    await machine.start(input);
+    await drain();
+    expect(w.facts).toContainEqual(
+      expect.objectContaining({ reviewModel: "gpt-5.4-nano" }),
+    );
+    expect(w.reviewModels).toEqual(["gpt-5.4-nano"]);
   });
 });

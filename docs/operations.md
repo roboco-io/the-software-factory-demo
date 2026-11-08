@@ -239,7 +239,7 @@ API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requ
 | -------------------------- | ------------------------------------- | ------------------------------------------------------- |
 | `BUDGET_ANTHROPIC_USD`     | `50`                                  | Anthropic 계정의 월 예산(달러, 추정)                    |
 | `BUDGET_OPENAI_USD`        | `50`                                  | OpenAI 계정의 월 예산(달러, 추정)                       |
-| `RUN_BUDGET_USD`           | `5`                                   | 실행 하나가 한 계정에서 쓸 수 있는 최대 금액            |
+| `RUN_BUDGET_USD`           | `5`                                   | 실행의 한 단계(구현 또는 리뷰)가 쓸 수 있는 최대 금액   |
 | `FALLBACK_IMPLEMENT_MODEL` | `gpt-6.1-terra`                       | Anthropic이 상한에 도달했을 때 Codex가 구현에 쓰는 모델 |
 | `ANTHROPIC_REVIEW_MODEL`   | `claude-haiku-5-5`                    | Anthropic에서 리뷰하는 모델                             |
 | `FACTORY_REPO`             | `roboco-io/the-software-factory-demo` | 예산 소진 이슈를 등록할 저장소                          |
@@ -249,7 +249,9 @@ API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requ
 ### 동작
 
 - 청구 주기는 UTC 달력 월이다. 실제 구독의 청구일과 다르면 경계 근처에서 오차가 생긴다.
-- 출구 핸들러는 모델 호출 전에 실행 상한과 월 상한을 확인한다. 거부 응답은 402 `run_budget_exceeded`, 402 `monthly_budget_exceeded`, 402 `model_not_priced`, 403 `no_run_bound`(실행 ID가 없는 샌드박스), 503 `budget_unavailable`(D1을 읽지 못함)이다. 이전에는 실행 ID가 없는 샌드박스의 호출을 측정 없이 통과시켰으나 이제 거부한다.
+- 출구 핸들러는 모델 호출 전에 실행 상한과 월 상한을 확인하고, 실행마다 동시에 진행 중인 호출을 4개까지만 허용한다. 거부 응답은 402 `run_budget_exceeded`, 402 `monthly_budget_exceeded`, 402 `model_not_priced`, 429 `too_many_calls_in_flight`, 403 `no_run_bound`(실행 ID가 없는 샌드박스), 503 `budget_unavailable`(D1을 읽지 못함)이다. 이전에는 실행 ID가 없는 샌드박스의 호출을 측정 없이 통과시켰으나 이제 거부한다.
+- 성공한 응답에서 사용량을 읽지 못하면 로그에 `usage-unreadable`을 남기고 입력 100,000토큰, 출력 16,000토큰으로 기록한다. 이 로그가 자주 보이면 해당 엔진의 응답 형식을 확인해야 한다.
+- 단가표(`pricing.ts`)의 항목은 지우지 않는다. 그 달에 단가 없는 모델의 기록이 하나라도 있으면 두 계정의 지출을 알 수 없는 것으로 보고 새 실행과 모델 호출을 모두 멈춘다.
 - 웹훅은 새 실행을 거절할 때 202와 함께 `budget_exhausted`(두 계정 모두 상한) 또는 `budget_reserved`(진행 중인 실행이 예산을 잡고 있음)를 돌려준다.
 - `GET /api/budget`은 로그인 없이 읽을 수 있고, 청구 주기, 실행 상한, 모드(`normal`, `single_engine`, `paused`), 계정별 월 상한과 추정 지출을 돌려준다. 포털은 모드가 `normal`이 아니면 모든 화면 위에 안내를 표시한다.
 - 실행 상태 `awaiting_engine`은 리뷰 엔진을 기다리는 상태다. 운영자는 이 상태의 실행을 포털에서 중지할 수 있고, 중지하면 `needs_human`으로 끝난다.
@@ -261,7 +263,7 @@ API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requ
 
 ### 마이그레이션 0007
 
-`apps/control/migrations/0007_budget.sql`은 `runs`와 `events`에 새 상태와 사유 코드를 허용하도록 두 표를 다시 만들고, `runs`를 참조하는 `run_usage`도 함께 다시 만든다. 행과 ID는 그대로 옮긴다. `runs`에 `implement_model`, `review_model`, `single_engine` 열을, `run_usage`에 `ts` 인덱스를, 새 표 `budget_alerts`를 더한다. 0007 전에 시작한 실행은 `implement_model`이 비어 있어 예약에 세지 않는다. 배포 전에 이 파일이 D1 마이그레이션 적용에 포함되는지, 배포 뒤 프로덕션 D1에 적용됐는지 사람이 확인해야 한다.
+`apps/control/migrations/0007_budget.sql`은 `runs`와 `events`에 새 상태와 사유 코드를 허용하도록 두 표를 다시 만들고, `runs`를 참조하는 `run_usage`도 함께 다시 만든다. 행과 ID는 그대로 옮긴다. `runs`에 `implement_model`, `review_model`, `single_engine` 열을, `run_usage`에 `ts` 인덱스를, 새 표 `run_inflight`와 `budget_alerts`를 더한다. 0007 전에 시작한 실행은 `implement_model`과 `review_model`이 비어 있어 예약에 세지 않는다. 배포 전에 프로덕션 `run_usage`의 모델이 모두 단가표에 있는지 확인해야 한다(`SELECT DISTINCT model FROM run_usage`). 배포 전에 이 파일이 D1 마이그레이션 적용에 포함되는지, 배포 뒤 프로덕션 D1에 적용됐는지 사람이 확인해야 한다.
 
 ### 확인하지 못한 것
 

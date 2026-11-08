@@ -50,6 +50,8 @@ export interface RunRepo {
     ts: number;
     code: ReasonCode | null;
   }): Promise<void>;
+  /** Active runs that hold a sandbox slot (see CAPACITY_SQL). */
+  capacityUsed(): Promise<number>;
   /** Sets the given fields. Leaves unset fields. Adds no event. */
   recordFacts(f: {
     runId: string;
@@ -133,6 +135,13 @@ export class D1RunRepo implements RunRepo {
       throw error;
     }
     return results[0]?.meta.changes === 1 ? "created" : "capacity_full";
+  }
+
+  async capacityUsed(): Promise<number> {
+    const row = await this.db
+      .prepare(`SELECT COUNT(*) AS n FROM runs WHERE state IN ${CAPACITY_SQL}`)
+      .first<{ n: number }>();
+    return Number(row?.n ?? 0);
   }
 
   async findActiveRun(repo: string, issueNumber: number) {

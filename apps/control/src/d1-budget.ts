@@ -7,12 +7,16 @@ export interface ModelUsage {
   usage: TokenUsage;
 }
 
+export interface PhaseUsage extends ModelUsage {
+  phase: string;
+}
+
 export interface ActiveRunBudget {
   id: string;
   state: RunState;
   implementModel: string | null;
   reviewModel: string | null;
-  usage: ModelUsage[];
+  usage: PhaseUsage[];
 }
 
 const SUMS =
@@ -53,14 +57,50 @@ export class D1BudgetRepo {
     return results.map(toModelUsage);
   }
 
-  async runUsage(runId: string): Promise<ModelUsage[]> {
-    const { results } = await this.db
-      .prepare(
-        `SELECT model, ${SUMS} FROM run_usage WHERE run_id = ? GROUP BY model ORDER BY model`,
-      )
-      .bind(runId)
-      .all<SumRow>();
+  /** A run's usage per model, of one phase when `phase` is given. */
+  async runUsage(runId: string, phase?: string): Promise<ModelUsage[]> {
+    const { results } = await (
+      phase === undefined
+        ? this.db
+            .prepare(
+              `SELECT model, ${SUMS} FROM run_usage WHERE run_id = ? GROUP BY model ORDER BY model`,
+            )
+            .bind(runId)
+        : this.db
+            .prepare(
+              `SELECT model, ${SUMS} FROM run_usage WHERE run_id = ? AND phase = ? GROUP BY model ORDER BY model`,
+            )
+            .bind(runId, phase)
+    ).all<SumRow>();
     return results.map(toModelUsage);
+  }
+
+  /**
+   * Takes one in-flight slot of the run, atomically, when fewer than `max` are taken.
+   * Slots older than `staleMs` do not count. Returns the slot id, or null when all are taken.
+   */
+  async acquireInflight(
+    runId: string,
+    now: number,
+    max: number,
+    staleMs: number,
+  ): Promise<number | null> {
+    const row = await this.db
+      .prepare(
+        `INSERT INTO run_inflight (run_id, started_at)
+         SELECT ?, ? WHERE (SELECT COUNT(*) FROM run_inflight WHERE run_id = ? AND started_at > ?) < ?
+         RETURNING id`,
+      )
+      .bind(runId, now, runId, now - staleMs, max)
+      .first<{ id: number }>();
+    return row === null ? null : Number(row.id);
+  }
+
+  async releaseInflight(id: number): Promise<void> {
+    await this.db
+      .prepare("DELETE FROM run_inflight WHERE id = ?")
+      .bind(id)
+      .run();
   }
 
   /** Every active run, its models and its usage per model. At most a few rows. */
@@ -78,18 +118,20 @@ export class D1BudgetRepo {
         }>(),
       this.db
         .prepare(
-          `SELECT u.run_id AS run_id, u.model AS model, ${SUMS.replace(/(\w+_tokens)/g, "u.$1")}
+          `SELECT u.run_id AS run_id, u.phase AS phase, u.model AS model, ${SUMS.replace(/(\w+_tokens)/g, "u.$1")}
            FROM run_usage u JOIN runs r ON r.id = u.run_id
-           WHERE r.state NOT IN ${TERMINAL_SQL} GROUP BY u.run_id, u.model ORDER BY u.model`,
+           WHERE r.state NOT IN ${TERMINAL_SQL} GROUP BY u.run_id, u.phase, u.model ORDER BY u.phase, u.model`,
         )
-        .all<SumRow & { run_id: string }>(),
+        .all<SumRow & { run_id: string; phase: string }>(),
     ]);
     return runs.results.map((r) => ({
       id: r.id,
       state: r.state,
       implementModel: r.implement_model,
       reviewModel: r.review_model,
-      usage: usage.results.filter((u) => u.run_id === r.id).map(toModelUsage),
+      usage: usage.results
+        .filter((u) => u.run_id === r.id)
+        .map((u) => ({ phase: u.phase, ...toModelUsage(u) })),
     }));
   }
 

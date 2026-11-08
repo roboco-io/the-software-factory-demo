@@ -48,6 +48,8 @@ export const MAX_CLEANUP_ATTEMPTS = 5;
 export const MAX_ACTIVE_RUNS = 2;
 /** Stage 5. How often a pull request waiting for a reviewing engine checks the budget. */
 export const ENGINE_POLL_MS = 60 * 60 * 1000;
+/** How often a pull request with an engine but no free review slot checks again. */
+export const ENGINE_CAPACITY_POLL_MS = 5 * 60 * 1000;
 /** Longer than one billing period: by then the budget has reset, so a longer wait means a fault. */
 export const ENGINE_WAIT_TIMEOUT_MS = 35 * 24 * 60 * 60 * 1000;
 const SINGLE_ENGINE_TIERS: readonly Tier[] = ["T0", "T1"];
@@ -243,9 +245,13 @@ export class RunMachine {
   }
 
   /** Whether the run's calls of `model` are now refused for budget. A failed check counts as no. */
-  private async overrun(run: StoredRun, model: string): Promise<boolean> {
+  private async overrun(
+    run: StoredRun,
+    model: string,
+    phase: "implement" | "review",
+  ): Promise<boolean> {
     try {
-      return await this.deps.budget.overrun(run.id, model);
+      return await this.deps.budget.overrun(run.id, model, phase);
     } catch {
       return false;
     }
@@ -561,7 +567,7 @@ export class RunMachine {
           throw new StepFailure("agent_timeout");
         // The egress refuses calls past the run's or the month's limit; the agent then fails.
         throw new StepFailure(
-          (await this.overrun(run, this.implementModel(run)))
+          (await this.overrun(run, this.implementModel(run), "implement"))
             ? "budget_exceeded"
             : "agent_failed",
         );
@@ -735,7 +741,9 @@ export class RunMachine {
       if (isTimeoutExit(outcome.exitCode))
         throw new StepFailure("agent_timeout");
       throw new StepFailure(
-        (await this.overrun(run, model)) ? "budget_exceeded" : "review_failed",
+        (await this.overrun(run, model, "review"))
+          ? "budget_exceeded"
+          : "review_failed",
       );
     }
     // Only the schema-valid verdict counts. Anything else is "no verdict".
@@ -773,6 +781,14 @@ export class RunMachine {
    * Returns false when no engine may review now: the run then waits in awaiting_engine.
    */
   private async pickReviewer(run: StoredRun): Promise<boolean> {
+    // A waiting run holds no slot. Leaving the wait starts a review sandbox, so it needs one.
+    if (
+      run.state === "awaiting_engine" &&
+      (await this.deps.repo.capacityUsed()) >= MAX_ACTIVE_RUNS
+    ) {
+      await this.setAlarm(run, this.deps.now() + ENGINE_CAPACITY_POLL_MS);
+      return false;
+    }
     if (run.reviewModel === undefined) {
       const status = await this.deps.budget.status(run.id);
       const choice = chooseReviewer(
@@ -785,14 +801,16 @@ export class RunMachine {
         await this.waitForEngine(run, status);
         return false;
       }
-      run.reviewModel = choice.model;
-      run.singleEngine = choice.singleEngine;
-      await this.save(run);
+      // D1 first: the budget reserves by this column, and a failed write is retried
+      // because the choice is saved here only after it.
       await this.deps.repo.recordFacts({
         runId: run.id,
         reviewModel: choice.model,
         singleEngine: choice.singleEngine,
       });
+      run.reviewModel = choice.model;
+      run.singleEngine = choice.singleEngine;
+      await this.save(run);
     }
     if (run.state === "awaiting_engine") {
       // The review gets its full time from now, not from when the pull request opened.

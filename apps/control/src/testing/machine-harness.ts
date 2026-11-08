@@ -150,6 +150,10 @@ export interface BuildOptions {
   beforeSandboxStart?: () => Promise<void>;
   /** Stage 5. Defaults to a fake budget with room on both accounts. */
   budget?: BudgetPort;
+  /** Runs holding a sandbox slot, as D1 would count them. Defaults to 0. */
+  busySlots?: () => number;
+  /** The first recordFacts call that sets a reviewer fails. */
+  failFactsOnce?: boolean;
 }
 
 // Producer fakes. The seam check swaps real sandbox, publisher and GitHub client behind these ports.
@@ -206,7 +210,14 @@ export function build(over: BuildOptions = {}) {
       w.events.push({ kind: "cleanup", from: null, to: null, code: e.code });
     },
     async recordFacts(f) {
+      if (over.failFactsOnce === true && f.reviewModel !== undefined) {
+        over.failFactsOnce = false;
+        throw new Error("D1 interrupted");
+      }
       w.facts.push(f);
+    },
+    async capacityUsed() {
+      return over.busySlots?.() ?? 0;
     },
   };
   const sandbox: SandboxPort = {

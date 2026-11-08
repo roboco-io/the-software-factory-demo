@@ -117,3 +117,59 @@ describe("Outbound budget check (fake usage)", () => {
     expect(upstream).not.toHaveBeenCalled();
   });
 });
+
+describe("Outbound review fixes", () => {
+  it("refuses a call while the run already has 4 calls in flight, and frees the slot after each response", async () => {
+    const pending: ((r: Response) => void)[] = [];
+    upstream.mockImplementation(
+      () => new Promise<Response>((resolve) => pending.push(resolve)),
+    );
+    const waits: Promise<unknown>[] = [];
+    const outbound = () =>
+      new Outbound(
+        {
+          props,
+          waitUntil: (p: Promise<unknown>) => void waits.push(p),
+        } as never,
+        { ANTHROPIC_API_KEY: "k", DB: db.d1 } as never,
+      );
+    const calls = [1, 2, 3, 4].map(() => outbound().fetch(call()));
+    for (let i = 0; i < 50 && pending.length < 4; i++)
+      await Promise.resolve().then(() => new Promise((r) => setTimeout(r, 0)));
+    expect(pending).toHaveLength(4);
+    const fifth = await outbound().fetch(call());
+    expect(fifth.status).toBe(429);
+    expect(await fifth.text()).toBe("DENIED: too_many_calls_in_flight\n");
+    for (const resolve of pending) resolve(new Response("{}", { status: 200 }));
+    for (const res of await Promise.all(calls)) await res.text();
+    await Promise.all(waits);
+    expect(db.query("SELECT COUNT(*) AS n FROM run_inflight")).toEqual([
+      { n: 0 },
+    ]);
+  });
+
+  it("records a conservative usage row when the response has no readable usage", async () => {
+    const waits: Promise<unknown>[] = [];
+    const res = await new Outbound(
+      {
+        props,
+        waitUntil: (p: Promise<unknown>) => void waits.push(p),
+      } as never,
+      { ANTHROPIC_API_KEY: "k", DB: db.d1 } as never,
+    ).fetch(call());
+    await res.text();
+    await Promise.all(waits);
+    expect(
+      db.query(
+        "SELECT phase, model, input_tokens, output_tokens FROM run_usage WHERE run_id = 'r1'",
+      ),
+    ).toEqual([
+      {
+        phase: "implement",
+        model: MODEL,
+        input_tokens: 100000,
+        output_tokens: 16000,
+      },
+    ]);
+  });
+});

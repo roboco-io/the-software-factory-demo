@@ -188,6 +188,7 @@ describe("D1BudgetRepo", () => {
         reviewModel: "gpt-5.4-nano",
         usage: [
           {
+            phase: "implement",
             model: "gpt-6.1-terra",
             usage: {
               inputTokens: 5,
@@ -213,5 +214,52 @@ describe("D1BudgetRepo", () => {
     expect(await budget.claimAlert("2026-12", 3)).toBe(true);
     await budget.releaseAlert("2026-12");
     expect(await budget.claimAlert("2026-12", 4)).toBe(true);
+  });
+});
+
+describe("D1BudgetRepo review fixes", () => {
+  it("reads one phase of a run's usage", async () => {
+    const { runs, budget } = setup();
+    await runs.createRun(
+      { id: "r1", repo: "acme/demo", issueNumber: 1, ts: 1 },
+      9,
+    );
+    await runs.recordUsage({
+      runId: "r1",
+      phase: "implement",
+      model: "claude-sonnet-5-5",
+      ...tokens(10),
+      ts: 2,
+    });
+    await runs.recordUsage({
+      runId: "r1",
+      phase: "review",
+      model: "claude-haiku-5-5",
+      ...tokens(7),
+      ts: 3,
+    });
+    expect((await budget.runUsage("r1", "review")).map((u) => u.model)).toEqual(
+      ["claude-haiku-5-5"],
+    );
+    const active = await budget.activeRuns();
+    expect(active[0]!.usage.map((u) => [u.phase, u.model])).toEqual([
+      ["implement", "claude-sonnet-5-5"],
+      ["review", "claude-haiku-5-5"],
+    ]);
+  });
+
+  it("hands out at most `max` in-flight slots per run, frees them, and expires stale ones", async () => {
+    const { budget } = setup();
+    const a = await budget.acquireInflight("r1", 1000, 2, 500);
+    const b = await budget.acquireInflight("r1", 1000, 2, 500);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(await budget.acquireInflight("r1", 1000, 2, 500)).toBeNull();
+    // Another run has its own slots.
+    expect(await budget.acquireInflight("r2", 1000, 2, 500)).not.toBeNull();
+    await budget.releaseInflight(a!);
+    expect(await budget.acquireInflight("r1", 1000, 2, 500)).not.toBeNull();
+    // A slot older than the stale age no longer counts (a crashed call).
+    expect(await budget.acquireInflight("r1", 1600, 2, 500)).not.toBeNull();
   });
 });

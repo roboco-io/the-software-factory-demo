@@ -145,14 +145,16 @@ describe("BudgetService.callCheck (fake usage)", () => {
       { id: "r", repo: "acme/demo", issueNumber: 1, ts: 1 },
       9,
     );
-    expect(await service.callCheck("r", "claude-sonnet-5-5")).toEqual({
+    expect(
+      await service.callCheck("r", "claude-sonnet-5-5", "implement"),
+    ).toEqual({
       allow: true,
     });
   });
 
   it("refuses a model without a price", async () => {
     const { service } = setup();
-    expect(await service.callCheck("r", "mystery")).toEqual({
+    expect(await service.callCheck("r", "mystery", "implement")).toEqual({
       allow: false,
       reason: "model_not_priced",
     });
@@ -165,16 +167,20 @@ describe("BudgetService.callCheck (fake usage)", () => {
       9,
     );
     await spend("claude-sonnet-5-5", 5, { runId: "r" });
-    expect(await service.callCheck("r", "claude-sonnet-5-5")).toEqual({
+    expect(
+      await service.callCheck("r", "claude-sonnet-5-5", "implement"),
+    ).toEqual({
       allow: false,
       reason: "run_budget_exceeded",
     });
     // The other account's cap is separate.
-    expect(await service.callCheck("r", "gpt-5.4-nano")).toEqual({
+    expect(await service.callCheck("r", "gpt-5.4-nano", "implement")).toEqual({
       allow: true,
     });
-    expect(await service.overrun("r", "claude-sonnet-5-5")).toBe(true);
-    expect(await service.overrun("r", "gpt-5.4-nano")).toBe(false);
+    expect(await service.overrun("r", "claude-sonnet-5-5", "implement")).toBe(
+      true,
+    );
+    expect(await service.overrun("r", "gpt-5.4-nano", "implement")).toBe(false);
   });
 
   it("refuses once the account reached its monthly limit", async () => {
@@ -184,11 +190,13 @@ describe("BudgetService.callCheck (fake usage)", () => {
       { id: "r", repo: "acme/demo", issueNumber: 1, ts: 1 },
       9,
     );
-    expect(await service.callCheck("r", "gpt-5.4-nano")).toEqual({
+    expect(await service.callCheck("r", "gpt-5.4-nano", "implement")).toEqual({
       allow: false,
       reason: "monthly_budget_exceeded",
     });
-    expect(await service.callCheck("r", "claude-sonnet-5-5")).toEqual({
+    expect(
+      await service.callCheck("r", "claude-sonnet-5-5", "implement"),
+    ).toEqual({
       allow: true,
     });
   });
@@ -226,5 +234,28 @@ describe("BudgetService.notifyExhausted", () => {
     expect(failing.t.query("SELECT COUNT(*) AS n FROM budget_alerts")).toEqual([
       { n: 0 },
     ]);
+  });
+});
+
+describe("BudgetService per-phase cap (review fix)", () => {
+  it("gives the review its own cap when it bills the same account as the implementation", async () => {
+    const { service, runs, spend } = setup();
+    await runs.createRun(
+      { id: "r", repo: "acme/demo", issueNumber: 1, ts: 1 },
+      9,
+    );
+    await spend("claude-sonnet-5-5", 5, { runId: "r" });
+    expect(
+      await service.callCheck("r", "claude-sonnet-5-5", "implement"),
+    ).toEqual({
+      allow: false,
+      reason: "run_budget_exceeded",
+    });
+    expect(await service.callCheck("r", "claude-haiku-5-5", "review")).toEqual({
+      allow: true,
+    });
+    expect(await service.overrun("r", "claude-haiku-5-5", "review")).toBe(
+      false,
+    );
   });
 });

@@ -30,8 +30,8 @@ export type CallCheck =
 export interface BudgetPort {
   /** Spend this billing period and what the active runs other than `excludeRunId` still reserve. */
   status(excludeRunId?: string): Promise<BudgetStatus>;
-  /** True when a call of `model` for this run would now be refused for budget. */
-  overrun(runId: string, model: string): Promise<boolean>;
+  /** True when a call of `model` in this phase of the run would now be refused for budget. */
+  overrun(runId: string, model: string, phase: string): Promise<boolean>;
   /** Opens the period's factory issue once, when both accounts reached their limit. Never throws. */
   notifyExhausted(status: BudgetStatus): Promise<void>;
 }
@@ -43,10 +43,14 @@ const IMPLEMENT_STATES: readonly RunState[] = [
   "publishing",
 ];
 
-/** The model the run calls in its current state, or null when it calls none. */
-function currentModel(run: ActiveRunBudget): string | null {
-  if (IMPLEMENT_STATES.includes(run.state)) return run.implementModel;
-  if (run.state === "reviewing") return run.reviewModel;
+/** The phase and model the run calls in its current state, or null when it calls none. */
+function currentCall(
+  run: ActiveRunBudget,
+): { phase: string; model: string } | null {
+  if (IMPLEMENT_STATES.includes(run.state) && run.implementModel !== null)
+    return { phase: "implement", model: run.implementModel };
+  if (run.state === "reviewing" && run.reviewModel !== null)
+    return { phase: "review", model: run.reviewModel };
   return null;
 }
 
@@ -87,10 +91,12 @@ export class BudgetService implements BudgetPort {
     const reserved: Record<Provider, number> = { anthropic: 0, openai: 0 };
     for (const run of active) {
       if (run.id === excludeRunId) continue;
-      const model = currentModel(run);
-      const provider = model === null ? null : providerOf(model);
-      if (provider === null) continue;
-      const used = spendByProvider(run.usage)[provider];
+      const call = currentCall(run);
+      const provider = call === null ? null : providerOf(call.model);
+      if (call === null || provider === null) continue;
+      const used = spendByProvider(
+        run.usage.filter((u) => u.phase === call.phase),
+      )[provider];
       // Unknown usage reserves the whole cap.
       reserved[provider] += Math.max(
         0,
@@ -100,12 +106,19 @@ export class BudgetService implements BudgetPort {
     return assessBudget(this.deps.config, period.key, spent, reserved);
   }
 
-  /** The egress check before each model call. Overshoot is bounded by the calls already in flight. */
-  async callCheck(runId: string, model: string): Promise<CallCheck> {
+  /**
+   * The egress check before each model call. The cap counts one phase of the run, so a
+   * same-account review keeps its own share. Overshoot is bounded by the calls in flight.
+   */
+  async callCheck(
+    runId: string,
+    model: string,
+    phase: string,
+  ): Promise<CallCheck> {
     const provider = providerOf(model);
     if (provider === null) return { allow: false, reason: "model_not_priced" };
     const [runRows, { spent }] = await Promise.all([
-      this.deps.repo.runUsage(runId),
+      this.deps.repo.runUsage(runId, phase),
       this.monthSpend(),
     ]);
     const runSpent = spendByProvider(runRows)[provider];
@@ -120,8 +133,8 @@ export class BudgetService implements BudgetPort {
     return { allow: true };
   }
 
-  async overrun(runId: string, model: string): Promise<boolean> {
-    return !(await this.callCheck(runId, model)).allow;
+  async overrun(runId: string, model: string, phase: string): Promise<boolean> {
+    return !(await this.callCheck(runId, model, phase)).allow;
   }
 
   async notifyExhausted(status: BudgetStatus): Promise<void> {

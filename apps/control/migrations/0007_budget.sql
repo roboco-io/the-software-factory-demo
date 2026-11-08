@@ -5,7 +5,8 @@
 -- codes budget_exceeded (the agent stopped after the run or the month hit its spending limit)
 -- and engine_wait_timeout. Records the implementing and the reviewing model of each run, so
 -- the control plane can reserve budget for active runs. Adds budget_alerts: the one factory
--- issue per billing period when both accounts reached their limit.
+-- issue per billing period when both accounts reached their limit. Adds run_inflight: the model
+-- calls of each run that are still in flight, so the egress can cap how many run at once.
 --
 -- SQLite cannot change a CHECK constraint, so runs and events are rebuilt. run_usage refers
 -- to runs and is rebuilt with them. Rows and ids are kept. A run in awaiting_engine holds no
@@ -106,6 +107,16 @@ DROP TABLE run_usage_old;
 CREATE INDEX run_usage_by_run ON run_usage (run_id);
 -- The monthly spend reads one billing period.
 CREATE INDEX run_usage_by_ts ON run_usage (ts);
+
+-- One row per model call in flight. Not tied to runs by a foreign key: a row of a crashed
+-- call is ignored once it is older than the agent's time limit.
+CREATE TABLE run_inflight (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT NOT NULL,
+  started_at INTEGER NOT NULL
+);
+
+CREATE INDEX run_inflight_by_run ON run_inflight (run_id, started_at);
 
 CREATE TABLE budget_alerts (
   period TEXT PRIMARY KEY,
