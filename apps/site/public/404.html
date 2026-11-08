@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>페이지 없음</title>
+    <link rel="stylesheet" href="/the-software-factory-demo/style.css" />
+    <script type="module">
+      import { conveyorTarget } from "/the-software-factory-demo/redirect.js";
+      const target = conveyorTarget(location);
+      if (target) location.replace(target);
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>페이지를 찾지 못했습니다</h1>
+      <p class="lead">
+        예전 conveyor 링크라면 <a href="/conveyor/">/conveyor/</a>에서 찾을 수
+        있습니다. 팩토리 소개는
+        <a href="/the-software-factory-demo/">첫 페이지</a>에 있습니다.
+      </p>
+    </main>
+  </body>
+</html>
