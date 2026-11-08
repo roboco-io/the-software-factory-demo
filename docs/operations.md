@@ -116,7 +116,7 @@ PR의 등급은 바뀐 파일 중 가장 높은 등급이다. 어떤 규칙에�
 
 ### 구성과 역할
 
-control Worker(`software-factory-control`)는 `/api/*` 요청을 직접 처리하고, 그 밖의 경로는 `apps/portal`을 빌드한 정적 파일로 응답한다. 포털은 주소 표시줄의 경로(`/projects`, `/runs/<ID>` 등)로 화면을 정하므로, 정적 파일이 없는 경로도 `index.html`로 응답하는 SPA 설정(`not_found_handling`)을 그대로 쓴다.
+control Worker(`software-factory-control`)는 `/api/*` 요청을 직접 처리하고, 그 밖의 경로는 `apps/portal`을 빌드한 정적 파일로 응답한다. 포털은 주소 표시줄의 경로(`/projects/<owner>/<repo>`, `/runs/<ID>` 등)로 화면을 정한다. 그래서 정적 파일이 없는 경로도 `index.html`로 응답하는 SPA 설정(`not_found_handling`)을 그대로 쓴다. 첫 화면(`/`)은 소개와 프로젝트 목록을 함께 보여 주며, 예전 목록 주소 `/projects`도 같은 화면을 연다.
 
 역할은 세 가지이며 요청마다 계산한다. 세션 쿠키가 없거나 서명이 맞지 않거나 만료되었으면 익명이다. 유효한 세션이 있고 그 GitHub 숫자 ID가 변수 `OPERATOR_IDS`에 없으면 옵저버이고, 있으면 운영자다. 역할은 쿠키에 넣지 않는다. 그래서 `OPERATOR_IDS`에서 ID를 빼고 배포하면 그 사람의 기존 쿠키도 다음 요청부터 운영자 권한을 잃는다. 읽기 API는 세 역할 모두에게 열려 있다. 읽는 내용이 `PROJECTS`에 적힌 공개 시험 저장소의 실행 기록과 고정 코드뿐이기 때문이다. 쓰기 API는 운영자만 쓸 수 있다. 읽기 API는 익명에게도 열려 있으므로 `PROJECTS`에는 공개 저장소만 적어야 한다. 비공개 저장소를 적으면 그 저장소의 실행 목록, 이슈 번호, 이벤트 시각이 누구에게나 보인다.
 

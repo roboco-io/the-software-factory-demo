@@ -7,7 +7,6 @@ import {
   messageBox,
   notFoundView,
   projectView,
-  projectsView,
   runView,
   type View,
   type ViewContext,
@@ -61,17 +60,10 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
   const bannerSlot = h("div");
   const budgetSlot = h("div");
   const main = h("main", { id: "main" });
-  const nav = h(
-    "nav",
-    { "aria-label": "주 메뉴" },
-    link("/", "홈"),
-    link("/projects", "프로젝트"),
-  );
   const header = h(
     "header",
     { class: "top" },
     link("/", "Software Factory"),
-    nav,
     roleArea,
   );
   root.replaceChildren(header, budgetSlot, bannerSlot, main);
@@ -201,10 +193,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
       let view: View;
       switch (route.name) {
         case "home":
-          view = homeView(me);
-          break;
-        case "projects":
-          view = await projectsView(context);
+          view = await homeView(context);
           break;
         case "project":
           view = await projectView(context, route.repo);
