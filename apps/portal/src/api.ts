@@ -68,6 +68,17 @@ export interface RunDetail {
   events: EventItem[];
 }
 
+/** Stage 5. GET /api/budget: this billing period's estimated spend and the factory's mode. */
+export interface BudgetInfo {
+  period: string;
+  runCapUsd: number;
+  mode: "normal" | "single_engine" | "paused";
+  providers: Record<
+    "anthropic" | "openai",
+    { limitUsd: number; spentUsd: number | null; exhausted: boolean }
+  >;
+}
+
 /** A failed API call: the HTTP status and the fixed error code the server sent. */
 export class ApiError extends Error {
   constructor(
@@ -88,6 +99,7 @@ export interface Api {
   /** Starts the approval. Resolves with the address the browser must go to. */
   review(id: string, action: ReviewAction, headSha: string): Promise<string>;
   logout(): Promise<void>;
+  budget(): Promise<BudgetInfo>;
 }
 
 export function createApi(
@@ -147,6 +159,7 @@ export function createApi(
     logout: async () => {
       await call("/api/auth/logout", { method: "POST" });
     },
+    budget: () => call("/api/budget"),
   };
 }
 

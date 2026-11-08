@@ -16,6 +16,16 @@ export interface ControlEnv {
   PROJECTS?: string;
   IMPLEMENT_MODEL?: string;
   REVIEW_MODEL?: string;
+  /** Stage 5. The model Codex implements with when Anthropic reached its limit. */
+  FALLBACK_IMPLEMENT_MODEL?: string;
+  /** Stage 5. The model that reviews on Anthropic (another engine's work, or T0/T1 alone). */
+  ANTHROPIC_REVIEW_MODEL?: string;
+  /** Stage 5. Monthly limit per account and per-run cap, in USD. Defaults 50, 50 and 5. */
+  BUDGET_ANTHROPIC_USD?: string;
+  BUDGET_OPENAI_USD?: string;
+  RUN_BUDGET_USD?: string;
+  /** Stage 5. Repository of the once-per-period budget issue. Not a managed project. */
+  FACTORY_REPO?: string;
   GITHUB_WEBHOOK_SECRET?: string;
   GITHUB_APP_PRIVATE_KEY?: string;
   GITHUB_OAUTH_CLIENT_SECRET?: string;

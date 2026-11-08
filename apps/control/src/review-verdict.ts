@@ -113,12 +113,14 @@ function safeLine(value: string, limit: number): string {
 /** The pull request comment for a verdict. Reviewer text is data: it is escaped and length-capped. */
 export function renderReviewComment(
   verdict: Verdict,
-  context: { model: string; headSha: string },
+  context: { model: string; headSha: string; singleEngine?: boolean },
 ): string {
   const lines = [
     `Automated review (${safeLine(context.model, 64)}) of commit \`${context.headSha.slice(0, 12)}\`: **${verdict.verdict}**`,
     "",
-    "This is a machine-generated review by a second AI engine. It is not a human approval. The factory decides the merge from the risk tier, the required checks and this verdict.",
+    context.singleEngine === true
+      ? "Single-engine review: the other engine's budget is used up, so a different model of the implementing engine reviewed this change in a new session. The factory allows this for risk tiers T0 and T1 only. It is not a human approval. The factory decides the merge from the risk tier, the required checks and this verdict."
+      : "This is a machine-generated review by a second AI engine. It is not a human approval. The factory decides the merge from the risk tier, the required checks and this verdict.",
     "",
     safeLine(verdict.summary, SHOWN_SUMMARY),
   ];

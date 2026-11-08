@@ -1,5 +1,11 @@
 export const DEFAULT_IMPLEMENT_MODEL = "claude-sonnet-5-5";
 export const DEFAULT_REVIEW_MODEL = "gpt-5.4-nano";
+/** Stage 5. Codex implements with this once Anthropic reached its limit. */
+export const DEFAULT_FALLBACK_IMPLEMENT_MODEL = "gpt-6.1-terra";
+/** Stage 5. Reviews on Anthropic: Codex's work, or T0/T1 when only Anthropic is left. */
+export const DEFAULT_ANTHROPIC_REVIEW_MODEL = "claude-haiku-5-5";
+/** Stage 5. The once-per-period budget issue goes here. It is not a managed project. */
+export const DEFAULT_FACTORY_REPO = "roboco-io/the-software-factory-demo";
 
 /** Comma-separated list, exact entries, whitespace around entries trimmed. Empty means no entries. */
 export function parseList(value: string | undefined): string[] {

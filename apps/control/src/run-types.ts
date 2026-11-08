@@ -15,6 +15,7 @@ export const STATES = [
   "publishing",
   "pr_opened",
   "reviewing",
+  "awaiting_engine",
   "awaiting_checks",
   "awaiting_approval",
   "merged",
@@ -56,6 +57,9 @@ export const REASON_CODES = [
   "merge_conflict",
   // Portal (stage 4).
   "stopped_by_operator",
+  // Budget and engine switching (stage 5).
+  "budget_exceeded",
+  "engine_wait_timeout",
 ] as const;
 export type ReasonCode = (typeof REASON_CODES)[number];
 

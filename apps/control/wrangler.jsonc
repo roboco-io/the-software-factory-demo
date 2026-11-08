@@ -33,6 +33,17 @@
     "PROJECTS": "roboco-io/factory-test-app,roboco-io/conveyor",
     "IMPLEMENT_MODEL": "claude-sonnet-5-5",
     "REVIEW_MODEL": "gpt-5.4-nano",
+    // Stage 5: budget and engine switching. Estimated monthly spend per account (UTC
+    // calendar month) and the most one run may spend on one account, in USD. When Anthropic
+    // reached its limit Codex implements with FALLBACK_IMPLEMENT_MODEL; ANTHROPIC_REVIEW_MODEL
+    // reviews on Anthropic. When both reached it, new runs stop and one issue per period goes
+    // to FACTORY_REPO (the GitHub App needs Issues write there). See docs/operations.md.
+    "BUDGET_ANTHROPIC_USD": "50",
+    "BUDGET_OPENAI_USD": "50",
+    "RUN_BUDGET_USD": "5",
+    "FALLBACK_IMPLEMENT_MODEL": "gpt-6.1-terra",
+    "ANTHROPIC_REVIEW_MODEL": "claude-haiku-5-5",
+    "FACTORY_REPO": "roboco-io/the-software-factory-demo",
   },
   "d1_databases": [
     {

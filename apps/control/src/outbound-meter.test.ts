@@ -31,6 +31,13 @@ vi.mock("./d1-repo", async (orig) => {
   };
 });
 
+// These tests are about metering. The budget check has its own tests (outbound-budget.test.ts).
+vi.mock("./outbound-budget", () => ({
+  checkCallBudget: async () => ({ allow: true }),
+  acquireCallSlot: async () => 1,
+  releaseCallSlot: async () => undefined,
+}));
+
 import { Outbound } from "./outbound";
 
 const SSE =
@@ -159,19 +166,15 @@ describe("Outbound metering", () => {
     expect(recorded).toHaveLength(0);
   });
 
-  it("test_no_run_id_unmetered: returns the upstream response as is", async () => {
-    const upstream = new Response(SSE, {
-      status: 200,
-      headers: { "content-type": "text/event-stream" },
-    });
-    vi.mocked(fetch).mockResolvedValue(upstream);
+  it("test_no_run_id_refused: a model call with no run to charge never reaches the provider (stage 5)", async () => {
     const res = await make({
       repo: "a/b",
       model: "m1",
       phase: "implement",
     }).fetch(modelReq());
-    expect(res).toBe(upstream);
-    expect(waited).toHaveLength(0);
+    expect(res.status).toBe(403);
+    expect(await res.text()).toBe("DENIED: no_run_bound\n");
+    expect(fetch).not.toHaveBeenCalled();
     expect(recorded).toHaveLength(0);
   });
 

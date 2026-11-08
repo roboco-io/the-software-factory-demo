@@ -1,4 +1,6 @@
 import { vi } from "vitest";
+import { assessBudget, budgetConfig } from "../budget";
+import type { BudgetPort } from "../budget-service";
 import { ActiveRunConflict, type RunRepo } from "../d1-repo";
 import {
   RunMachine,
@@ -68,7 +70,48 @@ export interface World {
   prompts: string[];
   reviewPrompts: string[];
   dbActive: { id: string; createdAt: number } | null;
-  facts: { runId: string; tier?: string; headSha?: string }[];
+  facts: {
+    runId: string;
+    tier?: string;
+    headSha?: string;
+    reviewModel?: string;
+    singleEngine?: boolean;
+  }[];
+  /** The model of every startAgent and startReview call, in order. */
+  agentModels: string[];
+  reviewModels: string[];
+  /** implementModel of every createRun call. */
+  createdModels: (string | undefined)[];
+}
+
+/**
+ * A budget driven by fake usage: tests set the month's spend per account (and, optionally,
+ * which runs are over their cap). Everything else is the real budget arithmetic.
+ */
+export interface FakeBudget extends BudgetPort {
+  spent: { anthropic: number | null; openai: number | null };
+  reserved: { anthropic: number; openai: number };
+  overrunRuns: Set<string>;
+  notices: string[];
+}
+
+export function fakeBudget(): FakeBudget {
+  const b: FakeBudget = {
+    spent: { anthropic: 0, openai: 0 },
+    reserved: { anthropic: 0, openai: 0 },
+    overrunRuns: new Set(),
+    notices: [],
+    async status() {
+      return assessBudget(budgetConfig({}), "2026-11", b.spent, b.reserved);
+    },
+    async overrun(runId) {
+      return b.overrunRuns.has(runId);
+    },
+    async notifyExhausted(status) {
+      b.notices.push(status.period);
+    },
+  };
+  return b;
 }
 
 export interface BuildOptions {
@@ -105,6 +148,12 @@ export interface BuildOptions {
   duringTransition?: (to: RunState) => Promise<void>;
   /** Awaited at the start of sandbox.start: lets a test act while the sandbox is being created. */
   beforeSandboxStart?: () => Promise<void>;
+  /** Stage 5. Defaults to a fake budget with room on both accounts. */
+  budget?: BudgetPort;
+  /** Runs holding a sandbox slot, as D1 would count them. Defaults to 0. */
+  busySlots?: () => number;
+  /** The first recordFacts call that sets a reviewer fails. */
+  failFactsOnce?: boolean;
 }
 
 // Producer fakes. The seam check swaps real sandbox, publisher and GitHub client behind these ports.
@@ -126,12 +175,16 @@ export function build(over: BuildOptions = {}) {
     reviewPrompts: [],
     dbActive: null,
     facts: [],
+    agentModels: [],
+    reviewModels: [],
+    createdModels: [],
   };
   const pullsWorld = createWorld(over.pulls);
   const repo: RunRepo = {
     async createRun(r, max) {
       if (w.dbActive !== null) throw new ActiveRunConflict();
       if ((over.activeRuns ?? 0) >= max) return "capacity_full";
+      w.createdModels.push(r.implementModel);
       w.dbActive = { id: r.id, createdAt: r.ts };
       w.events.push({ kind: "created", from: null, to: "queued", code: null });
       w.states.push("queued");
@@ -157,7 +210,14 @@ export function build(over: BuildOptions = {}) {
       w.events.push({ kind: "cleanup", from: null, to: null, code: e.code });
     },
     async recordFacts(f) {
+      if (over.failFactsOnce === true && f.reviewModel !== undefined) {
+        over.failFactsOnce = false;
+        throw new Error("D1 interrupted");
+      }
       w.facts.push(f);
+    },
+    async capacityUsed() {
+      return over.busySlots?.() ?? 0;
     },
   };
   const sandbox: SandboxPort = {
@@ -171,6 +231,7 @@ export function build(over: BuildOptions = {}) {
     },
     async startAgent(i) {
       w.sandboxCalls.push("startAgent");
+      w.agentModels.push(i.model);
       w.prompts.push(i.prompt);
       return "started";
     },
@@ -198,6 +259,7 @@ export function build(over: BuildOptions = {}) {
       },
       async startReview(i) {
         w.reviewCalls.push("startReview");
+        w.reviewModels.push(i.model);
         w.reviewPrompts.push(i.prompt);
         return "started";
       },
@@ -280,6 +342,9 @@ export function build(over: BuildOptions = {}) {
     operatorIds: over.operatorIds ?? [OPERATOR],
     model: "claude-sonnet-5-5",
     reviewModel: "gpt-5.4-nano",
+    fallbackModel: "gpt-6.1-terra",
+    anthropicReviewModel: "claude-haiku-5-5",
+    budget: over.budget ?? fakeBudget(),
     now: () => w.now,
     newId: () => `${over.idPrefix ?? ""}run${++ids}`,
   });

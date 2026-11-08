@@ -176,6 +176,8 @@ export function meterResponse(
   response: Response,
   target: Target,
   onUsage: (u: Usage) => Promise<void>,
+  /** Called instead of onUsage when a successful response has no readable usage. */
+  onMissing?: () => Promise<void>,
 ): { response: Response; done: Promise<void> } {
   if (!response.ok || !response.body)
     return { response, done: Promise.resolve() };
@@ -194,8 +196,10 @@ export function meterResponse(
           response.headers.get("content-type") ?? "",
         );
         if (usage) await onUsage(usage);
+        else await onMissing?.();
       } catch {
         // metering must never surface an error
+        await onMissing?.().catch(() => undefined);
       }
     })();
     return { response: out, done };

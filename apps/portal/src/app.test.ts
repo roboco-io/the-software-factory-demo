@@ -85,6 +85,15 @@ function fakeApi(
       return "https://github.com/login/oauth/authorize?state=s";
     },
     logout: async () => void calls.push("logout"),
+    budget: async () => ({
+      period: "2026-11",
+      runCapUsd: 5,
+      mode: "normal",
+      providers: {
+        anthropic: { limitUsd: 50, spentUsd: 1, exhausted: false },
+        openai: { limitUsd: 50, spentUsd: 1, exhausted: false },
+      },
+    }),
     ...over,
   };
   return Object.assign(api, { calls });
@@ -128,6 +137,41 @@ describe("home", () => {
       expect(t).toContain(word);
     expect(root().querySelectorAll("ol.flow > li")).toHaveLength(4);
     expect(root().querySelector('a[href="/projects"]')).not.toBeNull();
+  });
+});
+
+describe("budget notice (stage 5)", () => {
+  it("shows on every screen when both accounts reached their limit", async () => {
+    const api = fakeApi({
+      budget: async () => ({
+        period: "2026-11",
+        runCapUsd: 5,
+        mode: "paused",
+        providers: {
+          anthropic: { limitUsd: 50, spentUsd: 50, exhausted: true },
+          openai: { limitUsd: 50, spentUsd: 48, exhausted: true },
+        },
+      }),
+    });
+    await open("/projects", api);
+    const notice = root().querySelector(".budget-notice");
+    expect(notice?.getAttribute("role")).toBe("alert");
+    expect(notice?.textContent).toContain("새 실행을 멈췄습니다");
+  });
+
+  it("shows nothing in normal mode or when the budget cannot be read", async () => {
+    await open("/", fakeApi());
+    expect(root().querySelector(".budget-notice")).toBeNull();
+    await open(
+      "/",
+      fakeApi({
+        budget: async () => {
+          throw new ApiError(503, "unavailable");
+        },
+      }),
+    );
+    expect(root().querySelector(".budget-notice")).toBeNull();
+    expect(text()).not.toContain("예산");
   });
 });
 

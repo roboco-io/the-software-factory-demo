@@ -1,3 +1,11 @@
+import {
+  allExhausted,
+  chooseImplementer,
+  chooseReviewer,
+  type BudgetStatus,
+  type EngineModels,
+} from "./budget";
+import type { BudgetPort } from "./budget-service";
 import { ActiveRunConflict, type RunRepo } from "./d1-repo";
 import { validateChanges, type ValidChange } from "./changes";
 import { decideMerge } from "./decision";
@@ -38,6 +46,13 @@ export const MAX_STEP_ATTEMPTS = 3;
 export const MAX_WAIT_ATTEMPTS = 12;
 export const MAX_CLEANUP_ATTEMPTS = 5;
 export const MAX_ACTIVE_RUNS = 2;
+/** Stage 5. How often a pull request waiting for a reviewing engine checks the budget. */
+export const ENGINE_POLL_MS = 60 * 60 * 1000;
+/** How often a pull request with an engine but no free review slot checks again. */
+export const ENGINE_CAPACITY_POLL_MS = 5 * 60 * 1000;
+/** Longer than one billing period: by then the budget has reset, so a longer wait means a fault. */
+export const ENGINE_WAIT_TIMEOUT_MS = 35 * 24 * 60 * 60 * 1000;
+const SINGLE_ENGINE_TIERS: readonly Tier[] = ["T0", "T1"];
 /** How long a freshly started agent may show no pid file before the run counts as lost. */
 export const START_GRACE_MS = 60 * 1000;
 
@@ -113,15 +128,26 @@ export interface MachineDeps {
   pulls: PullRequestPort;
   /** Numeric GitHub user IDs whose approval counts. */
   operatorIds: readonly string[];
+  /** Claude's implement model (Anthropic). */
   model: string;
+  /** The reviewer model on OpenAI. */
   reviewModel: string;
+  /** Stage 5. Codex's implement model (OpenAI), used once Anthropic reached its limit. */
+  fallbackModel: string;
+  /** Stage 5. The reviewer model on Anthropic. */
+  anthropicReviewModel: string;
+  budget: BudgetPort;
   now(): number;
   newId(): string;
 }
 
 export type StartResult =
   | { outcome: "started" | "duplicate" | "already_done"; runId: string }
-  | { outcome: "capacity_full" };
+  | { outcome: "capacity_full" }
+  /** Both accounts reached their monthly limit: no new run until the next billing period. */
+  | { outcome: "budget_exhausted" }
+  /** An account has room, but the active runs hold it for now. */
+  | { outcome: "budget_reserved" };
 
 interface StoredRun {
   id: string;
@@ -159,6 +185,14 @@ interface StoredRun {
   /** The last tier written to the repository, so polling writes it only when it changes. */
   recordedTier?: string;
   recordedHeadSha?: string;
+  /** Stage 5. The model chosen at start. Older runs have none and used `deps.model`. */
+  implementModel?: string;
+  /** Stage 5. The reviewer chosen when the review could start. */
+  reviewModel?: string;
+  /** The reviewer is another model of the implementer's engine (T0 and T1 only). */
+  singleEngine?: boolean;
+  /** Start of the current wait in awaiting_engine. */
+  engineWaitStartedAt?: number;
 }
 
 /** What an operator's stop request did. */
@@ -193,6 +227,36 @@ const isTimeoutExit = (code: number) => code === 124 || code === 137;
 export class RunMachine {
   constructor(private readonly deps: MachineDeps) {}
 
+  private engines(): EngineModels {
+    return {
+      implement: {
+        anthropic: this.deps.model,
+        openai: this.deps.fallbackModel,
+      },
+      review: {
+        anthropic: this.deps.anthropicReviewModel,
+        openai: this.deps.reviewModel,
+      },
+    };
+  }
+
+  private implementModel(run: StoredRun): string {
+    return run.implementModel ?? this.deps.model;
+  }
+
+  /** Whether the run's calls of `model` are now refused for budget. A failed check counts as no. */
+  private async overrun(
+    run: StoredRun,
+    model: string,
+    phase: "implement" | "review",
+  ): Promise<boolean> {
+    try {
+      return await this.deps.budget.overrun(run.id, model, phase);
+    } catch {
+      return false;
+    }
+  }
+
   private async load(): Promise<StoredRun | undefined> {
     const run = await this.deps.storage.get<StoredRun>(KEY);
     if (run !== undefined && run.live === undefined) {
@@ -223,6 +287,13 @@ export class RunMachine {
       if (existing.state === "merged" || existing.state === "needs_human")
         return { outcome: "already_done", runId: existing.id };
     }
+    const status = await this.deps.budget.status();
+    const choice = chooseImplementer(status, this.engines());
+    if (choice.kind === "exhausted") {
+      await this.deps.budget.notifyExhausted(status);
+      return { outcome: "budget_exhausted" };
+    }
+    if (choice.kind === "reserved") return { outcome: "budget_reserved" };
     const now = this.deps.now();
     const run: StoredRun = {
       id: this.deps.newId(),
@@ -237,6 +308,7 @@ export class RunMachine {
       attempts: 0,
       live: [],
       cleanupAttempts: 0,
+      implementModel: choice.model,
     };
     try {
       const created = await this.deps.repo.createRun(
@@ -246,6 +318,7 @@ export class RunMachine {
           issueNumber: run.issueNumber,
           ts: now,
           title: run.title,
+          implementModel: choice.model,
         },
         MAX_ACTIVE_RUNS,
       );
@@ -365,7 +438,8 @@ export class RunMachine {
         error: errorKind(error),
       });
       // The long approval wait tolerates more consecutive errors, with growing pauses.
-      const waiting = run.state === "awaiting_approval";
+      const waiting =
+        run.state === "awaiting_approval" || run.state === "awaiting_engine";
       if (run.attempts >= (waiting ? MAX_WAIT_ATTEMPTS : MAX_STEP_ATTEMPTS)) {
         await this.fail(
           run,
@@ -397,6 +471,12 @@ export class RunMachine {
           since: run.reviewPhaseStartedAt ?? run.createdAt,
           ms: REVIEW_TIMEOUT_MS,
           code: "timeout",
+        };
+      case "awaiting_engine":
+        return {
+          since: run.engineWaitStartedAt ?? run.createdAt,
+          ms: ENGINE_WAIT_TIMEOUT_MS,
+          code: "engine_wait_timeout",
         };
       case "awaiting_checks":
         return {
@@ -446,7 +526,7 @@ export class RunMachine {
       case "cloning": {
         this.markLive(run, run.id);
         await this.save(run);
-        await sandbox.start(run.repo, this.deps.model);
+        await sandbox.start(run.repo, this.implementModel(run));
         const cloned = await sandbox.clone(run.repo);
         if (!cloned.ok || cloned.baseSha === undefined)
           throw new StepFailure("clone_failed");
@@ -464,7 +544,7 @@ export class RunMachine {
               title: run.title,
               body: run.body,
             }),
-            model: this.deps.model,
+            model: this.implementModel(run),
           });
           run.agentStarted = true;
           run.agentStartedAt = this.deps.now();
@@ -483,8 +563,13 @@ export class RunMachine {
           await this.deps.storage.setAlarm(this.deps.now());
           return;
         }
+        if (isTimeoutExit(outcome.exitCode))
+          throw new StepFailure("agent_timeout");
+        // The egress refuses calls past the run's or the month's limit; the agent then fails.
         throw new StepFailure(
-          isTimeoutExit(outcome.exitCode) ? "agent_timeout" : "agent_failed",
+          (await this.overrun(run, this.implementModel(run), "implement"))
+            ? "budget_exceeded"
+            : "agent_failed",
         );
       }
       case "publishing": {
@@ -535,6 +620,7 @@ export class RunMachine {
         return;
       }
       case "reviewing":
+      case "awaiting_engine":
         await this.review(run);
         return;
       case "awaiting_checks":
@@ -610,11 +696,12 @@ export class RunMachine {
   private async review(run: StoredRun): Promise<void> {
     const rid = reviewSandboxId(run.id);
     const sandbox = this.deps.reviewSandbox(rid);
-    const model = this.deps.reviewModel;
     if (run.headSha === undefined || run.prNumber === undefined)
       throw new StepFailure("legacy_run");
     if (run.reviewStarted !== true) {
+      // While it waits for an engine, this also notices a pull request closed or changed meanwhile.
       await this.openPullRequest(run);
+      if (!(await this.pickReviewer(run))) return;
       if (run.baseSha === undefined) throw new StepFailure("internal_error");
       const diff = await this.deps.pulls.getDiff(
         run.repo,
@@ -632,14 +719,16 @@ export class RunMachine {
       if (!prompt.ok) throw new StepFailure(prompt.code);
       this.markLive(run, rid);
       await this.save(run);
-      await sandbox.start(run.repo, model);
+      const reviewer = run.reviewModel ?? this.deps.reviewModel;
+      await sandbox.start(run.repo, reviewer);
       const cloned = await sandbox.cloneAt(run.repo, run.headSha);
       if (!cloned.ok) throw new StepFailure("clone_failed");
-      await sandbox.startReview({ prompt: prompt.prompt, model });
+      await sandbox.startReview({ prompt: prompt.prompt, model: reviewer });
       run.reviewStarted = true;
       run.reviewTaskStartedAt = this.deps.now();
       await this.save(run);
     }
+    const model = run.reviewModel ?? this.deps.reviewModel;
     const outcome = await this.taskOutcome(
       sandbox,
       run.reviewTaskStartedAt ?? run.createdAt,
@@ -649,8 +738,12 @@ export class RunMachine {
       return;
     }
     if (outcome.exitCode !== 0) {
+      if (isTimeoutExit(outcome.exitCode))
+        throw new StepFailure("agent_timeout");
       throw new StepFailure(
-        isTimeoutExit(outcome.exitCode) ? "agent_timeout" : "review_failed",
+        (await this.overrun(run, model, "review"))
+          ? "budget_exceeded"
+          : "review_failed",
       );
     }
     // Only the schema-valid verdict counts. Anything else is "no verdict".
@@ -665,7 +758,11 @@ export class RunMachine {
         run.repo,
         run.prNumber,
         run.headSha,
-        renderReviewComment(parsed.verdict, { model, headSha: run.headSha }),
+        renderReviewComment(parsed.verdict, {
+          model,
+          headSha: run.headSha,
+          singleEngine: run.singleEngine === true,
+        }),
       );
       run.commentPosted = true;
       await this.save(run);
@@ -677,6 +774,62 @@ export class RunMachine {
     run.checksStartedAt = this.deps.now();
     await this.transition(run, "awaiting_checks", null);
     await this.deps.storage.setAlarm(this.deps.now());
+  }
+
+  /**
+   * Chooses the reviewer once, from the budget at the moment the review can start (stage 5).
+   * Returns false when no engine may review now: the run then waits in awaiting_engine.
+   */
+  private async pickReviewer(run: StoredRun): Promise<boolean> {
+    // A waiting run holds no slot. Leaving the wait starts a review sandbox, so it needs one.
+    if (
+      run.state === "awaiting_engine" &&
+      (await this.deps.repo.capacityUsed()) >= MAX_ACTIVE_RUNS
+    ) {
+      await this.setAlarm(run, this.deps.now() + ENGINE_CAPACITY_POLL_MS);
+      return false;
+    }
+    if (run.reviewModel === undefined) {
+      const status = await this.deps.budget.status(run.id);
+      const choice = chooseReviewer(
+        run.recordedTier as Tier | undefined,
+        this.implementModel(run),
+        status,
+        this.engines(),
+      );
+      if (choice.kind === "wait") {
+        await this.waitForEngine(run, status);
+        return false;
+      }
+      // D1 first: the budget reserves by this column, and a failed write is retried
+      // because the choice is saved here only after it.
+      await this.deps.repo.recordFacts({
+        runId: run.id,
+        reviewModel: choice.model,
+        singleEngine: choice.singleEngine,
+      });
+      run.reviewModel = choice.model;
+      run.singleEngine = choice.singleEngine;
+      await this.save(run);
+    }
+    if (run.state === "awaiting_engine") {
+      // The review gets its full time from now, not from when the pull request opened.
+      run.reviewPhaseStartedAt = this.deps.now();
+      await this.transition(run, "reviewing", null);
+    }
+    return true;
+  }
+
+  private async waitForEngine(
+    run: StoredRun,
+    status: BudgetStatus,
+  ): Promise<void> {
+    if (allExhausted(status)) await this.deps.budget.notifyExhausted(status);
+    if (run.state !== "awaiting_engine") {
+      run.engineWaitStartedAt = this.deps.now();
+      await this.transition(run, "awaiting_engine", null);
+    }
+    await this.setAlarm(run, this.deps.now() + ENGINE_POLL_MS);
   }
 
   /** awaiting_checks and awaiting_approval: decide from fresh GitHub data whether the pull request may merge. */
@@ -693,6 +846,10 @@ export class RunMachine {
     await this.recordHead(run);
     const { policy, tier } = await this.evaluate(run, pr);
     await this.recordTier(run, tier);
+    // A single-engine review covers T0 and T1 only. The base branch's policy may have
+    // raised the tier since the review: then a person decides.
+    if (run.singleEngine === true && !SINGLE_ENGINE_TIERS.includes(tier))
+      throw new StepFailure("review_invalid");
     const checks = await this.deps.pulls.listChecks(run.repo, run.headSha);
     const reviews = await this.deps.pulls.listReviews(run.repo, run.prNumber);
     const decision =

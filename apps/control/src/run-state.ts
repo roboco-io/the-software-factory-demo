@@ -11,7 +11,8 @@ const NEXT: Readonly<Record<RunState, readonly RunState[]>> = {
   implementing: ["publishing", ...STOPS],
   publishing: ["pr_opened", ...STOPS],
   pr_opened: ["reviewing", ...STOPS],
-  reviewing: ["awaiting_checks", ...STOPS],
+  reviewing: ["awaiting_checks", "awaiting_engine", ...STOPS],
+  awaiting_engine: ["reviewing", ...STOPS],
   awaiting_checks: ["awaiting_approval", "merged", ...STOPS],
   awaiting_approval: ["merged", ...STOPS],
   merged: [],
@@ -23,6 +24,7 @@ const NEXT: Readonly<Record<RunState, readonly RunState[]>> = {
 export const POST_PR_STATES: readonly RunState[] = [
   "pr_opened",
   "reviewing",
+  "awaiting_engine",
   "awaiting_checks",
   "awaiting_approval",
 ];

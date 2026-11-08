@@ -35,6 +35,10 @@ export const STATE_LABELS: Readonly<Record<string, Label>> = {
     title: "교차 리뷰 중",
     text: "구현과 다른 엔진이 새 샌드박스에서 변경을 읽기 전용으로 리뷰하고 있습니다.",
   },
+  awaiting_engine: {
+    title: "리뷰 엔진 대기",
+    text: "예산이 남은 리뷰 엔진을 기다리고 있습니다. 한 계정의 예산이 소진되어 엔진이 하나만 남으면 위험 등급 T2·T3 변경은 다른 엔진을 쓸 수 있을 때까지 기다리고, 두 계정이 모두 소진되면 모든 변경이 기다립니다. 다음 청구 주기에 예산이 생기면 리뷰를 이어서 시작합니다.",
+  },
   awaiting_checks: {
     title: "필수 체크 대기",
     text: "리뷰가 승인했습니다. 정책이 요구하는 필수 체크가 성공하기를 기다리고 있습니다.",
@@ -279,6 +283,16 @@ export const REASON_LABELS: Readonly<Record<string, ReasonLabel>> = {
     text: "운영자가 포털에서 이 실행을 중지했습니다. 샌드박스는 정리되었고 이후 자동 진행은 없습니다. PR이 이미 있다면 그대로 남아 있습니다.",
     tone: "info",
   },
+  budget_exceeded: {
+    title: "예산 한도 도달",
+    text: "실행 하나의 지출 상한이나 계정의 월 예산에 도달해 제어 평면이 모델 호출을 막았고, 에이전트가 작업을 끝내지 못했습니다. 지출은 기록된 토큰 수와 고정 단가로 계산한 추정치입니다.",
+    tone: "fail",
+  },
+  engine_wait_timeout: {
+    title: "리뷰 엔진 대기 시간 초과",
+    text: "예산이 남은 리뷰 엔진을 청구 주기 하나보다 오래 기다렸습니다. 이 정도로 오래 기다리는 것은 정상이 아니므로 사람에게 넘겼습니다.",
+    tone: "attention",
+  },
 };
 
 const STATE_TONE: Readonly<Record<string, Tone>> = {
@@ -343,6 +357,8 @@ const STOPPED_ACTIONS: Readonly<Record<string, string>> = {
   merge_refused: `대상 저장소의 브랜치 보호 규칙을 확인하고, 규칙을 만족한 뒤 PR을 직접 병합하세요. 변경이 필요 없으면 PR과 이슈를 닫으세요.`,
   merge_conflict: `PR 브랜치의 충돌을 해결한 뒤 직접 병합하세요. 변경이 필요 없으면 PR과 이슈를 닫으세요.`,
   stopped_by_operator: `남아 있는 PR을 검토하세요. ${MERGE_OR_CLOSE}`,
+  budget_exceeded: `자동 리뷰가 끝나지 않았으므로 PR을 직접 검토하세요. ${MERGE_OR_CLOSE}`,
+  engine_wait_timeout: `예산 상태와 제어 평면 로그를 확인하세요. 자동 리뷰가 없으므로 PR을 직접 검토하세요. ${MERGE_OR_CLOSE}`,
   pr_closed: `남은 조치는 없습니다. 변경이 아직 필요하면 새 이슈를 만들어 factory:go 라벨을 붙이세요.`,
 };
 
@@ -357,6 +373,8 @@ const BEFORE_RETRY: Readonly<Record<string, string>> = {
   too_many_files: "이슈의 범위를 줄이세요.",
   total_too_large: "이슈의 범위를 줄이세요.",
   file_too_large: "이슈의 범위를 줄이세요.",
+  budget_exceeded:
+    "이슈의 범위를 줄이거나, 포털 상단의 예산 안내를 보고 다음 청구 주기를 기다리세요.",
 };
 
 const UNSAFE_CHANGE_REASONS: ReadonlySet<string> = new Set([

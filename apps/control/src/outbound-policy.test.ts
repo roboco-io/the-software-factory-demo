@@ -7,7 +7,11 @@ import {
   type SandboxPhase,
 } from "./outbound-policy";
 
-type Ctx = { repo?: string; phase?: SandboxPhase };
+type Ctx = {
+  repo?: string;
+  phase?: SandboxPhase;
+  provider?: "anthropic" | "openai";
+};
 const run: Ctx = { repo: "acme/demo", phase: "implement" };
 const review: Ctx = { repo: "acme/demo", phase: "review" };
 const decide = (method: string, url: string, ctx: Ctx = run) =>
@@ -273,5 +277,37 @@ describe("injectOpenAIKey", () => {
     expect(out.has("x-api-key")).toBe(false);
     expect(out.get("content-type")).toBe("application/json");
     expect(original.get("authorization")).toContain("placeholder");
+  });
+});
+
+describe("outbound policy: engine switching (stage 5)", () => {
+  const codex: Ctx = {
+    repo: "acme/demo",
+    phase: "implement",
+    provider: "openai",
+  };
+  const claudeReview: Ctx = {
+    repo: "acme/demo",
+    phase: "review",
+    provider: "anthropic",
+  };
+
+  it("lets an implement sandbox bound to an OpenAI model reach only OpenAI", () => {
+    expect(
+      decide("POST", "https://api.openai.com/v1/responses", codex),
+    ).toEqual({ allow: true, target: "openai" });
+    denied("POST", "https://api.anthropic.com/v1/messages", codex);
+  });
+
+  it("lets a review sandbox bound to an Anthropic model reach only Anthropic", () => {
+    expect(
+      decide("POST", "https://api.anthropic.com/v1/messages", claudeReview),
+    ).toEqual({ allow: true, target: "anthropic" });
+    denied("POST", "https://api.openai.com/v1/responses", claudeReview);
+  });
+
+  it("still needs a phase: a provider alone reaches nothing", () => {
+    const noPhase: Ctx = { repo: "acme/demo", provider: "openai" };
+    denied("POST", "https://api.openai.com/v1/responses", noPhase);
   });
 });

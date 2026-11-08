@@ -204,6 +204,17 @@ describe("webhook", () => {
     });
   });
 
+  it.each(["budget_exhausted", "budget_reserved"])(
+    "answers 202 with the fixed code %s when the budget stops new runs (stage 5)",
+    async (outcome) => {
+      const { deps, start } = makeDeps();
+      start.mockResolvedValueOnce({ outcome } as never);
+      const res = await post(deps, payload());
+      expect(res.status).toBe(202);
+      expect(await res.json()).toEqual({ status: "rejected", code: outcome });
+    },
+  );
+
   it("ignores an unlisted repository", async () => {
     const { deps, start } = makeDeps();
     const res = await post(

@@ -28,6 +28,8 @@ export interface RunRepo {
       issueNumber: number;
       ts: number;
       title?: string;
+      /** The model that implements this run. It decides which account the run reserves. */
+      implementModel?: string;
     },
     maxActive: number,
   ): Promise<"created" | "capacity_full">;
@@ -48,11 +50,16 @@ export interface RunRepo {
     ts: number;
     code: ReasonCode | null;
   }): Promise<void>;
-  /** Sets tier and head_sha when given. Leaves unset fields. Adds no event. */
+  /** Active runs that hold a sandbox slot (see CAPACITY_SQL). */
+  capacityUsed(): Promise<number>;
+  /** Sets the given fields. Leaves unset fields. Adds no event. */
   recordFacts(f: {
     runId: string;
     tier?: string;
     headSha?: string;
+    reviewModel?: string;
+    /** The reviewer is another model of the implementer's engine (stage 5). */
+    singleEngine?: boolean;
   }): Promise<void>;
 }
 
@@ -60,7 +67,8 @@ export interface RunRepo {
 const TERMINAL_SQL = "('merged', 'needs_human', 'failed')";
 /**
  * Active runs that count against capacity: they hold a sandbox or are about to.
- * A run in awaiting_approval waits for a person for up to days and holds no slot.
+ * A run in awaiting_approval waits for a person for up to days and holds no slot; a run in
+ * awaiting_engine waits for budget, for up to a billing period, and holds none either.
  */
 const CAPACITY_SQL =
   "('queued', 'cloning', 'implementing', 'publishing', 'pr_opened', 'reviewing', 'awaiting_checks')";
@@ -89,6 +97,7 @@ export class D1RunRepo implements RunRepo {
       issueNumber: number;
       ts: number;
       title?: string;
+      implementModel?: string;
     },
     maxActive: number,
   ): Promise<"created" | "capacity_full"> {
@@ -97,8 +106,8 @@ export class D1RunRepo implements RunRepo {
       results = await this.db.batch([
         this.db
           .prepare(
-            `INSERT INTO runs (id, repo, issue_number, state, created_at, updated_at, title)
-             SELECT ?, ?, ?, 'queued', ?, ?, ?
+            `INSERT INTO runs (id, repo, issue_number, state, created_at, updated_at, title, implement_model)
+             SELECT ?, ?, ?, 'queued', ?, ?, ?, ?
              WHERE (SELECT COUNT(*) FROM runs WHERE state IN ${CAPACITY_SQL}) < ?`,
           )
           .bind(
@@ -108,6 +117,7 @@ export class D1RunRepo implements RunRepo {
             run.ts,
             run.ts,
             run.title ?? null,
+            run.implementModel ?? null,
             maxActive,
           ),
         this.db
@@ -125,6 +135,13 @@ export class D1RunRepo implements RunRepo {
       throw error;
     }
     return results[0]?.meta.changes === 1 ? "created" : "capacity_full";
+  }
+
+  async capacityUsed(): Promise<number> {
+    const row = await this.db
+      .prepare(`SELECT COUNT(*) AS n FROM runs WHERE state IN ${CAPACITY_SQL}`)
+      .first<{ n: number }>();
+    return Number(row?.n ?? 0);
   }
 
   async findActiveRun(repo: string, issueNumber: number) {
@@ -169,12 +186,20 @@ export class D1RunRepo implements RunRepo {
     runId: string;
     tier?: string;
     headSha?: string;
+    reviewModel?: string;
+    singleEngine?: boolean;
   }): Promise<void> {
     await this.db
       .prepare(
-        "UPDATE runs SET tier = COALESCE(?, tier), head_sha = COALESCE(?, head_sha) WHERE id = ?",
+        "UPDATE runs SET tier = COALESCE(?, tier), head_sha = COALESCE(?, head_sha), review_model = COALESCE(?, review_model), single_engine = COALESCE(?, single_engine) WHERE id = ?",
       )
-      .bind(f.tier ?? null, f.headSha ?? null, f.runId)
+      .bind(
+        f.tier ?? null,
+        f.headSha ?? null,
+        f.reviewModel ?? null,
+        f.singleEngine === undefined ? null : f.singleEngine ? 1 : 0,
+        f.runId,
+      )
       .run();
   }
 
