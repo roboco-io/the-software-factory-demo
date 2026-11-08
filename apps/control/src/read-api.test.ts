@@ -8,6 +8,16 @@ import {
   req,
   type World,
 } from "./testing/api-world";
+import { nodeModule } from "./testing/node";
+
+const TEST_PEM = nodeModule<{
+  generateKeyPairSync(
+    t: "rsa",
+    o: { modulusLength: number },
+  ): { privateKey: { export(o: { type: "pkcs1"; format: "pem" }): string } };
+}>("node:crypto")
+  .generateKeyPairSync("rsa", { modulusLength: 2048 })
+  .privateKey.export({ type: "pkcs1", format: "pem" });
 
 // Same data as the shared seedRuns, with column lists so later migrations cannot break it.
 function seedRuns(w: World) {
@@ -76,12 +86,14 @@ describe("GET /api/projects", () => {
           counts: { active: 1, merged: 1, needs_human: 0, failed: 1 },
           attention: 1,
           costUsd: 0,
+          description: null,
         },
         {
           repo: "acme/other",
           counts: { active: 0, merged: 0, needs_human: 1, failed: 0 },
           attention: 0,
           costUsd: 0,
+          description: null,
         },
       ],
     });
@@ -98,6 +110,41 @@ describe("GET /api/projects", () => {
     });
     w.env.PROJECTS = "";
     expect((await get(w, "/api/projects")).body).toEqual({ projects: [] });
+  });
+
+  it("adds each repository's GitHub description, and null where GitHub does not answer", async () => {
+    const w = makeWorld({
+      GITHUB_APP_ID: "desc-test-1",
+      GITHUB_APP_PRIVATE_KEY: TEST_PEM,
+    });
+    const asked: string[] = [];
+    const fakeFetch = (async (input: RequestInfo | URL) => {
+      const path = new URL(String(input)).pathname;
+      asked.push(path);
+      const reply = (data: unknown, status = 200) =>
+        new Response(JSON.stringify(data), { status });
+      if (path === "/repos/acme/demo/installation") return reply({ id: 1 });
+      if (path === "/app/installations/1/access_tokens")
+        return reply({ token: "t" }, 201);
+      if (path === "/repos/acme/demo")
+        return reply({ description: "데모 앱입니다" });
+      return reply({ message: "boom" }, 500);
+    }) as typeof fetch;
+    const call = async () => {
+      const res = await handleRequest(req("/api/projects"), w.env, {
+        fetch: fakeFetch,
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return { res, body: (await res.json()) as Record<string, any> };
+    };
+    const { res, body } = await call();
+    expect(res.status).toBe(200);
+    expect(
+      body.projects.map((p: { description: unknown }) => p.description),
+    ).toEqual(["데모 앱입니다", null]);
+    const first = asked.length;
+    await call();
+    expect(asked).toHaveLength(first);
   });
 });
 
