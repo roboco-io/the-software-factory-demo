@@ -1,6 +1,18 @@
 import { DurableObject } from "cloudflare:workers";
-import { parseList, resolveModel, resolveReviewModel } from "./config";
+import { budgetConfig } from "./budget";
+import { BudgetService } from "./budget-service";
+import {
+  DEFAULT_ANTHROPIC_REVIEW_MODEL,
+  DEFAULT_FACTORY_REPO,
+  DEFAULT_FALLBACK_IMPLEMENT_MODEL,
+  parseList,
+  resolveModel,
+  resolveReviewModel,
+} from "./config";
+import { D1BudgetRepo } from "./d1-budget";
 import { D1RunRepo } from "./d1-repo";
+import { createIssueCreator } from "./github-issues";
+import { isValidRepo } from "./repo";
 import type { ControlEnv } from "./env";
 import { createPublisher } from "./github-publisher";
 import { createPullClient } from "./github-pulls";
@@ -81,6 +93,25 @@ export class IssueRun extends DurableObject<ControlEnv> {
         }).publish(input);
       },
     };
+    const factoryRepo = env.FACTORY_REPO?.trim() ?? "";
+    const budget = new BudgetService({
+      repo: new D1BudgetRepo(env.DB),
+      config: budgetConfig(env),
+      now: () => Date.now(),
+      factoryRepo: isValidRepo(factoryRepo)
+        ? factoryRepo
+        : DEFAULT_FACTORY_REPO,
+      issues: {
+        createIssue: (...a) => {
+          if (!env.GITHUB_APP_ID || !env.GITHUB_APP_PRIVATE_KEY)
+            return Promise.reject(new Error("GitHub App is not configured"));
+          return createIssueCreator({
+            appId: env.GITHUB_APP_ID,
+            privateKeyPem: env.GITHUB_APP_PRIVATE_KEY,
+          }).createIssue(...a);
+        },
+      },
+    });
     this.machine = new RunMachine({
       storage: {
         get: <T>(key: string) => ctx.storage.get<T>(key),
@@ -97,6 +128,15 @@ export class IssueRun extends DurableObject<ControlEnv> {
       operatorIds: parseList(env.OPERATOR_IDS),
       model: resolveModel(env.IMPLEMENT_MODEL),
       reviewModel: resolveReviewModel(env.REVIEW_MODEL),
+      fallbackModel: resolveModel(
+        env.FALLBACK_IMPLEMENT_MODEL,
+        DEFAULT_FALLBACK_IMPLEMENT_MODEL,
+      ),
+      anthropicReviewModel: resolveModel(
+        env.ANTHROPIC_REVIEW_MODEL,
+        DEFAULT_ANTHROPIC_REVIEW_MODEL,
+      ),
+      budget,
       now: () => Date.now(),
       newId: () => crypto.randomUUID().replace(/-/g, "").slice(0, 12),
     });

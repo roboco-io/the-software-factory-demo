@@ -232,7 +232,8 @@ describe("D1RunRepo for review and merge", () => {
 describe("stopped_by_operator migration", () => {
   it("is the fifth migration and accepts the new code only after it", () => {
     const files = readMigrations();
-    expect(files).toHaveLength(6);
+    // 0006 (console) and later migrations follow it.
+    expect(files.length).toBeGreaterThanOrEqual(6);
     const insert = `INSERT INTO runs VALUES ('r', 'acme/demo', 1, 'needs_human', 'stopped_by_operator', NULL, 1, 2);
       INSERT INTO events (run_id, ts, kind, reason_code) VALUES ('r', 2, 'transition', 'stopped_by_operator')`;
     const before = createTestD1(files.slice(0, 4));

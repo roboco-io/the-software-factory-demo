@@ -1,5 +1,9 @@
 import { PLACEHOLDER_API_KEY, TRUST_ENV, isValidModel } from "./agent-command";
 import { OPENAI_MAX_OUTPUT_TOKENS } from "./outbound-body";
+import { providerOf } from "./pricing";
+
+/** The pi provider of a reviewer model. Models without a price entry stay on OpenAI, as before stage 5. */
+const piProvider = (model: string) => providerOf(model) ?? "openai";
 
 export const PI_VERSION = "1.5.0";
 export const REVIEW_TIMEOUT_SECONDS = 15 * 60;
@@ -15,7 +19,7 @@ export const REVIEW_TOOLS = "read,ls,grep,find";
 export function piModelsConfig(model: string): string {
   return JSON.stringify({
     providers: {
-      openai: {
+      [piProvider(model)]: {
         modelOverrides: { [model]: { maxTokens: OPENAI_MAX_OUTPUT_TOKENS } },
       },
     },
@@ -32,6 +36,7 @@ export function buildReviewCommand(input: { prompt: string; model: string }): {
   env: Record<string, string>;
 } {
   if (!isValidModel(input.model)) throw new Error("invalid model name");
+  const provider = piProvider(input.model);
   return {
     command: [
       "timeout",
@@ -39,7 +44,7 @@ export function buildReviewCommand(input: { prompt: string; model: string }): {
       String(REVIEW_TIMEOUT_SECONDS),
       "pi",
       "--provider",
-      "openai",
+      provider,
       "--model",
       input.model,
       "--tools",
@@ -57,7 +62,9 @@ export function buildReviewCommand(input: { prompt: string; model: string }): {
     ],
     env: {
       ...TRUST_ENV,
-      OPENAI_API_KEY: PLACEHOLDER_API_KEY,
+      ...(provider === "anthropic"
+        ? { ANTHROPIC_API_KEY: PLACEHOLDER_API_KEY }
+        : { OPENAI_API_KEY: PLACEHOLDER_API_KEY }),
       PI_OFFLINE: "1",
       PI_SKIP_VERSION_CHECK: "1",
       PI_TELEMETRY: "0",

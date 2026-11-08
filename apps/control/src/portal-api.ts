@@ -1,4 +1,7 @@
+import { PROVIDERS, budgetConfig, budgetMode } from "./budget";
+import { BudgetService } from "./budget-service";
 import { parseList } from "./config";
+import { D1BudgetRepo } from "./d1-budget";
 import { D1ReadRepo, type RunCursor } from "./read-repo";
 import { errorKind, logDiagnostic } from "./diagnostics";
 import { json, type RouteContext } from "./http";
@@ -44,6 +47,38 @@ export async function handleProjects(ctx: RouteContext): Promise<Response> {
       costUsd:
         stats.get(name)?.costUsd === undefined ? 0 : stats.get(name)!.costUsd,
     })),
+  });
+}
+
+/**
+ * Stage 5. This billing period's estimated spend per account and the factory's mode. Public,
+ * like the per-run cost: the amounts are estimates from recorded tokens and fixed prices.
+ */
+export async function handleBudget(ctx: RouteContext): Promise<Response> {
+  if (ctx.env.DB === undefined) return unavailable();
+  const status = await new BudgetService({
+    repo: new D1BudgetRepo(ctx.env.DB),
+    config: budgetConfig(ctx.env),
+    now: () => Date.now(),
+    factoryRepo: "",
+  }).status();
+  return json({
+    period: status.period,
+    runCapUsd: status.runCapUsd,
+    mode: budgetMode(status),
+    providers: Object.fromEntries(
+      PROVIDERS.map((p) => {
+        const b = status.providers[p];
+        return [
+          p,
+          {
+            limitUsd: b.limitUsd,
+            spentUsd: b.spentUsd,
+            exhausted: b.exhausted,
+          },
+        ];
+      }),
+    ),
   });
 }
 

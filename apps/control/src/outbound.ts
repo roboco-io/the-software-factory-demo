@@ -2,6 +2,7 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 import { D1RunRepo } from "./d1-repo";
 import type { ControlEnv } from "./env";
 import { prepareAnthropicRequest, prepareOpenAIRequest } from "./outbound-body";
+import { checkCallBudget } from "./outbound-budget";
 import {
   decideOutbound,
   injectAnthropicKey,
@@ -9,6 +10,7 @@ import {
   selectKey,
   type SandboxPhase,
 } from "./outbound-policy";
+import { providerOf } from "./pricing";
 import { meterResponse } from "./usage-meter";
 
 interface OutboundProps {
@@ -29,9 +31,18 @@ interface OutboundProps {
  */
 export class Outbound extends WorkerEntrypoint<ControlEnv, OutboundProps> {
   async fetch(request: Request): Promise<Response> {
+    const boundModel = this.ctx.props?.model;
     const decision = decideOutbound(
       { method: request.method, url: request.url },
-      { repo: this.ctx.props?.repo, phase: this.ctx.props?.phase },
+      {
+        repo: this.ctx.props?.repo,
+        phase: this.ctx.props?.phase,
+        // The bound model's provider is the only one this sandbox reaches.
+        provider:
+          boundModel === undefined
+            ? undefined
+            : (providerOf(boundModel) ?? undefined),
+      },
     );
     const url = new URL(request.url);
     // Log method, host and path only: never the query, headers or bodies.
@@ -45,7 +56,9 @@ export class Outbound extends WorkerEntrypoint<ControlEnv, OutboundProps> {
       const key = selectKey(decision.target, this.env);
       if (!key)
         return new Response("DENIED: key_unavailable\n", { status: 503 });
-      const model = this.ctx.props?.model;
+      const model = boundModel;
+      const budget = await this.checkBudget(model);
+      if (budget !== null) return budget;
       const prepared =
         decision.target === "anthropic"
           ? await prepareAnthropicRequest(request, { model })
@@ -67,6 +80,29 @@ export class Outbound extends WorkerEntrypoint<ControlEnv, OutboundProps> {
       return this.meter(upstream, decision.target);
     }
     return fetch(new Request(request, { redirect: "manual" }));
+  }
+
+  /**
+   * Refuses the call when the run or the account has reached its limit (stage 5).
+   * Returns null when the call may go. Spend is recorded after each response, so the
+   * calls already in flight can overshoot the limit by their own cost.
+   */
+  private async checkBudget(
+    model: string | undefined,
+  ): Promise<Response | null> {
+    const runId = this.ctx.props?.runId;
+    if (!runId || !model)
+      return new Response("DENIED: no_run_bound\n", { status: 403 });
+    try {
+      const check = await checkCallBudget(this.env, runId, model);
+      if (check.allow) return null;
+      console.log(`outbound deny-budget ${check.reason}`);
+      return new Response(`DENIED: ${check.reason}\n`, { status: 402 });
+    } catch (error) {
+      // Without the spend the limit cannot be kept: fail closed.
+      console.log(`outbound budget-check-failed ${errorKind(error)}`);
+      return new Response("DENIED: budget_unavailable\n", { status: 503 });
+    }
   }
 
   /** Meters a model response for the run. A metering or recording failure never changes the response. */

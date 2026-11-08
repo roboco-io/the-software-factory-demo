@@ -6,11 +6,13 @@ export type OutboundDecision =
   { allow: false; reason: string } | { allow: true; target: OutboundTarget };
 
 /**
- * Which agent the sandbox runs. Each phase reaches one LLM provider and no other:
- * the implement sandbox reaches only Anthropic, the review sandbox only OpenAI.
+ * Which agent the sandbox runs. A sandbox reaches one LLM provider and no other: the
+ * provider of the model it is bound to. Without that, the implement sandbox reaches only
+ * Anthropic and the review sandbox only OpenAI (before stage 5 every sandbox was bound so).
  * A sandbox without a phase reaches neither.
  */
 export type SandboxPhase = "implement" | "review";
+export type ModelProvider = "anthropic" | "openai";
 
 export interface OutboundRequest {
   method: string;
@@ -28,8 +30,16 @@ const deny = (reason: string): OutboundDecision => ({ allow: false, reason });
  */
 export function decideOutbound(
   request: OutboundRequest,
-  run: { repo?: string; phase?: SandboxPhase | undefined },
+  run: {
+    repo?: string;
+    phase?: SandboxPhase | undefined;
+    provider?: ModelProvider | undefined;
+  },
 ): OutboundDecision {
+  const provider =
+    run.phase === undefined
+      ? undefined
+      : (run.provider ?? (run.phase === "implement" ? "anthropic" : "openai"));
   let url: URL;
   try {
     url = new URL(request.url);
@@ -42,7 +52,7 @@ export function decideOutbound(
   if (url.port !== "") return deny("port_not_allowed");
 
   if (url.hostname === "api.anthropic.com") {
-    if (run.phase !== "implement") return deny("provider_not_allowed_in_phase");
+    if (provider !== "anthropic") return deny("provider_not_allowed_in_phase");
     if (request.method === "POST" && ANTHROPIC_PATHS.has(url.pathname)) {
       return { allow: true, target: "anthropic" };
     }
@@ -50,7 +60,7 @@ export function decideOutbound(
   }
 
   if (url.hostname === "api.openai.com") {
-    if (run.phase !== "review") return deny("provider_not_allowed_in_phase");
+    if (provider !== "openai") return deny("provider_not_allowed_in_phase");
     if (
       request.method === "POST" &&
       url.pathname === OPENAI_PATH &&

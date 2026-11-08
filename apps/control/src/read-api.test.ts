@@ -368,3 +368,44 @@ describe("field allowlist", () => {
     }
   });
 });
+
+describe("GET /api/budget (stage 5)", () => {
+  const usage = (model: string, input: number) =>
+    `INSERT INTO run_usage (run_id, phase, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, ts)
+     VALUES ('aaaaaaaaaaa2', 'implement', '${model}', ${input}, 0, 0, 0, ${Date.now()});`;
+
+  it("shows anyone this period's estimated spend and the factory's mode", async () => {
+    const w = makeWorld();
+    seedRuns(w);
+    // Fake usage: $46 of Sonnet input, $1 of nano input.
+    w.exec(
+      usage("claude-sonnet-5-5", 23_000_000) + usage("gpt-5.4-nano", 5_000_000),
+    );
+    const { res, body } = await get(w, "/api/budget");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(body.mode).toBe("single_engine");
+    expect(body.runCapUsd).toBe(5);
+    expect(body.period).toMatch(/^\d{4}-\d{2}$/);
+    expect(body.providers.anthropic).toEqual({
+      limitUsd: 50,
+      spentUsd: 46,
+      exhausted: true,
+    });
+    expect(body.providers.openai).toMatchObject({
+      limitUsd: 50,
+      exhausted: false,
+    });
+    expect(body.providers.openai.spentUsd).toBeCloseTo(1, 6);
+  });
+
+  it("is paused when both accounts reached their limit", async () => {
+    const w = makeWorld();
+    seedRuns(w);
+    w.exec(
+      usage("claude-sonnet-5-5", 25_000_000) +
+        usage("gpt-5.4-nano", 250_000_000),
+    );
+    expect((await get(w, "/api/budget")).body.mode).toBe("paused");
+  });
+});

@@ -66,3 +66,31 @@ describe("piModelsConfig", () => {
     });
   });
 });
+
+describe("Anthropic reviewer (stage 5)", () => {
+  const { command, env } = buildReviewCommand({
+    prompt: "p",
+    model: "claude-haiku-5-5",
+  });
+
+  it("runs the same read-only pi with the anthropic provider", () => {
+    expect(command[command.indexOf("--provider") + 1]).toBe("anthropic");
+    expect(command[command.indexOf("--model") + 1]).toBe("claude-haiku-5-5");
+    expect(command[command.indexOf("--tools") + 1]).toBe("read,ls,grep,find");
+  });
+
+  it("sets only the Anthropic placeholder key", () => {
+    expect(env.ANTHROPIC_API_KEY).toBe(PLACEHOLDER_API_KEY);
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+  });
+
+  it("caps the output tokens under the anthropic provider", () => {
+    expect(JSON.parse(piModelsConfig("claude-haiku-5-5"))).toEqual({
+      providers: {
+        anthropic: {
+          modelOverrides: { "claude-haiku-5-5": { maxTokens: 16000 } },
+        },
+      },
+    });
+  });
+});

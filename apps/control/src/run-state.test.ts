@@ -21,13 +21,18 @@ const LEGAL: [RunState, RunState][] = [
   ["awaiting_checks", "awaiting_approval"],
   ["awaiting_checks", "merged"],
   ["awaiting_approval", "merged"],
+  // Stage 5: the review waits for an engine with budget, then starts.
+  ["reviewing", "awaiting_engine"],
+  ["awaiting_engine", "reviewing"],
   // Any active state may stop with a fixed code.
-  ...[...FLOW, "awaiting_approval" as RunState].flatMap(
-    (s): [RunState, RunState][] => [
-      [s, "needs_human"],
-      [s, "failed"],
-    ],
-  ),
+  ...[
+    ...FLOW,
+    "awaiting_approval" as RunState,
+    "awaiting_engine" as RunState,
+  ].flatMap((s): [RunState, RunState][] => [
+    [s, "needs_human"],
+    [s, "failed"],
+  ]),
 ];
 
 describe("run state machine", () => {
@@ -69,8 +74,19 @@ describe("run state machine", () => {
     expect(POST_PR_STATES).toEqual([
       "pr_opened",
       "reviewing",
+      "awaiting_engine",
       "awaiting_checks",
       "awaiting_approval",
     ]);
+  });
+  it("cannot leave awaiting_engine for checks or merge without a review", () => {
+    for (const to of [
+      "awaiting_checks",
+      "awaiting_approval",
+      "merged",
+    ] as const)
+      expect(() => assertTransition("awaiting_engine", to)).toThrow(
+        IllegalTransitionError,
+      );
   });
 });

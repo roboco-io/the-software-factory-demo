@@ -161,3 +161,11 @@ describe("durationText", () => {
     expect(durationText(ms)).toBe(text);
   });
 });
+
+describe("awaiting_engine (stage 5)", () => {
+  it("belongs to the review stage", () => {
+    expect(STAGES.find((s) => s.key === "review")!.states).toContain(
+      "awaiting_engine",
+    );
+  });
+});

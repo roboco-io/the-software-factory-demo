@@ -5,6 +5,7 @@ import type { ControlEnv } from "./env";
 import { json, type Handler, type RouteContext } from "./http";
 import {
   handleMe,
+  handleBudget,
   handleProjects,
   handleRun,
   handleRuns,
@@ -122,6 +123,12 @@ export const ROUTES: readonly Route[] = [
     methods: ["GET"],
     minRole: "anonymous",
     handler: handleProjects,
+  },
+  {
+    path: "/api/budget",
+    methods: ["GET"],
+    minRole: "anonymous",
+    handler: handleBudget,
   },
   {
     path: "/api/projects/:owner/:repo/runs",

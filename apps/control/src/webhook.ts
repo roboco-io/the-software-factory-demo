@@ -153,8 +153,13 @@ export async function handleWebhook(
 
   try {
     const result = await deps.starter.start({ ...qualified, deliveryId });
-    if (isRecord(result) && result.outcome === "capacity_full") {
-      return json({ status: "rejected", code: "capacity_full" }, 202);
+    if (
+      isRecord(result) &&
+      (result.outcome === "capacity_full" ||
+        result.outcome === "budget_exhausted" ||
+        result.outcome === "budget_reserved")
+    ) {
+      return json({ status: "rejected", code: result.outcome }, 202);
     }
     const runId =
       isRecord(result) && typeof result.runId === "string"

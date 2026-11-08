@@ -1,4 +1,4 @@
-# Agent sandbox image for both phases (Claude Code implements, pi reviews). Built and pushed by `wrangler deploy` (see wrangler.jsonc).
+# Agent sandbox image for both phases (Claude Code or Codex implements, pi reviews). Built and pushed by `wrangler deploy` (see wrangler.jsonc).
 # The image holds tools only: no GitHub token and no LLM key. Claude Code reads a
 # placeholder key (ANTHROPIC_API_KEY or OPENAI_API_KEY) that the exec call sets;
 # the Worker's Outbound handler swaps in the real key on the way out.
@@ -11,6 +11,11 @@ RUN apt-get update \
 # Pinned. The install scripts of these two packages are needed; npm blocks others by default.
 RUN npm install --global --allow-scripts=@anthropic-ai/claude-code,pnpm @anthropic-ai/claude-code@2.1.318 pnpm@12.18.0 \
 	&& claude --version
+
+# The fallback implementer (stage 5: Codex on OpenAI once Anthropic reached its limit). Pinned.
+# No install scripts: the native binary comes from the platform optional dependency.
+RUN npm install --global --ignore-scripts @openai/codex@0.166.0 \
+	&& codex --version
 
 # The reviewer engine (stage 3), pinned as in the sandbox experiment. Its install scripts are not needed.
 RUN npm install --global --ignore-scripts @earendil-works/pi-coding-agent@1.5.0 \

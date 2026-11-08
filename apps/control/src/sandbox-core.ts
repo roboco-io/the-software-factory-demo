@@ -1,5 +1,7 @@
 import { isValidRepo } from "./repo";
 import { TRUST_ENV, buildAgentCommand } from "./agent-command";
+import { buildCodexCommand } from "./codex-command";
+import { providerOf } from "./pricing";
 import {
   PI_AGENT_DIR,
   PI_MODELS_PATH,
@@ -221,7 +223,11 @@ export class SandboxController {
     model: string;
   }): Promise<"started" | "busy"> {
     if ((await this.readTaskStatus()).state === "running") return "busy";
-    const { command, env } = buildAgentCommand(input);
+    // Claude Code on Anthropic; Codex on OpenAI once Anthropic reached its limit (stage 5).
+    const { command, env } =
+      providerOf(input.model) === "openai"
+        ? buildCodexCommand(input)
+        : buildAgentCommand(input);
     await this.launch(command, env);
     return "started";
   }

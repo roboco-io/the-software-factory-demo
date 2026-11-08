@@ -14,12 +14,12 @@ export interface StageCell {
   ms: number | null;
 }
 
-/** The nine run states grouped into the seven stages a person follows, in the order work moves. */
+/** The run states (all but the two stop states) grouped into the seven stages a person follows, in the order work moves. */
 export const STAGES = [
   { key: "intake", label: "접수", states: ["queued", "cloning"] },
   { key: "implement", label: "구현", states: ["implementing"] },
   { key: "pr", label: "PR", states: ["publishing", "pr_opened"] },
-  { key: "review", label: "리뷰", states: ["reviewing"] },
+  { key: "review", label: "리뷰", states: ["reviewing", "awaiting_engine"] },
   { key: "checks", label: "체크", states: ["awaiting_checks"] },
   { key: "approval", label: "승인", states: ["awaiting_approval"] },
   { key: "merge", label: "병합", states: ["merged"] },

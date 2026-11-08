@@ -1,4 +1,5 @@
 import { ApiError, type Api, type Me } from "./api";
+import { budgetNotice } from "./budget-notice";
 import { h, link } from "./dom";
 import { matchRoute } from "./router";
 import {
@@ -58,6 +59,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
 
   const roleArea = h("div", { class: "who" });
   const bannerSlot = h("div");
+  const budgetSlot = h("div");
   const main = h("main", { id: "main" });
   const nav = h(
     "nav",
@@ -72,7 +74,32 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
     nav,
     roleArea,
   );
-  root.replaceChildren(header, bannerSlot, main);
+  root.replaceChildren(header, budgetSlot, bannerSlot, main);
+
+  /** Stage 5: a notice while the budget limits the factory. Nothing when it cannot be read. */
+  async function paintBudget() {
+    let notice: ReturnType<typeof budgetNotice> = null;
+    try {
+      notice = budgetNotice(await api.budget());
+    } catch {
+      notice = null;
+    }
+    if (!alive) return;
+    budgetSlot.replaceChildren(
+      ...(notice === null
+        ? []
+        : [
+            h(
+              "div",
+              {
+                class: `message ${notice.kind} budget-notice`,
+                role: notice.kind,
+              },
+              notice.text,
+            ),
+          ]),
+    );
+  }
 
   function paintBanner() {
     if (banner === null) return bannerSlot.replaceChildren();
@@ -252,6 +279,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
   }
   paintBanner();
   paintRole();
+  void paintBudget();
   void refreshMe().then(() => render());
 
   const destroy = () => {

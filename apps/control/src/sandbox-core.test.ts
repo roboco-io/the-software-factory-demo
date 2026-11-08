@@ -109,6 +109,22 @@ describe("SandboxController", () => {
     }
   });
 
+  it("starts Codex, not Claude Code, for an OpenAI implementer (stage 5)", async () => {
+    const { port, calls } = fakeContainer((c) => {
+      if (c.command[0] === "cat") return { exitCode: 1 };
+      return {};
+    });
+    await new SandboxController(port).startAgent({
+      prompt: "do it",
+      model: "gpt-6.1-terra",
+    });
+    const agent = calls.find((c) => c.background)!;
+    expect(agent.command).toContain("codex");
+    expect(agent.command).not.toContain("claude");
+    expect(agent.env.CODEX_API_KEY).toBe(PLACEHOLDER_API_KEY);
+    expect(agent.env.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
   it("starts the agent in the background with the prompt as a single argv element", async () => {
     const { port, calls } = fakeContainer((c) =>
       c.command[0] === "cat" ? { exitCode: 1 } : {},
