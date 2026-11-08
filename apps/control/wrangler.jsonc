@@ -30,7 +30,7 @@
     "GITHUB_OAUTH_CLIENT_ID": "Ov23liX5hM3Y9qOhi6Gv",
     "RUNS_ENABLED": "true",
     "OPERATOR_IDS": "3435720",
-    "PROJECTS": "roboco-io/factory-test-app",
+    "PROJECTS": "roboco-io/factory-test-app,roboco-io/conveyor",
     "IMPLEMENT_MODEL": "claude-sonnet-5-5",
     "REVIEW_MODEL": "gpt-5.4-nano",
   },
