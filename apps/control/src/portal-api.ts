@@ -3,6 +3,10 @@ import { BudgetService } from "./budget-service";
 import { parseList } from "./config";
 import { D1BudgetRepo } from "./d1-budget";
 import { D1ReadRepo, type RunCursor } from "./read-repo";
+import {
+  createDescriptionCache,
+  githubDescriptionLoader,
+} from "./repo-descriptions";
 import { errorKind, logDiagnostic } from "./diagnostics";
 import { json, type RouteContext } from "./http";
 import type { StopResult } from "./run-machine";
@@ -29,13 +33,46 @@ export function handleMe(ctx: RouteContext): Response {
   );
 }
 
+/** One cache per GitHub App, kept for the life of the Worker isolate. */
+const descriptionCaches = new Map<
+  string,
+  ReturnType<typeof createDescriptionCache>
+>();
+
+/** Each project's GitHub description. Empty when the App is not configured. */
+async function descriptionsOf(
+  ctx: RouteContext,
+  repos: readonly string[],
+): Promise<Map<string, string | null>> {
+  const appId = ctx.env.GITHUB_APP_ID;
+  const privateKeyPem = ctx.env.GITHUB_APP_PRIVATE_KEY;
+  if (!appId || !privateKeyPem) return new Map();
+  let cache = descriptionCaches.get(appId);
+  if (cache === undefined) {
+    cache = createDescriptionCache({
+      load: githubDescriptionLoader({
+        appId,
+        privateKeyPem,
+        fetch: ctx.fetch,
+      }),
+      now: () => ctx.now(),
+    });
+    descriptionCaches.set(appId, cache);
+  }
+  return cache.get(repos);
+}
+
 export async function handleProjects(ctx: RouteContext): Promise<Response> {
   const repo = repoOf(ctx);
   if (repo === null) return unavailable();
-  const counts = await repo.countsByRepo();
-  const stats = await repo.statsByRepo(Date.now());
+  const projects = projectsOf(ctx);
+  const [counts, stats, descriptions] = await Promise.all([
+    repo.countsByRepo(),
+    repo.statsByRepo(Date.now()),
+    descriptionsOf(ctx, projects),
+  ]);
   return json({
-    projects: projectsOf(ctx).map((name) => ({
+    projects: projects.map((name) => ({
       repo: name,
       counts: counts.get(name) ?? {
         active: 0,
@@ -46,6 +83,7 @@ export async function handleProjects(ctx: RouteContext): Promise<Response> {
       attention: stats.get(name)?.attention ?? 0,
       costUsd:
         stats.get(name)?.costUsd === undefined ? 0 : stats.get(name)!.costUsd,
+      description: descriptions.get(name) ?? null,
     })),
   });
 }

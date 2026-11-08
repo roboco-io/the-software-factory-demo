@@ -98,6 +98,12 @@ time {
   font-size: 0.9rem;
 }
 
+.card .desc {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
 .lead {
   font-size: 1.05rem;
 }

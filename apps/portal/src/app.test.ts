@@ -74,6 +74,7 @@ function fakeApi(
           counts: { active: 1, merged: 2, needs_human: 3, failed: 4 },
           attention: 5,
           costUsd: 1.5,
+          description: "데모 <b>저장소</b>",
         },
       ],
     }),
@@ -278,6 +279,30 @@ describe("projects", () => {
     expect(link?.textContent).toContain("acme/demo");
     expect(text()).toContain("진행 중");
     expect(text()).toContain("병합");
+  });
+
+  it("shows each project's description as plain text, and nothing when it has none", async () => {
+    await open("/", fakeApi());
+    const desc = root().querySelector(".cards .card .desc");
+    expect(desc?.textContent).toBe("데모 <b>저장소</b>");
+    expect(desc?.querySelector("b")).toBeNull();
+    await open(
+      "/",
+      fakeApi({
+        projects: async () => ({
+          projects: [
+            {
+              repo: "acme/demo",
+              counts: { active: 0, merged: 0, needs_human: 0, failed: 0 },
+              attention: 0,
+              costUsd: 0,
+              description: null,
+            },
+          ],
+        }),
+      }),
+    );
+    expect(root().querySelector(".cards .desc")).toBeNull();
   });
 
   it("shows an empty state", async () => {

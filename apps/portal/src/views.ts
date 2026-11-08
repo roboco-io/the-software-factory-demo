@@ -186,6 +186,7 @@ async function projectList(ctx: ViewContext) {
             "li",
             { class: "card" },
             h("h2", null, link(projectPath(p.repo), p.repo)),
+            p.description ? h("p", { class: "desc" }, p.description) : null,
             h(
               "dl",
               { class: "counts" },

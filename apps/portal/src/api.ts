@@ -17,6 +17,8 @@ export interface Project {
   attention: number;
   /** Null when a run used a model without a known price. */
   costUsd: number | null;
+  /** The repository's GitHub description. Null or missing when there is none or GitHub did not answer. */
+  description?: string | null;
 }
 export interface TokenUsage {
   inputTokens: number;
