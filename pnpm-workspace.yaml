@@ -1,2 +1,6 @@
 packages:
   - apps/*
+
+overrides:
+  # Dependabot alert 1 (GHSA, globparts amplification DoS): fixed in 11.0.1. Dev-only, via eslint.
+  minimatch: ^11.0.1
