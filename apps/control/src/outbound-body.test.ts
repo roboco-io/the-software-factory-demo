@@ -299,6 +299,47 @@ describe("inspectOpenAIBody", () => {
       { ...oaiGood, tools: "web_search" },
       "tools_not_allowed",
     ],
+    // Codex 0.166.0 sent its tools as an input item, not in `tools`: the same rule applies there.
+    [
+      "hosted tool in an additional_tools input item",
+      {
+        ...oaiGood,
+        input: [{ type: "additional_tools", tools: [{ type: "web_search" }] }],
+      },
+      "tool_type_not_allowed",
+    ],
+    [
+      "hosted tool inside a namespace",
+      {
+        ...oaiGood,
+        input: [
+          {
+            type: "additional_tools",
+            tools: [
+              {
+                type: "namespace",
+                name: "functions",
+                tools: [{ type: "function", name: "a" }, { type: "mcp" }],
+              },
+            ],
+          },
+        ],
+      },
+      "tool_type_not_allowed",
+    ],
+    [
+      "hosted tool in a top-level namespace",
+      {
+        ...oaiGood,
+        tools: [{ type: "namespace", tools: [{ type: "code_interpreter" }] }],
+      },
+      "tool_type_not_allowed",
+    ],
+    [
+      "additional_tools without a tool array",
+      { ...oaiGood, input: [{ type: "additional_tools", tools: "x" }] },
+      "tools_not_allowed",
+    ],
     ["array body", [], "body_not_object"],
     ["null body", null, "body_not_object"],
   ])("denies %s", (_n, body, reason) => {
@@ -306,6 +347,52 @@ describe("inspectOpenAIBody", () => {
       ok: false,
       reason,
     });
+  });
+  it("accepts the request shape pi 1.5.0 sends as the implementer (captured locally on 2026-11-09)", () => {
+    const tool = (name: string) => ({
+      type: "function",
+      name,
+      description: "d",
+      parameters: { type: "object", properties: {} },
+      strict: false,
+    });
+    const body = {
+      model: "gpt-6.1-terra",
+      stream: true,
+      prompt_cache_key: "k",
+      store: false,
+      max_output_tokens: 16000,
+      reasoning: { effort: "medium", summary: "auto" },
+      include: ["reasoning.encrypted_content"],
+      input: [
+        { type: "configuration_update", reasoning: { effort: "medium" } },
+        { role: "developer", content: "system prompt" },
+        {
+          type: "additional_tools",
+          tools: ["read", "bash", "edit", "write"].map(tool),
+        },
+        { role: "user", content: [{ type: "input_text", text: "task" }] },
+      ],
+    };
+    expect(inspectOpenAIBody(body, { model: "gpt-6.1-terra" })).toEqual({
+      ok: true,
+    });
+  });
+  it("accepts function tools in namespaces and in additional_tools items", () => {
+    const fn = { type: "function", name: "a", parameters: {} };
+    expect(
+      inspectOpenAIBody(
+        {
+          ...oaiGood,
+          tools: [{ type: "namespace", name: "n", tools: [fn] }],
+          input: [
+            { type: "additional_tools", tools: [fn] },
+            { type: "message", role: "user", content: "hi" },
+          ],
+        },
+        oaiRun,
+      ),
+    ).toEqual({ ok: true });
   });
   it("allows explicit false for store and background", () => {
     expect(
