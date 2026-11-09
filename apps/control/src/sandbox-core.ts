@@ -1,6 +1,6 @@
 import { isValidRepo } from "./repo";
 import { TRUST_ENV, buildAgentCommand } from "./agent-command";
-import { buildCodexCommand } from "./codex-command";
+import { buildPiImplementCommand } from "./pi-implement-command";
 import { providerOf } from "./pricing";
 import {
   PI_AGENT_DIR,
@@ -33,6 +33,9 @@ export type TaskStatus =
   | { state: "finished"; exitCode: number };
 
 // Runs the command in its own process group; records pid and exit code. Same as the spike.
+/** How much of each agent log the failure label reads. */
+const FAILURE_TAIL_BYTES = 4000;
+
 const TASK_SCRIPT = `dir=$1; shift
 setsid sh -c 'echo "$$ $(cat /proc/sys/kernel/random/boot_id)" >"$0/pid"; exec "$@"' \\
 	"$dir" "$@" >"$dir/stdout.log" 2>"$dir/stderr.log" </dev/null
@@ -223,13 +226,51 @@ export class SandboxController {
     model: string;
   }): Promise<"started" | "busy"> {
     if ((await this.readTaskStatus()).state === "running") return "busy";
-    // Claude Code on Anthropic; Codex on OpenAI once Anthropic reached its limit (stage 5).
-    const { command, env } =
-      providerOf(input.model) === "openai"
-        ? buildCodexCommand(input)
-        : buildAgentCommand(input);
+    // Claude Code on Anthropic; pi on OpenAI once Anthropic reached its limit (stage 5).
+    if (providerOf(input.model) === "openai") {
+      const { command, env } = buildPiImplementCommand(input);
+      await this.writePiSettings(input.model);
+      await this.launch(command, env);
+      return "started";
+    }
+    const { command, env } = buildAgentCommand(input);
     await this.launch(command, env);
     return "started";
+  }
+
+  /**
+   * The last bytes of the agent's stderr and stdout, for the failure label only. The
+   * caller must never log them: they are untrusted and may hold the prompt or code.
+   */
+  async readFailureOutput(): Promise<{ stderr: string; stdout: string }> {
+    const tail = async (name: string) => {
+      const r = await this.run(
+        ["tail", "-c", String(FAILURE_TAIL_BYTES), `${TASK_DIR}/${name}`],
+        "/",
+        {},
+      );
+      return r.exitCode === 0 ? r.stdout : "";
+    };
+    return {
+      stderr: await tail("stderr.log"),
+      stdout: await tail("stdout.log"),
+    };
+  }
+
+  /** pi's models.json, outside the repository: caps the output at the egress limit. */
+  private async writePiSettings(model: string): Promise<void> {
+    await this.run(
+      [
+        "node",
+        "-e",
+        "const fs=require('node:fs');fs.mkdirSync(process.argv[1],{recursive:true});fs.writeFileSync(process.argv[2],process.argv[3])",
+        PI_AGENT_DIR,
+        PI_MODELS_PATH,
+        piModelsConfig(model),
+      ],
+      "/workspace",
+      {},
+    );
   }
 
   /** Starts the pi reviewer, read-only, with its settings outside the repository. */
@@ -239,18 +280,7 @@ export class SandboxController {
   }): Promise<"started" | "busy"> {
     if ((await this.readTaskStatus()).state === "running") return "busy";
     const { command, env } = buildReviewCommand(input);
-    await this.run(
-      [
-        "node",
-        "-e",
-        "const fs=require('node:fs');fs.mkdirSync(process.argv[1],{recursive:true});fs.writeFileSync(process.argv[2],process.argv[3])",
-        PI_AGENT_DIR,
-        PI_MODELS_PATH,
-        piModelsConfig(input.model),
-      ],
-      "/workspace",
-      {},
-    );
+    await this.writePiSettings(input.model);
     await this.launch(command, env);
     return "started";
   }

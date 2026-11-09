@@ -129,6 +129,9 @@ export interface BuildOptions {
   /** The reviewer's final message. undefined means no usable message. */
   reviewText?: () => string | undefined;
   reviewTask?: () => TaskStatus;
+  /** Output tails of a failed implementer / reviewer. */
+  failureOutput?: () => { stderr: string; stdout: string };
+  reviewFailureOutput?: () => { stderr: string; stdout: string };
   reviewClone?: () => { ok: boolean };
   reviewDestroy?: () => Promise<void>;
   /** Changes to the pull request world (files, policy, checks, reviews, ...). */
@@ -238,6 +241,11 @@ export function build(over: BuildOptions = {}) {
     async taskStatus() {
       return over.task ? over.task() : { state: "finished", exitCode: 0 };
     },
+    async failureOutput() {
+      return over.failureOutput
+        ? over.failureOutput()
+        : { stderr: "", stdout: "" };
+    },
     async collectChanges() {
       w.sandboxCalls.push("collect");
       return over.report ? over.report() : goodReport;
@@ -267,6 +275,11 @@ export function build(over: BuildOptions = {}) {
         return over.reviewTask
           ? over.reviewTask()
           : { state: "finished", exitCode: 0 };
+      },
+      async failureOutput() {
+        return over.reviewFailureOutput
+          ? over.reviewFailureOutput()
+          : { stderr: "", stdout: "" };
       },
       async readReviewText() {
         return over.reviewText ? over.reviewText() : APPROVE;

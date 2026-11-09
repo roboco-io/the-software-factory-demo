@@ -281,7 +281,7 @@ describe("injectOpenAIKey", () => {
 });
 
 describe("outbound policy: engine switching (stage 5)", () => {
-  const codex: Ctx = {
+  const fallback: Ctx = {
     repo: "acme/demo",
     phase: "implement",
     provider: "openai",
@@ -294,9 +294,9 @@ describe("outbound policy: engine switching (stage 5)", () => {
 
   it("lets an implement sandbox bound to an OpenAI model reach only OpenAI", () => {
     expect(
-      decide("POST", "https://api.openai.com/v1/responses", codex),
+      decide("POST", "https://api.openai.com/v1/responses", fallback),
     ).toEqual({ allow: true, target: "openai" });
-    denied("POST", "https://api.anthropic.com/v1/messages", codex);
+    denied("POST", "https://api.anthropic.com/v1/messages", fallback);
   });
 
   it("lets a review sandbox bound to an Anthropic model reach only Anthropic", () => {

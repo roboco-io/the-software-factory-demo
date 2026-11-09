@@ -141,6 +141,13 @@ export class AgentSandbox extends DurableObject<ControlEnv> {
     return this.controller.readReviewText();
   }
 
+  /** Agent output tails for the failure label. Never logged: see SandboxController. */
+  async failureOutput(): Promise<{ stderr: string; stdout: string }> {
+    // Never start a new container for this: its logs would be empty.
+    if (!this.container.running) throw new Error("container not running");
+    return this.controller.readFailureOutput();
+  }
+
   async taskStatus(): Promise<TaskStatus> {
     if (!this.container.running) return { state: "lost" };
     return this.controller.readTaskStatus();

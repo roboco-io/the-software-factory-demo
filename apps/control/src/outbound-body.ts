@@ -195,16 +195,38 @@ export function inspectOpenAIBody(
       return deny("max_output_tokens_not_allowed");
   }
   // Only the agent's own function tools. Hosted tools (web search, file search,
-  // code interpreter, computer use, MCP, ...) have other types.
-  const tools = body.tools;
-  if (tools !== undefined && tools !== null) {
-    if (!Array.isArray(tools)) return deny("tools_not_allowed");
-    for (const tool of tools) {
-      if (!isRecord(tool) || tool.type !== "function")
-        return deny("tool_type_not_allowed");
-    }
+  // code interpreter, computer use, MCP, ...) have other types. Tools can also come
+  // as an `additional_tools` input item (pi 1.5.0 and Codex 0.166.0 send them so),
+  // and grouped in a `namespace`: the same rule applies to every one of them.
+  const toolLists: unknown[] = [];
+  if (body.tools !== undefined && body.tools !== null)
+    toolLists.push(body.tools);
+  if (Array.isArray(body.input)) {
+    for (const item of body.input)
+      if (isRecord(item) && item.type === "additional_tools")
+        toolLists.push(item.tools);
+  }
+  for (const list of toolLists) {
+    const reason = checkTools(list, 0);
+    if (reason !== null) return deny(reason);
   }
   return { ok: true };
+}
+
+/** Null when every tool is a function tool, allowing one level of namespace. */
+function checkTools(tools: unknown, depth: number): string | null {
+  if (!Array.isArray(tools)) return "tools_not_allowed";
+  for (const tool of tools) {
+    if (!isRecord(tool)) return "tool_type_not_allowed";
+    if (tool.type === "function") continue;
+    if (tool.type === "namespace" && depth === 0) {
+      const inner = checkTools(tool.tools, 1);
+      if (inner !== null) return inner;
+      continue;
+    }
+    return "tool_type_not_allowed";
+  }
+  return null;
 }
 
 /**

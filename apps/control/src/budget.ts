@@ -144,7 +144,7 @@ export type ImplementChoice =
   /** An account has room, but active runs hold it for now. */
   | { kind: "reserved" };
 
-/** Claude implements while Anthropic has room; then Codex on OpenAI. */
+/** Claude implements while Anthropic has room; then pi on OpenAI. */
 export function chooseImplementer(
   status: BudgetStatus,
   models: EngineModels,
