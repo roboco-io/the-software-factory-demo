@@ -40,6 +40,7 @@ export class IssueRun extends DurableObject<ControlEnv> {
         clone: (repo) => stub.clone(repo),
         startAgent: (input) => stub.startAgent(input),
         taskStatus: () => stub.taskStatus() as Promise<TaskStatus>,
+        failureOutput: () => stub.failureOutput(),
         collectChanges: (baseSha) =>
           stub.collectChanges(baseSha) as Promise<unknown>,
         destroy: () => stub.destroy(),
@@ -58,6 +59,7 @@ export class IssueRun extends DurableObject<ControlEnv> {
         startReview: (input) => stub.startReview(input),
         taskStatus: () => stub.taskStatus() as Promise<TaskStatus>,
         readReviewText: () => stub.readReviewText(),
+        failureOutput: () => stub.failureOutput(),
         destroy: () => stub.destroy(),
       };
     };

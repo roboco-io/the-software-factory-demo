@@ -9,6 +9,7 @@ import type { BudgetPort } from "./budget-service";
 import { ActiveRunConflict, type RunRepo } from "./d1-repo";
 import { validateChanges, type ValidChange } from "./changes";
 import { decideMerge } from "./decision";
+import { type AgentFailure, classifyAgentFailure } from "./agent-failure";
 import { errorKind, logDiagnostic } from "./diagnostics";
 import { neutralizeMentions } from "./neutralize-mentions";
 import {
@@ -72,6 +73,8 @@ export interface SandboxPort {
     model: string;
   }): Promise<"started" | "busy">;
   taskStatus(): Promise<TaskStatus>;
+  /** Tails of the agent's output, for the failure label only. Never logged. */
+  failureOutput?(): Promise<{ stderr: string; stdout: string }>;
   collectChanges(baseSha: string): Promise<unknown>;
   destroy(): Promise<void>;
 }
@@ -88,6 +91,8 @@ export interface ReviewSandboxPort {
   taskStatus(): Promise<TaskStatus>;
   /** The text of the reviewer's final message, or undefined. */
   readReviewText(): Promise<string | undefined>;
+  /** Tails of the reviewer's output, for the failure label only. Never logged. */
+  failureOutput?(): Promise<{ stderr: string; stdout: string }>;
   destroy(): Promise<void>;
 }
 
@@ -132,7 +137,7 @@ export interface MachineDeps {
   model: string;
   /** The reviewer model on OpenAI. */
   reviewModel: string;
-  /** Stage 5. Codex's implement model (OpenAI), used once Anthropic reached its limit. */
+  /** Stage 5. pi's implement model (OpenAI), used once Anthropic reached its limit. */
   fallbackModel: string;
   /** Stage 5. The reviewer model on Anthropic. */
   anthropicReviewModel: string;
@@ -495,6 +500,35 @@ export class RunMachine {
     }
   }
 
+  /**
+   * Logs why an agent exited non-zero: a fixed label from its output, never the output.
+   * Best effort: a failure here never changes the run's outcome.
+   */
+  private async logAgentFailure(
+    run: StoredRun,
+    port: {
+      failureOutput?(): Promise<{ stderr: string; stdout: string }>;
+    },
+    phase: "implement" | "review",
+    exitCode: number,
+  ): Promise<void> {
+    let failure: AgentFailure;
+    try {
+      const output = port.failureOutput
+        ? await port.failureOutput()
+        : { stderr: "", stdout: "" };
+      failure = classifyAgentFailure(exitCode, output);
+    } catch {
+      failure = { kind: "output_unreadable" };
+    }
+    logDiagnostic("agent_exit_failed", {
+      runId: run.id,
+      phase,
+      exitCode,
+      ...failure,
+    });
+  }
+
   /** What the sandbox is doing: waits and shorter polls, or the exit code once it ended. */
   private async taskOutcome(
     port: { taskStatus(): Promise<TaskStatus> },
@@ -563,6 +597,7 @@ export class RunMachine {
           await this.deps.storage.setAlarm(this.deps.now());
           return;
         }
+        await this.logAgentFailure(run, sandbox, "implement", outcome.exitCode);
         if (isTimeoutExit(outcome.exitCode))
           throw new StepFailure("agent_timeout");
         // The egress refuses calls past the run's or the month's limit; the agent then fails.
@@ -738,6 +773,7 @@ export class RunMachine {
       return;
     }
     if (outcome.exitCode !== 0) {
+      await this.logAgentFailure(run, sandbox, "review", outcome.exitCode);
       if (isTimeoutExit(outcome.exitCode))
         throw new StepFailure("agent_timeout");
       throw new StepFailure(
