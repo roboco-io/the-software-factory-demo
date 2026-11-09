@@ -235,14 +235,14 @@ API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requ
 
 ### 변수
 
-| 변수                       | 기본값                                | 뜻                                                      |
-| -------------------------- | ------------------------------------- | ------------------------------------------------------- |
-| `BUDGET_ANTHROPIC_USD`     | `50`                                  | Anthropic 계정의 월 예산(달러, 추정)                    |
-| `BUDGET_OPENAI_USD`        | `50`                                  | OpenAI 계정의 월 예산(달러, 추정)                       |
-| `RUN_BUDGET_USD`           | `5`                                   | 실행의 한 단계(구현 또는 리뷰)가 쓸 수 있는 최대 금액   |
-| `FALLBACK_IMPLEMENT_MODEL` | `gpt-6.1-terra`                       | Anthropic이 상한에 도달했을 때 Codex가 구현에 쓰는 모델 |
-| `ANTHROPIC_REVIEW_MODEL`   | `claude-haiku-5-5`                    | Anthropic에서 리뷰하는 모델                             |
-| `FACTORY_REPO`             | `roboco-io/the-software-factory-demo` | 예산 소진 이슈를 등록할 저장소                          |
+| 변수                       | 기본값                                | 뜻                                                    |
+| -------------------------- | ------------------------------------- | ----------------------------------------------------- |
+| `BUDGET_ANTHROPIC_USD`     | `50`                                  | Anthropic 계정의 월 예산(달러, 추정)                  |
+| `BUDGET_OPENAI_USD`        | `50`                                  | OpenAI 계정의 월 예산(달러, 추정)                     |
+| `RUN_BUDGET_USD`           | `5`                                   | 실행의 한 단계(구현 또는 리뷰)가 쓸 수 있는 최대 금액 |
+| `FALLBACK_IMPLEMENT_MODEL` | `gpt-6.1-terra`                       | Anthropic이 상한에 도달했을 때 pi가 구현에 쓰는 모델  |
+| `ANTHROPIC_REVIEW_MODEL`   | `claude-haiku-5-5`                    | Anthropic에서 리뷰하는 모델                           |
+| `FACTORY_REPO`             | `roboco-io/the-software-factory-demo` | 예산 소진 이슈를 등록할 저장소                        |
 
 잘못된 금액은 기본값으로 바뀐다. 모델은 `pricing.ts`에 단가가 있어야 한다. 단가가 없는 모델은 출구 핸들러가 호출을 거부하므로 그 엔진의 실행은 실패한다. `gpt-6.1-terra`(입력 1, 캐시 입력 0.05, 출력 5)와 `claude-haiku-5-5`의 단가는 2026-11-08에 공급사 문서에서 읽었다. `claude-haiku-5-5`는 프롬프트가 10만 토큰을 넘으면 비싸지는데, 추정이 작아지지 않도록 비싼 쪽 단가(입력 0.50, 출력 2.50, 캐시 읽기 0.05, 캐시 쓰기 0.625)를 모든 호출에 쓴다.
 
@@ -259,7 +259,11 @@ API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requ
 
 ### 사람이 할 일
 
-예산 소진 이슈를 등록하려면 GitHub App(`roboco-software-factory-control`)이 `FACTORY_REPO` 저장소에 설치되어 있고 Issues 쓰기 권한이 있어야 한다. 2026-11-08 기준으로 이 권한과 설치 여부는 확인하지 않았다. 권한이 없으면 이슈 등록이 실패하고 실패 종류만 로그(`budget_alert_failed`)에 남으며, 다음 확인 때 다시 시도한다. 컨테이너 이미지에는 Codex CLI 0.166.0이 추가되므로 배포 때 이미지가 다시 빌드된다.
+예산 소진 이슈를 등록하려면 GitHub App(`roboco-software-factory-control`)이 `FACTORY_REPO` 저장소에 설치되어 있고 Issues 쓰기 권한이 있어야 한다. 2026-11-08 기준으로 이 권한과 설치 여부는 확인하지 않았다. 권한이 없으면 이슈 등록이 실패하고 실패 종류만 로그(`budget_alert_failed`)에 남으며, 다음 확인 때 다시 시도한다. 2026-11-09 구현 엔진을 Codex에서 pi로 바꾸면서 컨테이너 이미지에서 Codex CLI를 뺐다. 배포 때 이미지가 다시 빌드된다.
+
+### 에이전트 실패 진단
+
+구현 에이전트나 리뷰 에이전트가 0이 아닌 코드로 끝나면 제어 평면이 로그에 `agent_exit_failed` 한 줄을 남긴다. 이 줄에는 실행 ID, 단계, 종료 코드, 실패 종류(`kind`)만 들어 있다. 실패 종류는 에이전트 출력의 마지막 4000바이트를 고정된 패턴과 비교해 정한다. 종류는 `command_not_found`, `not_executable`, `agent_home_missing`, `egress_denied`, `budget_denied`, `auth_rejected`, `rate_limited`, `model_not_found`, `permission_denied`, `network_error`, `no_output`, `unknown`, `output_unreadable`(컨테이너가 이미 없어 출력을 읽지 못함)이다. `egress_denied`일 때는 출구 핸들러의 거부 사유 토큰(예: `tool_type_not_allowed`)을 `detail`에 함께 남긴다. 출력 원문은 프롬프트, 코드, 키를 담을 수 있으므로 로그에 남기지 않는다. 이 로그는 원인을 좁히는 용도이며, 패턴이 맞지 않으면 `unknown`이 된다. pi는 API 오류가 나도 종료 코드 0으로 끝날 수 있다(로컬 확인). 이 경우 이 로그는 남지 않고 실행은 변경 없음 같은 다음 단계의 실패로 끝난다.
 
 ### 마이그레이션 0007
 
@@ -267,8 +271,8 @@ API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requ
 
 ### 확인하지 못한 것
 
-- Codex CLI 0.166.0이 컨테이너에서 출구 핸들러를 거쳐 실제로 동작하는지. 플래그는 로컬 `codex exec --help`에서 확인했다. Codex가 보내는 요청 본문은 확인하지 않았다. 출구 핸들러는 함수 도구만 허용하므로 Codex가 `custom`이나 `local_shell` 도구, 16000을 넘는 `max_output_tokens`, `store: true`를 보내면 거부되고 실행은 `agent_failed`로 끝난다. 이 경우 허용 범위를 넓힐지는 실제 요청을 보고 정해야 한다. Codex가 다른 호스트(통계, 업데이트 확인)에 접속하려 하면 출구 핸들러가 거부한다.
-- Codex가 `CODEX_API_KEY` 자리 값으로 `api.openai.com/v1/responses`에 요청하는지.
+- pi 구현 엔진이 컨테이너에서 출구 핸들러를 거쳐 실제로 동작하는지. 2026-11-09 로컬에서 pi 1.5.0을 이 코드가 만드는 명령 그대로 실행하고 요청을 로컬 서버로 받아 확인했다. 요청은 `store: false`, `max_output_tokens: 16000`, 사고 수준 `medium`이었고, 도구는 `input`의 `additional_tools` 항목에 함수 도구 4개(read, bash, edit, write)로 들어 있어 출구 본문 검사를 통과한다. 실제 OpenAI 응답과 컨테이너 안의 동작은 확인하지 않았다.
+- 출구 본문 검사는 이전에 `tools` 필드만 보았다. pi 1.5.0과 Codex 0.166.0은 도구를 `input`의 `additional_tools` 항목에 넣으므로, 그 항목과 그 안의 `namespace`도 같은 규칙(함수 도구만)으로 검사하도록 고쳤다.
 - pi 1.5.0이 `--provider anthropic`으로 Anthropic에 리뷰 요청을 보내는 동작.
 - 실제 청구액과 추정 지출의 차이. 그리고 0단계부터 남은 질문인, API 호출이 구독 크레딧에서 차감되는지(설계 문서 8절).
 - 두 실행이 동시에 시작할 때 예약 확인이 서로를 보지 못하는 경우. 이때 초과분은 출구 핸들러의 상한 확인으로 제한된다.

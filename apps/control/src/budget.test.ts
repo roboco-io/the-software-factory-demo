@@ -125,7 +125,7 @@ describe("chooseImplementer", () => {
     });
   });
 
-  it("switches to Codex when Anthropic reached its limit", () => {
+  it("switches to pi on OpenAI when Anthropic reached its limit", () => {
     expect(
       chooseImplementer(status({ anthropic: 50, openai: 0 }), models),
     ).toEqual({ kind: "engine", provider: "openai", model: "gpt-6.1-terra" });

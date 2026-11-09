@@ -28,7 +28,7 @@ describe("stage 5: engine switching by budget (fake usage)", () => {
     expect(w.states.at(-1)).toBe("merged");
   });
 
-  it("switches the implementer to Codex when Anthropic reached its limit", async () => {
+  it("switches the implementer to pi on OpenAI when Anthropic reached its limit", async () => {
     const budget = fakeBudget();
     budget.spent.anthropic = 45.01;
     const { w, machine, drain } = build({ budget });

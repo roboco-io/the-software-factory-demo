@@ -8,6 +8,7 @@ import {
   type ContainerPort,
   type ExecResult,
 } from "./sandbox-core";
+import { PI_MODELS_PATH } from "./review-command";
 import { nodeModule } from "./testing/node";
 
 interface Call {
@@ -109,7 +110,7 @@ describe("SandboxController", () => {
     }
   });
 
-  it("starts Codex, not Claude Code, for an OpenAI implementer (stage 5)", async () => {
+  it("starts pi, not Claude Code, for an OpenAI implementer (stage 5)", async () => {
     const { port, calls } = fakeContainer((c) => {
       if (c.command[0] === "cat") return { exitCode: 1 };
       return {};
@@ -119,10 +120,35 @@ describe("SandboxController", () => {
       model: "gpt-6.1-terra",
     });
     const agent = calls.find((c) => c.background)!;
-    expect(agent.command).toContain("codex");
+    expect(agent.command).toContain("pi");
     expect(agent.command).not.toContain("claude");
-    expect(agent.env.CODEX_API_KEY).toBe(PLACEHOLDER_API_KEY);
+    expect(agent.command).toContain("--append-system-prompt");
+    expect(agent.env.OPENAI_API_KEY).toBe(PLACEHOLDER_API_KEY);
     expect(agent.env.ANTHROPIC_API_KEY).toBeUndefined();
+    // pi's settings (output cap) are written before the agent starts.
+    const settings = calls.findIndex(
+      (c) => c.command[0] === "node" && c.command.includes(PI_MODELS_PATH),
+    );
+    expect(settings).toBeGreaterThanOrEqual(0);
+    expect(settings).toBeLessThan(calls.indexOf(agent));
+    expect(
+      JSON.parse(calls[settings]!.command.at(-1)!).providers.openai
+        .modelOverrides["gpt-6.1-terra"].maxTokens,
+    ).toBe(16000);
+  });
+
+  it("returns the tail of the agent's output for failure diagnostics", async () => {
+    const { port, calls } = fakeContainer((c) =>
+      c.command[0] === "tail"
+        ? { stdout: c.command.at(-1)!.endsWith("stderr.log") ? "err" : "out" }
+        : {},
+    );
+    expect(await new SandboxController(port).readFailureOutput()).toEqual({
+      stderr: "err",
+      stdout: "out",
+    });
+    for (const c of calls.filter((x) => x.command[0] === "tail"))
+      expect(c.command.slice(0, 3)).toEqual(["tail", "-c", "4000"]);
   });
 
   it("starts the agent in the background with the prompt as a single argv element", async () => {

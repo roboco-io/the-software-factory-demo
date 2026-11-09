@@ -16,7 +16,7 @@ export interface ControlEnv {
   PROJECTS?: string;
   IMPLEMENT_MODEL?: string;
   REVIEW_MODEL?: string;
-  /** Stage 5. The model Codex implements with when Anthropic reached its limit. */
+  /** Stage 5. The model pi implements with when Anthropic reached its limit. */
   FALLBACK_IMPLEMENT_MODEL?: string;
   /** Stage 5. The model that reviews on Anthropic (another engine's work, or T0/T1 alone). */
   ANTHROPIC_REVIEW_MODEL?: string;

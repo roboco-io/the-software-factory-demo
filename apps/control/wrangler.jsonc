@@ -35,7 +35,7 @@
     "REVIEW_MODEL": "gpt-5.4-nano",
     // Stage 5: budget and engine switching. Estimated monthly spend per account (UTC
     // calendar month) and the most one run may spend on one account, in USD. When Anthropic
-    // reached its limit Codex implements with FALLBACK_IMPLEMENT_MODEL; ANTHROPIC_REVIEW_MODEL
+    // reached its limit pi implements with FALLBACK_IMPLEMENT_MODEL; ANTHROPIC_REVIEW_MODEL
     // reviews on Anthropic. When both reached it, new runs stop and one issue per period goes
     // to FACTORY_REPO (the GitHub App needs Issues write there). See docs/operations.md.
     "BUDGET_ANTHROPIC_USD": "5",
