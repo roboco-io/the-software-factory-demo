@@ -109,9 +109,9 @@ flowchart LR
 
 ## 8. 현재 상태와 영향
 
-2026-11-06 확인 기준으로 `roboco-io/conveyor`는 `FACTORY_PAUSED=true`이고, 이전 URL `https://roboco.io/the-software-factory-demo/`는 404를 반환한다. `https://roboco.io/conveyor/`는 200을 반환하지만 코드의 저장소 이름 고정 때문에 일부 기능이 깨질 수 있다. API health는 200이다. 이전 저장소에 예약 실행이 남아 있어 실패할 수 있으며, 6단계 전에 정리한다.
+2026-11-09 확인 기준으로 상태는 다음과 같다. `roboco-io/conveyor`는 `PROJECTS`에 등록되어 있다(PR #18). conveyor 저장소의 레거시 Actions 팩토리(워크플로 14개, `packages/factory`, 예약 실행)와 이전 봇의 변수·비밀 값은 지웠고, 그 대신 이 플랫폼용 `.factory/policy.yml`과 `CODEOWNERS`를 두었다(conveyor PR #139, #140). conveyor의 웹은 `https://roboco.io/conveyor/`에서 200을 반환하고, 저장소 안의 옛 주소 링크도 고쳤다. 이전 주소 `https://roboco.io/the-software-factory-demo/`는 이제 이 저장소의 GitHub Pages 소개 페이지이며(`apps/site`), 예전 conveyor 링크는 브라우저 스크립트로 `/conveyor/`의 같은 위치로 넘긴다. 6단계의 남은 완료 조건은 실제 기능 이슈 하나가 팩토리를 거쳐 conveyor 프로덕션까지 가는 것이다.
 
-0단계 실험에서 확인한 제약은 다음과 같다. 플랫폼은 Workers Paid 플랜을 전제로 한다. 에이전트 컨테이너는 `basic` 이상이어야 한다. `lite`에서는 Claude가 11분 동안 진행하지 못했다. 컨테이너 CA가 시스템 저장소에 없어 도구별 환경변수를 실행 때마다 넣어야 한다. 미해결 항목은 DNS 이름 조회의 외부 유출 여부, pi와 Claude 호출의 크레딧 차감 및 키와 크레딧 조직의 연결, 6개를 넘는 동시 실행과 10분을 넘는 작업, 비루트 실행이다. DNS 유출과 크레딧 차감은 각각 7단계 공개 전과 5단계 전에 해결해야 한다.
+0단계 실험에서 확인한 제약은 다음과 같다. 플랫폼은 Workers Paid 플랜을 전제로 한다. 에이전트 컨테이너는 `basic` 이상이어야 한다. `lite`에서는 Claude가 11분 동안 진행하지 못했다. 컨테이너 CA가 시스템 저장소에 없어 도구별 환경변수를 실행 때마다 넣어야 한다. 미해결 항목은 DNS 이름 조회의 외부 유출 여부, pi와 Claude 호출의 크레딧 차감 및 키와 크레딧 조직의 연결, 6개를 넘는 동시 실행과 10분을 넘는 작업, 비루트 실행이다. DNS 유출은 7단계 공개 전에 해결해야 한다. 크레딧 차감은 5단계 전에 확인하려 했으나 확인하지 못한 채 5단계를 배포했다. 그래서 5단계의 지출은 호출별 토큰 사용량으로 계산한 추정치이고, 실제 청구와의 차이는 공급사 콘솔에서 따로 확인해야 한다.
 
 ## 9. 범위 밖
 
