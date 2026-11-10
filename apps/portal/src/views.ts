@@ -28,13 +28,18 @@ import {
 } from "./labels";
 import {
   costUsdText,
-  isAttention,
   isGithubAuthorize,
   costLine,
   moneyText,
   tokenCount,
   shortSha,
 } from "./console-labels";
+import {
+  filterText,
+  matchesFilter,
+  type RunFilter,
+  sameFilter,
+} from "./run-filter";
 import {
   durationText,
   stageCells,
@@ -238,7 +243,35 @@ function rail(cells: StageCell[], tone: Tone) {
   );
 }
 
-function boardHead(runs: readonly RunSummary[], now: number) {
+type PickFilter = (filter: RunFilter) => void;
+
+/** A count that narrows the list when clicked, and widens it again on a second click. */
+function filterButton(
+  text: string,
+  filter: RunFilter,
+  current: RunFilter,
+  pick: PickFilter,
+  attrs: Record<string, string> = {},
+) {
+  const el = h(
+    "button",
+    {
+      type: "button",
+      "aria-pressed": String(sameFilter(filter, current)),
+      ...attrs,
+    },
+    text,
+  );
+  el.addEventListener("click", () => pick(filter));
+  return el;
+}
+
+function boardHead(
+  runs: readonly RunSummary[],
+  now: number,
+  current: RunFilter,
+  pick: PickFilter,
+) {
   const counts = stageCounts(runs, now);
   return h(
     "div",
@@ -254,10 +287,28 @@ function boardHead(runs: readonly RunSummary[], now: number) {
           { class: "stage" },
           h("strong", null, stage.label),
           active > 0
-            ? h("span", { class: "stage-count active" }, `진행 ${active}`)
+            ? filterButton(
+                `진행 ${active}`,
+                { kind: "stage", stage: i, status: "current" },
+                current,
+                pick,
+                {
+                  class: "stage-count active",
+                  title: `${stage.label} 단계에서 진행 중인 실행만 보기`,
+                },
+              )
             : null,
           stopped > 0
-            ? h("span", { class: "stage-count stopped" }, `멈춤 ${stopped}`)
+            ? filterButton(
+                `멈춤 ${stopped}`,
+                { kind: "stage", stage: i, status: "stopped" },
+                current,
+                pick,
+                {
+                  class: "stage-count stopped",
+                  title: `${stage.label} 단계에서 멈춘 실행만 보기`,
+                },
+              )
             : null,
         );
       }),
@@ -314,22 +365,45 @@ function runRow(run: RunSummary, now: number) {
   );
 }
 
-/** The four cards above a project's runs. The numbers come from the whole project, not from the loaded page. */
-function summaryCards(project: Project) {
-  const card = (label: string, value: string, cls = "") =>
+/**
+ * The four cards above a project's runs. The numbers come from the whole project, not from the
+ * loaded page. Three of them filter the list; cost has no matching set of runs, so it is not a button.
+ */
+function summaryCards(project: Project, current: RunFilter, pick: PickFilter) {
+  const body = (label: string, value: string) => [
+    h("span", { class: "stat-label" }, label),
+    h("strong", { class: "stat-value" }, value),
+  ];
+  const card = (label: string, value: string, filter: RunFilter, cls = "") => {
+    const el = h(
+      "button",
+      {
+        type: "button",
+        class: `card stat ${cls}`.trim(),
+        "aria-pressed": String(sameFilter(filter, current)),
+        title: `${filterText(filter)}만 보기`,
+      },
+      ...body(label, value),
+    );
+    el.addEventListener("click", () => pick(filter));
+    return el;
+  };
+  return h(
+    "div",
+    { class: "summary" },
+    card(
+      "주의 필요",
+      String(project.attention),
+      { kind: "attention" },
+      "stat-attention",
+    ),
+    card("진행 중", String(project.counts.active), { kind: "active" }),
+    card("병합됨", String(project.counts.merged), { kind: "merged" }),
     h(
       "div",
-      { class: `card stat ${cls}`.trim() },
-      h("dt", null, label),
-      h("dd", null, value),
-    );
-  return h(
-    "dl",
-    { class: "summary" },
-    card("주의 필요", String(project.attention), "stat-attention"),
-    card("진행 중", String(project.counts.active)),
-    card("병합됨", String(project.counts.merged)),
-    card("비용", costUsdText(project.costUsd)),
+      { class: "card stat" },
+      ...body("비용", costUsdText(project.costUsd)),
+    ),
   );
 }
 
@@ -348,31 +422,59 @@ export async function projectView(
   let page = firstPage;
   // The board counts and the filter work on the runs loaded so far; "더 보기" adds to them.
   const loaded: RunSummary[] = [...page.runs];
-  let onlyAttention = false;
+  const ALL: RunFilter = { kind: "all" };
+  let current: RunFilter = ALL;
+  const summary = h("div");
   const head = h("div");
   const list = h("ul", { class: "board-rows" });
   const empty = h("div");
+  const filterBar = h("div", { class: "filter-bar" });
+  const clearButton = () => {
+    const el = h("button", { type: "button", class: "link" }, "전체 보기");
+    el.addEventListener("click", () => pick(current));
+    return el;
+  };
+  // Clicking the control of the filter already on clears it.
+  const pick: PickFilter = (next) => {
+    current = sameFilter(next, current) ? ALL : next;
+    paintList();
+  };
   const paintList = () => {
     const now = Date.now();
-    const shown = loaded.filter((r) => !onlyAttention || isAttention(r, now));
-    head.replaceChildren(boardHead(loaded, now));
+    const shown = loaded.filter((r) => matchesFilter(r, current, now));
+    if (project !== null)
+      summary.replaceChildren(summaryCards(project, current, pick));
+    head.replaceChildren(boardHead(loaded, now, current, pick));
     list.replaceChildren(...shown.map((r) => runRow(r, now)));
+    filterBar.replaceChildren(
+      filterButton(
+        "주의가 필요한 실행만",
+        { kind: "attention" },
+        current,
+        pick,
+      ),
+      ...(current.kind === "all"
+        ? []
+        : [
+            h(
+              "span",
+              { role: "status" },
+              `${filterText(current)}: 불러온 실행 중 ${shown.length}건`,
+            ),
+            clearButton(),
+          ]),
+    );
     empty.replaceChildren(
       ...(shown.length === 0 && loaded.length > 0
-        ? [messageBox("status", "주의가 필요한 실행이 없습니다.")]
+        ? [
+            messageBox(
+              "status",
+              `${filterText(current)}이 불러온 목록에 없습니다.`,
+            ),
+          ]
         : []),
     );
   };
-  const filter = h(
-    "button",
-    { type: "button", "aria-pressed": "false" },
-    "주의가 필요한 실행만",
-  );
-  filter.addEventListener("click", () => {
-    onlyAttention = !onlyAttention;
-    filter.setAttribute("aria-pressed", String(onlyAttention));
-    paintList();
-  });
   paintList();
   const more = h("div", { class: "more" });
   const failure = h("div");
@@ -412,13 +514,13 @@ export async function projectView(
       null,
       h("p", { class: "crumb" }, link("/", "프로젝트")),
       h("h1", null, repo),
-      project === null ? null : summaryCards(project),
+      project === null ? null : summary,
       loaded.length === 0
         ? messageBox("status", "아직 실행이 없습니다.")
         : h(
             "div",
             { class: "toolbar" },
-            filter,
+            filterBar,
             h(
               "p",
               { class: "legend muted" },
