@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { budgetConfig } from "./budget";
+import { loadBudgetConfig } from "./budget";
 import { BudgetService } from "./budget-service";
 import {
   DEFAULT_ANTHROPIC_REVIEW_MODEL,
@@ -96,9 +96,10 @@ export class IssueRun extends DurableObject<ControlEnv> {
       },
     };
     const factoryRepo = env.FACTORY_REPO?.trim() ?? "";
+    const budgetRepo = new D1BudgetRepo(env.DB);
     const budget = new BudgetService({
-      repo: new D1BudgetRepo(env.DB),
-      config: budgetConfig(env),
+      repo: budgetRepo,
+      config: () => loadBudgetConfig(env, budgetRepo),
       now: () => Date.now(),
       factoryRepo: isValidRepo(factoryRepo)
         ? factoryRepo

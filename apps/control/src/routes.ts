@@ -6,6 +6,7 @@ import { json, type Handler, type RouteContext } from "./http";
 import {
   handleMe,
   handleBudget,
+  handleBudgetLimits,
   handleProjects,
   handleRun,
   handleRuns,
@@ -129,6 +130,12 @@ export const ROUTES: readonly Route[] = [
     methods: ["GET"],
     minRole: "anonymous",
     handler: handleBudget,
+  },
+  {
+    path: "/api/budget/limits",
+    methods: ["POST"],
+    minRole: "operator",
+    handler: handleBudgetLimits,
   },
   {
     path: "/api/projects/:owner/:repo/runs",

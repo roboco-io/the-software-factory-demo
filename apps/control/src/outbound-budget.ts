@@ -1,4 +1,4 @@
-import { budgetConfig } from "./budget";
+import { loadBudgetConfig } from "./budget";
 import { BudgetService, type CallCheck } from "./budget-service";
 import { D1BudgetRepo } from "./d1-budget";
 import type { ControlEnv } from "./env";
@@ -20,9 +20,10 @@ export function checkCallBudget(
   model: string,
   phase: string,
 ): Promise<CallCheck> {
+  const repo = new D1BudgetRepo(env.DB);
   return new BudgetService({
-    repo: new D1BudgetRepo(env.DB),
-    config: budgetConfig(env),
+    repo,
+    config: () => loadBudgetConfig(env, repo),
     now: () => Date.now(),
     factoryRepo: "",
   }).callCheck(runId, model, phase);

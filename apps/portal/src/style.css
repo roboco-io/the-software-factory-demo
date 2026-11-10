@@ -721,3 +721,38 @@ button.stat[aria-pressed="true"] {
   border-left: 5px solid var(--attention);
   margin: 12px 0;
 }
+
+/* Stage 5: the budget card on the home screen. */
+.budget-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-panel th,
+.budget-panel td {
+  padding: 4px 5px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.budget-limits {
+  display: grid;
+  gap: 8px;
+  max-width: 360px;
+  margin-top: 12px;
+}
+
+.budget-limits label {
+  display: grid;
+  gap: 4px;
+}
+
+.budget-limits input {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: inherit;
+}

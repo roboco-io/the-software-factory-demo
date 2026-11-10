@@ -86,10 +86,13 @@ function fakeApi(
       return "https://github.com/login/oauth/authorize?state=s";
     },
     logout: async () => void calls.push("logout"),
+    setBudgetLimits: async (l) =>
+      void calls.push(`limits:${l.anthropicUsd}:${l.openaiUsd}:${l.runCapUsd}`),
     budget: async () => ({
       period: "2026-11",
       runCapUsd: 5,
       mode: "normal",
+      limits: { source: "default", updatedAt: null },
       providers: {
         anthropic: { limitUsd: 50, spentUsd: 1, exhausted: false },
         openai: { limitUsd: 50, spentUsd: 1, exhausted: false },
@@ -194,7 +197,10 @@ describe("budget notice (stage 5)", () => {
       }),
     );
     expect(root().querySelector(".budget-notice")).toBeNull();
-    expect(text()).not.toContain("예산");
+    expect(text()).not.toContain("소진");
+    expect(root().querySelector(".budget-panel")?.textContent).toContain(
+      "읽을 수 없습니다",
+    );
   });
 });
 
@@ -1197,5 +1203,66 @@ describe("review notice", () => {
     await open("/runs/aaaaaaaaaaa1?review=<b>x</b>", fakeApi());
     expect(root().querySelector(".message")).toBeNull();
     expect(root().querySelector("b")).toBeNull();
+  });
+});
+
+describe("budget limits on the home screen (stage 5)", () => {
+  const BOSS: Me = { role: "operator", login: "boss" };
+  const input = (name: string) =>
+    root().querySelector<HTMLInputElement>(
+      `.budget-limits input[name="${name}"]`,
+    );
+
+  it("shows everyone the limits and this period's spend, with no form", async () => {
+    await open("/", fakeApi());
+    const panel = root().querySelector(".budget-panel");
+    expect(panel?.textContent).toContain("Anthropic");
+    expect(panel?.textContent).toContain("$1.00 / $50.00");
+    expect(panel?.textContent).toContain("기본값");
+    expect(root().querySelector(".budget-limits")).toBeNull();
+  });
+
+  it("lets an operator change the limits, then reloads the screen", async () => {
+    const api = fakeApi({ user: BOSS });
+    await open("/", api);
+    expect(input("anthropicUsd")?.value).toBe("50");
+    input("openaiUsd")!.value = "0";
+    input("runCapUsd")!.value = "2.5";
+    button("한도 저장")!.click();
+    await flush();
+    expect(api.calls).toContain("limits:50:0:2.5");
+    expect(root().querySelector('[role="status"]')?.textContent).toContain(
+      "예산 한도를 저장했습니다",
+    );
+  });
+
+  it("refuses an empty or negative amount without calling the server", async () => {
+    const api = fakeApi({ user: BOSS });
+    await open("/", api);
+    input("openaiUsd")!.value = "-1";
+    button("한도 저장")!.click();
+    await flush();
+    input("openaiUsd")!.value = "";
+    button("한도 저장")!.click();
+    await flush();
+    expect(api.calls.filter((c) => c.startsWith("limits:"))).toEqual([]);
+    expect(
+      root().querySelector('.budget-limits [role="alert"]'),
+    ).not.toBeNull();
+  });
+
+  it("shows the server's refusal", async () => {
+    const api = fakeApi({
+      user: BOSS,
+      setBudgetLimits: async () => {
+        throw new ApiError(403, "forbidden");
+      },
+    });
+    await open("/", api);
+    button("한도 저장")!.click();
+    await flush();
+    expect(
+      root().querySelector('.budget-limits [role="alert"]')?.textContent,
+    ).toContain("저장하지 못했습니다");
   });
 });

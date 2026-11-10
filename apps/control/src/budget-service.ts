@@ -69,13 +69,19 @@ export class BudgetService implements BudgetPort {
         | "recordAlertIssue"
         | "releaseAlert"
       >;
-      config: BudgetConfig;
+      /** Fixed limits, or a loader read once per check (operator limits in D1, stage 5). */
+      config: BudgetConfig | (() => Promise<BudgetConfig>);
       now(): number;
       /** Where the exhaustion issue goes. Not a managed project, so the factory never works on it. */
       factoryRepo: string;
       issues?: IssueCreator;
     },
   ) {}
+
+  private config(): Promise<BudgetConfig> {
+    const c = this.deps.config;
+    return typeof c === "function" ? c() : Promise.resolve(c);
+  }
 
   private async monthSpend() {
     const period = billingPeriod(this.deps.now());
@@ -84,9 +90,10 @@ export class BudgetService implements BudgetPort {
   }
 
   async status(excludeRunId?: string): Promise<BudgetStatus> {
-    const [{ period, spent }, active] = await Promise.all([
+    const [{ period, spent }, active, config] = await Promise.all([
       this.monthSpend(),
       this.deps.repo.activeRuns(),
+      this.config(),
     ]);
     const reserved: Record<Provider, number> = { anthropic: 0, openai: 0 };
     for (const run of active) {
@@ -98,12 +105,9 @@ export class BudgetService implements BudgetPort {
         run.usage.filter((u) => u.phase === call.phase),
       )[provider];
       // Unknown usage reserves the whole cap.
-      reserved[provider] += Math.max(
-        0,
-        this.deps.config.runCapUsd - (used ?? 0),
-      );
+      reserved[provider] += Math.max(0, config.runCapUsd - (used ?? 0));
     }
-    return assessBudget(this.deps.config, period.key, spent, reserved);
+    return assessBudget(config, period.key, spent, reserved);
   }
 
   /**
@@ -117,18 +121,16 @@ export class BudgetService implements BudgetPort {
   ): Promise<CallCheck> {
     const provider = providerOf(model);
     if (provider === null) return { allow: false, reason: "model_not_priced" };
-    const [runRows, { spent }] = await Promise.all([
+    const [runRows, { spent }, config] = await Promise.all([
       this.deps.repo.runUsage(runId, phase),
       this.monthSpend(),
+      this.config(),
     ]);
     const runSpent = spendByProvider(runRows)[provider];
-    if (runSpent === null || runSpent >= this.deps.config.runCapUsd)
+    if (runSpent === null || runSpent >= config.runCapUsd)
       return { allow: false, reason: "run_budget_exceeded" };
     const monthSpent = spent[provider];
-    if (
-      monthSpent === null ||
-      monthSpent >= this.deps.config.monthlyUsd[provider]
-    )
+    if (monthSpent === null || monthSpent >= config.monthlyUsd[provider])
       return { allow: false, reason: "monthly_budget_exceeded" };
     return { allow: true };
   }

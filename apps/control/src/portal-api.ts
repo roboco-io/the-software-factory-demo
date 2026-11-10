@@ -1,4 +1,4 @@
-import { PROVIDERS, budgetConfig, budgetMode } from "./budget";
+import { PROVIDERS, budgetMode, loadBudgetConfig, parseLimits } from "./budget";
 import { BudgetService } from "./budget-service";
 import { parseList } from "./config";
 import { D1BudgetRepo } from "./d1-budget";
@@ -94,14 +94,22 @@ export async function handleProjects(ctx: RouteContext): Promise<Response> {
  */
 export async function handleBudget(ctx: RouteContext): Promise<Response> {
   if (ctx.env.DB === undefined) return unavailable();
+  const repo = new D1BudgetRepo(ctx.env.DB);
+  const stored = await repo.latestLimits();
   const status = await new BudgetService({
-    repo: new D1BudgetRepo(ctx.env.DB),
-    config: budgetConfig(ctx.env),
+    repo,
+    config: () =>
+      loadBudgetConfig(ctx.env, { latestLimits: async () => stored }),
     now: () => Date.now(),
     factoryRepo: "",
   }).status();
   return json({
     period: status.period,
+    // Who changed the limits stays in D1: this endpoint is public.
+    limits:
+      stored === null
+        ? { source: "default", updatedAt: null }
+        : { source: "operator", updatedAt: stored.ts },
     runCapUsd: status.runCapUsd,
     mode: budgetMode(status),
     providers: Object.fromEntries(
@@ -118,6 +126,36 @@ export async function handleBudget(ctx: RouteContext): Promise<Response> {
       }),
     ),
   });
+}
+
+const MAX_LIMITS_BODY = 1024;
+
+/**
+ * POST /api/budget/limits. The dispatcher has already required an operator and a same-origin
+ * request. Stores the three limits as a new row; the next budget check uses them. Answers with
+ * the budget as GET /api/budget shows it.
+ */
+export async function handleBudgetLimits(ctx: RouteContext): Promise<Response> {
+  if (ctx.env.DB === undefined) return unavailable();
+  const type = ctx.request.headers.get("content-type") ?? "";
+  if (type.split(";")[0]!.trim().toLowerCase() !== "application/json")
+    return json({ error: "bad_request" }, 400);
+  let limits: ReturnType<typeof parseLimits> = null;
+  try {
+    const text = await ctx.request.text();
+    if (text.length <= MAX_LIMITS_BODY) limits = parseLimits(JSON.parse(text));
+  } catch {
+    limits = null;
+  }
+  if (limits === null) return json({ error: "bad_request" }, 400);
+  const operatorId = ctx.session?.id ?? "";
+  await new D1BudgetRepo(ctx.env.DB).recordLimits({
+    ts: Date.now(),
+    actorId: operatorId,
+    ...limits,
+  });
+  logDiagnostic("budget_limits_changed", { operatorId });
+  return handleBudget(ctx);
 }
 
 /** `limit` and `cursor` only; anything else, a repeat, or a malformed value is a bad request. */

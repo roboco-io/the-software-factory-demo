@@ -21,6 +21,20 @@ describe("createApi", () => {
     );
   });
 
+  it("sends the budget limits as JSON in a POST", async () => {
+    const fetchFn = vi.fn(async () => Response.json({}));
+    const api = createApi(fetchFn as unknown as typeof fetch);
+    await api.setBudgetLimits({ anthropicUsd: 40, openaiUsd: 0, runCapUsd: 3 });
+    expect(fetchFn).toHaveBeenCalledWith(
+      "/api/budget/limits",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ anthropicUsd: 40, openaiUsd: 0, runCapUsd: 3 }),
+      }),
+    );
+  });
+
   it("turns an error answer into an ApiError with the status and fixed code", async () => {
     const api = createApi(reply(409, { error: "merge_attempted" }));
     await expect(api.stop("abc")).rejects.toMatchObject({

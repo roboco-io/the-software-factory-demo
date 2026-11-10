@@ -2,12 +2,12 @@
 
 GitHub 이슈를 AI 에이전트가 구현하고, 다른 모델이 리뷰하고, 프로그램이 병합 여부를 판정하는 소프트웨어 팩토리 플랫폼이다. 여러 저장소를 하나의 제어 평면에서 관리한다. 사람은 포털에서 진행 상황을 보고, 위험한 변경만 직접 판단한다.
 
-| 주소                                                        | 내용                                                                          |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [소개 페이지](https://roboco.io/the-software-factory-demo/) | 로그인 없이 읽는 플랫폼 소개. GitHub Pages로 배포한다.                        |
-| [포털](https://software-factory-control.roboco.workers.dev) | 프로젝트 목록, 실행 흐름과 재생, 예산 상태. 운영자는 실행 중지와 승인을 한다. |
-| [conveyor](https://roboco.io/conveyor/)                     | 팩토리가 관리하는 예제 포럼 앱.                                               |
-| [책](https://github.com/roboco-io/the-software-factory)     | 이 플랫폼의 바탕이 된 생각을 정리한 책.                                       |
+| 주소                                                        | 내용                                                                                         |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| [소개 페이지](https://roboco.io/the-software-factory-demo/) | 로그인 없이 읽는 플랫폼 소개. GitHub Pages로 배포한다.                                       |
+| [포털](https://software-factory-control.roboco.workers.dev) | 프로젝트 목록, 실행 흐름과 재생, 예산 상태. 운영자는 실행 중지, 승인, 예산 한도 변경을 한다. |
+| [conveyor](https://roboco.io/conveyor/)                     | 팩토리가 관리하는 예제 포럼 앱.                                                              |
+| [책](https://github.com/roboco-io/the-software-factory)     | 이 플랫폼의 바탕이 된 생각을 정리한 책.                                                      |
 
 ## 동작 방식
 

@@ -3,8 +3,10 @@ import { handleRequest } from "./app";
 import { REASON_CODES, STATES } from "./run-types";
 import { D1ReadRepo } from "./read-repo";
 import {
+  OPERATOR_ID,
   makeWorld,
   observerCookie,
+  operatorCookie,
   req,
   type World,
 } from "./testing/api-world";
@@ -454,5 +456,76 @@ describe("GET /api/budget (stage 5)", () => {
         usage("gpt-5.4-nano", 250_000_000),
     );
     expect((await get(w, "/api/budget")).body.mode).toBe("paused");
+  });
+});
+
+describe("budget limits set by an operator (no deploy needed)", () => {
+  const post = async (w: World, body: unknown, cookie?: string) => {
+    const base = req("/api/budget/limits", {
+      method: "POST",
+      ...(cookie === undefined ? {} : { cookie }),
+      headers: { "content-type": "application/json" },
+    });
+    return handleRequest(
+      new Request(base, { body: JSON.stringify(body) }),
+      w.env,
+    );
+  };
+  const limits = { anthropicUsd: 40, openaiUsd: 0, runCapUsd: 3 };
+
+  it("GET /api/budget uses the environment defaults until an operator sets limits", async () => {
+    const w = makeWorld();
+    const { body } = await get(w, "/api/budget");
+    expect(body.limits).toEqual({ source: "default", updatedAt: null });
+    expect(body.providers.anthropic.limitUsd).toBe(50);
+  });
+
+  it("an operator changes the limits at once, and GET shows them", async () => {
+    const w = makeWorld();
+    const res = await post(w, limits, await operatorCookie());
+    expect(res.status).toBe(200);
+    const { body } = await get(w, "/api/budget");
+    expect(body.runCapUsd).toBe(3);
+    expect(body.providers.anthropic.limitUsd).toBe(40);
+    expect(body.providers.openai).toMatchObject({
+      limitUsd: 0,
+      exhausted: true,
+    });
+    expect(body.mode).toBe("single_engine");
+    expect(body.limits.source).toBe("operator");
+    expect(typeof body.limits.updatedAt).toBe("number");
+    // Who changed it is kept in D1, not shown on the public endpoint.
+    expect(JSON.stringify(body)).not.toContain(OPERATOR_ID);
+    expect(w.query("SELECT actor_id FROM budget_limits")).toEqual([
+      { actor_id: OPERATOR_ID },
+    ]);
+  });
+
+  it("an observer or an anonymous caller cannot change them", async () => {
+    const w = makeWorld();
+    expect((await post(w, limits, await observerCookie())).status).toBe(403);
+    expect((await post(w, limits)).status).toBe(401);
+    expect(w.query("SELECT * FROM budget_limits")).toEqual([]);
+  });
+
+  it("refuses a bad body or a wrong content type and stores nothing", async () => {
+    const w = makeWorld();
+    const cookie = await operatorCookie();
+    for (const bad of [
+      { ...limits, anthropicUsd: -5 },
+      { ...limits, extra: true },
+      "nope",
+    ]) {
+      expect((await post(w, bad, cookie)).status, JSON.stringify(bad)).toBe(
+        400,
+      );
+    }
+    const plain = req("/api/budget/limits", { method: "POST", cookie });
+    const res = await handleRequest(
+      new Request(plain, { body: JSON.stringify(limits) }),
+      w.env,
+    );
+    expect(res.status).toBe(400);
+    expect(w.query("SELECT * FROM budget_limits")).toEqual([]);
   });
 });

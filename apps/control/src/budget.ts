@@ -38,6 +38,64 @@ export function budgetConfig(env: {
   };
 }
 
+/** Limits an operator set (stage 5). They replace the environment defaults while present. */
+export interface BudgetLimits {
+  anthropicUsd: number;
+  openaiUsd: number;
+  runCapUsd: number;
+}
+
+/** The most an operator may set, so a typo of a few zeros is refused. */
+export const MAX_LIMIT_USD = 100_000;
+const LIMIT_KEYS = ["anthropicUsd", "openaiUsd", "runCapUsd"] as const;
+
+/** The three limits from an untrusted request body, or null when anything is off. */
+export function parseLimits(body: unknown): BudgetLimits | null {
+  if (typeof body !== "object" || body === null || Array.isArray(body))
+    return null;
+  const record = body as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== LIMIT_KEYS.length ||
+    !LIMIT_KEYS.every((k) => keys.includes(k))
+  )
+    return null;
+  for (const k of LIMIT_KEYS) {
+    const v = record[k];
+    if (
+      typeof v !== "number" ||
+      !Number.isFinite(v) ||
+      v < 0 ||
+      v > MAX_LIMIT_USD
+    )
+      return null;
+  }
+  return {
+    anthropicUsd: record.anthropicUsd as number,
+    openaiUsd: record.openaiUsd as number,
+    runCapUsd: record.runCapUsd as number,
+  };
+}
+
+export function configFromLimits(limits: BudgetLimits): BudgetConfig {
+  return {
+    monthlyUsd: { anthropic: limits.anthropicUsd, openai: limits.openaiUsd },
+    runCapUsd: limits.runCapUsd,
+  };
+}
+
+/**
+ * The limits in force: the latest an operator set in D1, else the environment defaults.
+ * Read on every check, so a change applies to the next model call without a deploy.
+ */
+export async function loadBudgetConfig(
+  env: Parameters<typeof budgetConfig>[0],
+  limits: { latestLimits(): Promise<BudgetLimits | null> },
+): Promise<BudgetConfig> {
+  const stored = await limits.latestLimits();
+  return stored === null ? budgetConfig(env) : configFromLimits(stored);
+}
+
 /** The billing period: the UTC calendar month that holds `now`. `end` is exclusive. */
 export function billingPeriod(now: number): {
   key: string;
