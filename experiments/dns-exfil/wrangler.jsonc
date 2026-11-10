@@ -1,0 +1,18 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "sfd-dns-probe",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-11-05",
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": { "enabled": true },
+	"secrets": { "required": ["PROBE_TOKEN"] },
+	"containers": [
+		{
+			"class_name": "ProbeSandbox",
+			"scheduling_policy": "durable_object",
+			"images": { "probe": { "dockerfile": "./Dockerfile" } }
+		}
+	],
+	"durable_objects": { "bindings": [{ "class_name": "ProbeSandbox", "name": "SANDBOX" }] },
+	"exports": { "ProbeSandbox": { "type": "durable-object", "storage": "sqlite" } }
+}
