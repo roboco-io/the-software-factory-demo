@@ -22,7 +22,10 @@ const tokens = (input: number) => ({
 describe("migration 0007", () => {
   it("keeps runs, events and usage rows written before it", async () => {
     const all = readMigrations();
-    const before = all.slice(0, -1);
+    const at = all.findIndex((m) =>
+      m.includes("Stage 5: budget and engine switching"),
+    );
+    const before = all.slice(0, at);
     const t = createTestD1(before);
     t.exec(`
       INSERT INTO runs (id, repo, issue_number, state, created_at, updated_at, title, tier, head_sha)
@@ -31,7 +34,7 @@ describe("migration 0007", () => {
       INSERT INTO run_usage (run_id, phase, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, ts)
         VALUES ('r1', 'implement', 'claude-sonnet-5-5', 10, 1, 2, 3, 1500);
     `);
-    t.exec(all[all.length - 1]!);
+    t.exec(all[at]!);
     expect(
       t.query(
         "SELECT id, state, title, tier, head_sha, implement_model FROM runs",
@@ -261,5 +264,53 @@ describe("D1BudgetRepo review fixes", () => {
     expect(await budget.acquireInflight("r1", 1000, 2, 500)).not.toBeNull();
     // A slot older than the stale age no longer counts (a crashed call).
     expect(await budget.acquireInflight("r1", 1600, 2, 500)).not.toBeNull();
+  });
+});
+
+describe("operator budget limits (migration 0008)", () => {
+  it("has no limits until an operator sets them, then returns the latest", async () => {
+    const t = setup();
+    expect(await t.budget.latestLimits()).toBeNull();
+    await t.budget.recordLimits({
+      ts: 1000,
+      actorId: "3435720",
+      anthropicUsd: 40,
+      openaiUsd: 30,
+      runCapUsd: 4,
+    });
+    await t.budget.recordLimits({
+      ts: 2000,
+      actorId: "3435720",
+      anthropicUsd: 60,
+      openaiUsd: 0,
+      runCapUsd: 5.5,
+    });
+    expect(await t.budget.latestLimits()).toEqual({
+      ts: 2000,
+      actorId: "3435720",
+      anthropicUsd: 60,
+      openaiUsd: 0,
+      runCapUsd: 5.5,
+    });
+  });
+
+  it("keeps every change: rows cannot be updated or deleted", () => {
+    const t = setup();
+    t.exec(
+      "INSERT INTO budget_limits (ts, actor_id, anthropic_usd, openai_usd, run_cap_usd) VALUES (1, 'a', 1, 1, 1)",
+    );
+    expect(() => t.exec("UPDATE budget_limits SET anthropic_usd = 9")).toThrow(
+      /append-only/,
+    );
+    expect(() => t.exec("DELETE FROM budget_limits")).toThrow(/append-only/);
+  });
+
+  it("refuses a negative amount", () => {
+    const t = setup();
+    expect(() =>
+      t.exec(
+        "INSERT INTO budget_limits (ts, actor_id, anthropic_usd, openai_usd, run_cap_usd) VALUES (1, 'a', -1, 1, 1)",
+      ),
+    ).toThrow();
   });
 });

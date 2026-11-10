@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  configFromLimits,
+  parseLimits,
   assessBudget,
   budgetMode,
   billingPeriod,
@@ -225,5 +227,42 @@ describe("budgetMode", () => {
       "single_engine",
     );
     expect(budgetMode(status({ anthropic: 50, openai: 50 }))).toBe("paused");
+  });
+});
+
+describe("parseLimits", () => {
+  it("accepts three amounts in USD from 0 to 100000", () => {
+    expect(
+      parseLimits({ anthropicUsd: 40, openaiUsd: 0, runCapUsd: 2.5 }),
+    ).toEqual({ anthropicUsd: 40, openaiUsd: 0, runCapUsd: 2.5 });
+    expect(
+      parseLimits({ anthropicUsd: 100000, openaiUsd: 1, runCapUsd: 1 }),
+    ).not.toBeNull();
+  });
+
+  it("refuses anything else", () => {
+    const ok = { anthropicUsd: 40, openaiUsd: 30, runCapUsd: 5 };
+    for (const bad of [
+      null,
+      [],
+      "x",
+      { ...ok, anthropicUsd: -1 },
+      { ...ok, openaiUsd: "30" },
+      { ...ok, runCapUsd: Number.NaN },
+      { ...ok, runCapUsd: Number.POSITIVE_INFINITY },
+      { ...ok, anthropicUsd: 100001 },
+      { ...ok, extra: 1 },
+      { anthropicUsd: 40, openaiUsd: 30 },
+    ]) {
+      expect(parseLimits(bad), JSON.stringify(bad)).toBeNull();
+    }
+  });
+});
+
+describe("configFromLimits", () => {
+  it("maps stored limits to the budget config", () => {
+    expect(
+      configFromLimits({ anthropicUsd: 40, openaiUsd: 30, runCapUsd: 4 }),
+    ).toEqual({ monthlyUsd: { anthropic: 40, openai: 30 }, runCapUsd: 4 });
   });
 });

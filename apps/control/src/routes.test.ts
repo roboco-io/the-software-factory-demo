@@ -55,12 +55,16 @@ describe("route table", () => {
     expect(exempt).toEqual(Object.keys(EXEMPT).sort());
   });
 
-  it("allows only the stop route as an operator write", () => {
+  it("allows only the stop, review and budget-limit routes as operator writes", () => {
     expect(
       nonGet
         .filter((x) => x.route.minRole === "operator")
         .map((x) => x.route.path),
-    ).toEqual(["/api/runs/:id/stop", "/api/runs/:id/review"]);
+    ).toEqual([
+      "/api/budget/limits",
+      "/api/runs/:id/stop",
+      "/api/runs/:id/review",
+    ]);
   });
 });
 
@@ -153,9 +157,17 @@ describe("every non-GET route (proof for AGENTS.md: observers cannot write)", ()
       // Each write route gets the valid body it needs; the refusals above use no body at all.
       const reviewBody = JSON.stringify({ action: "approve", headSha: "abc" });
       const res = await handleRequest(
-        route.path === "/api/runs/:id/review"
+        route.path === "/api/runs/:id/review" ||
+          route.path === "/api/budget/limits"
           ? new Request(base, {
-              body: reviewBody,
+              body:
+                route.path === "/api/budget/limits"
+                  ? JSON.stringify({
+                      anthropicUsd: 50,
+                      openaiUsd: 50,
+                      runCapUsd: 5,
+                    })
+                  : reviewBody,
               headers: new Headers([
                 ...base.headers,
                 ["content-type", "application/json"],
@@ -167,6 +179,13 @@ describe("every non-GET route (proof for AGENTS.md: observers cannot write)", ()
       if (route.path === "/api/runs/:id/review") {
         expect(res.status).toBe(200);
         expect(w.stopCalls).toEqual([]);
+        return;
+      }
+      if (route.path === "/api/budget/limits") {
+        expect(res.status).toBe(200);
+        expect(w.query("SELECT run_cap_usd FROM budget_limits")).toEqual([
+          { run_cap_usd: 5 },
+        ]);
         return;
       }
       expect(res.status).toBe(202);

@@ -1,4 +1,5 @@
 import type { D1Like } from "./d1-repo";
+import type { BudgetLimits } from "./budget";
 import type { TokenUsage } from "./pricing";
 import type { RunState } from "./run-types";
 
@@ -43,8 +44,51 @@ const toModelUsage = (r: SumRow): ModelUsage => ({
 const TERMINAL_SQL = "('merged', 'needs_human', 'failed')";
 
 /** Reads for the stage 5 budget: recorded model usage and the active runs that reserve budget. */
+export interface StoredLimits extends BudgetLimits {
+  ts: number;
+  actorId: string;
+}
+
 export class D1BudgetRepo {
   constructor(private readonly db: D1Like) {}
+
+  /** The limits in force, or null when no operator has set any. */
+  async latestLimits(): Promise<StoredLimits | null> {
+    const row = await this.db
+      .prepare(
+        "SELECT ts, actor_id, anthropic_usd, openai_usd, run_cap_usd FROM budget_limits ORDER BY id DESC LIMIT 1",
+      )
+      .first<{
+        ts: number;
+        actor_id: string;
+        anthropic_usd: number;
+        openai_usd: number;
+        run_cap_usd: number;
+      }>();
+    if (row === null) return null;
+    return {
+      ts: row.ts,
+      actorId: row.actor_id,
+      anthropicUsd: row.anthropic_usd,
+      openaiUsd: row.openai_usd,
+      runCapUsd: row.run_cap_usd,
+    };
+  }
+
+  async recordLimits(input: StoredLimits): Promise<void> {
+    await this.db
+      .prepare(
+        "INSERT INTO budget_limits (ts, actor_id, anthropic_usd, openai_usd, run_cap_usd) VALUES (?, ?, ?, ?, ?)",
+      )
+      .bind(
+        input.ts,
+        input.actorId,
+        input.anthropicUsd,
+        input.openaiUsd,
+        input.runCapUsd,
+      )
+      .run();
+  }
 
   /** Usage per model with `start <= ts < end`. */
   async periodUsage(start: number, end: number): Promise<ModelUsage[]> {

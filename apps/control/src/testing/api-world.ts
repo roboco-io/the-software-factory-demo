@@ -42,6 +42,7 @@ export function makeWorld(over: Partial<ControlEnv> = {}) {
     JSON.stringify([
       t.query("SELECT * FROM runs ORDER BY id"),
       t.query("SELECT * FROM events ORDER BY id"),
+      t.query("SELECT * FROM budget_limits ORDER BY id"),
     ]);
   return { ...t, env, stopCalls, state, snapshot };
 }
