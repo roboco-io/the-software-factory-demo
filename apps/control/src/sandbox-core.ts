@@ -1,4 +1,5 @@
 import { isValidRepo } from "./repo";
+import { logDiagnostic, safeLabel } from "./diagnostics";
 import { TRUST_ENV, buildAgentCommand } from "./agent-command";
 import { buildPiImplementCommand } from "./pi-implement-command";
 import { providerOf } from "./pricing";
@@ -114,7 +115,14 @@ for (const line of raw.split("\n")) {
   try { event = JSON.parse(line); } catch { continue; }
   if (event && event.type === "message_end" && event.message && event.message.role === "assistant") last = event.message;
 }
-if (last === null || last.stopReason !== "stop" || !Array.isArray(last.content)) { out({ ok: false }); process.exit(0); }
+if (last === null) { out({ ok: false }); process.exit(0); }
+if (last.stopReason !== "stop" || !Array.isArray(last.content)) {
+  // Only the stop reason and a leading HTTP status. The error message can hold any text.
+  const r = { ok: false, stopReason: String(last.stopReason) };
+  const m = typeof last.errorMessage === "string" ? /^([1-5][0-9]{2})\b/.exec(last.errorMessage) : null;
+  if (m) r.status = Number(m[1]);
+  out(r); process.exit(0);
+}
 const text = last.content.filter((c) => c && c.type === "text" && typeof c.text === "string").map((c) => c.text).join("");
 out(text.length === 0 || text.length > MAX_TEXT ? { ok: false } : { ok: true, text });
 `;
@@ -297,10 +305,26 @@ export class SandboxController {
       const parsed = JSON.parse(result.stdout) as {
         ok?: unknown;
         text?: unknown;
+        stopReason?: unknown;
+        status?: unknown;
       };
-      return parsed.ok === true && typeof parsed.text === "string"
-        ? parsed.text
-        : undefined;
+      if (parsed.ok === true && typeof parsed.text === "string")
+        return parsed.text;
+      if (typeof parsed.stopReason === "string") {
+        // pi exits 0 after a failed API request, so this is the only trace of the cause.
+        const fields: Record<string, string | number> = {
+          stopReason: safeLabel(parsed.stopReason),
+        };
+        if (
+          typeof parsed.status === "number" &&
+          Number.isInteger(parsed.status) &&
+          parsed.status >= 100 &&
+          parsed.status <= 599
+        )
+          fields.status = parsed.status;
+        logDiagnostic("review_no_text", fields);
+      }
+      return undefined;
     } catch {
       return undefined;
     }

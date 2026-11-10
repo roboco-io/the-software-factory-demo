@@ -13,14 +13,35 @@ export const PI_MODELS_PATH = `${PI_AGENT_DIR}/models.json`;
 export const REVIEW_TOOLS = "read,ls,grep,find";
 
 /**
+ * pi 1.5.0 turns these on for new Claude models. Each one adds a beta flag outside the
+ * egress allowlist (mid-conversation-output-config, thinking-binding-controls,
+ * inline-tools) and body fields that need it (`thinking.block_binding`, a deferred tool).
+ * The egress removes the flags, so the API rejects the body. A one-shot review needs
+ * none of these features, so they stay off and the allowlist stays as it is.
+ */
+const ANTHROPIC_COMPAT_OFF = {
+  supportsMidConvoEffort: false,
+  supportsMidConvoSystemMessages: false,
+  supportsMidConvoToolChanges: false,
+} as const;
+
+/**
  * pi asks for the model's full output size (128000 for gpt-5.4-nano). The egress
  * rejects more than 16000, so the sandbox's pi settings lower it to the same limit.
  */
 export function piModelsConfig(model: string): string {
+  const provider = piProvider(model);
   return JSON.stringify({
     providers: {
-      [piProvider(model)]: {
-        modelOverrides: { [model]: { maxTokens: OPENAI_MAX_OUTPUT_TOKENS } },
+      [provider]: {
+        modelOverrides: {
+          [model]: {
+            maxTokens: OPENAI_MAX_OUTPUT_TOKENS,
+            ...(provider === "anthropic"
+              ? { compat: ANTHROPIC_COMPAT_OFF }
+              : {}),
+          },
+        },
       },
     },
   });

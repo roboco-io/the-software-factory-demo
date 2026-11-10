@@ -84,11 +84,22 @@ describe("Anthropic reviewer (stage 5)", () => {
     expect(env.OPENAI_API_KEY).toBeUndefined();
   });
 
-  it("caps the output tokens under the anthropic provider", () => {
+  it("caps the output tokens and turns off the beta-only features under the anthropic provider", () => {
+    // pi 1.5.0 sends three beta flags for these features, with body fields that need them.
+    // The egress removes flags outside its allowlist, so the API then rejects the body.
     expect(JSON.parse(piModelsConfig("claude-haiku-5-5"))).toEqual({
       providers: {
         anthropic: {
-          modelOverrides: { "claude-haiku-5-5": { maxTokens: 16000 } },
+          modelOverrides: {
+            "claude-haiku-5-5": {
+              maxTokens: 16000,
+              compat: {
+                supportsMidConvoEffort: false,
+                supportsMidConvoSystemMessages: false,
+                supportsMidConvoToolChanges: false,
+              },
+            },
+          },
         },
       },
     });
