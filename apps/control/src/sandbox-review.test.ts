@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PLACEHOLDER_API_KEY } from "./agent-command";
 import { PI_MODELS_PATH } from "./review-command";
 import {
@@ -166,6 +166,45 @@ describe("SandboxController.readReviewText", () => {
   });
 });
 
+describe("SandboxController.readReviewText diagnostics", () => {
+  it("logs the stop reason and status when there is no text, never the message", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const { port } = fakeContainer(() => ({
+        stdout: JSON.stringify({
+          ok: false,
+          stopReason: "error",
+          status: 400,
+        }),
+      }));
+      expect(
+        await new SandboxController(port).readReviewText(),
+      ).toBeUndefined();
+      expect(log).toHaveBeenCalledWith(
+        JSON.stringify({
+          event: "review_no_text",
+          stopReason: "error",
+          status: 400,
+        }),
+      );
+      log.mockClear();
+      const odd = fakeContainer(() => ({
+        stdout: JSON.stringify({
+          ok: false,
+          stopReason: "sk-abc",
+          status: "x",
+        }),
+      }));
+      await new SandboxController(odd.port).readReviewText();
+      expect(log).toHaveBeenCalledWith(
+        JSON.stringify({ event: "review_no_text", stopReason: "invalid" }),
+      );
+    } finally {
+      log.mockRestore();
+    }
+  });
+});
+
 describe("REVIEW_EXTRACT_SCRIPT against real pi-style output", () => {
   const cp = nodeModule<{
     execFileSync(
@@ -252,6 +291,28 @@ describe("REVIEW_EXTRACT_SCRIPT against real pi-style output", () => {
         { type: "message_end", message: { role: "user", content: "x" } },
       ]).ok,
     ).toBe(false);
+  });
+
+  it("reports the stop reason and the HTTP status of a failed request, nothing else", () => {
+    const failed = {
+      type: "message_end",
+      message: {
+        role: "assistant",
+        stopReason: "error",
+        content: [],
+        errorMessage:
+          '400 {"type":"error","error":{"message":"secret-ish text sk-x"}}',
+      },
+    };
+    expect(extract([failed])).toEqual({
+      ok: false,
+      stopReason: "error",
+      status: 400,
+    });
+    expect(extract([assistant("partial", "length")])).toEqual({
+      ok: false,
+      stopReason: "length",
+    });
   });
 
   it("reports no text when the message is larger than the limit", () => {
