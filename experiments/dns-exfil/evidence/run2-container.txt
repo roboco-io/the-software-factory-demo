@@ -1,0 +1,203 @@
+
+=== env
+nameserver 1.1.1.1
+nameserver 9.9.9.9
+nameserver 2606:4700:4700::1111
+
+hosts:          files dns
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+bond0            DOWN           
+dummy0           DOWN           
+cfeth0           UP             10.0.0.1/24 fd00::11/8 fe80::211:22ff:fe33:4466/64 
+default via 10.0.0.254 dev cfeth0 proto static 
+10.0.0.0/24 dev cfeth0 proto kernel scope link src 10.0.0.1 
+::1 dev lo proto kernel metric 256 pref medium
+fd00::/8 dev cfeth0 proto kernel metric 256 pref medium
+fe80::/64 dev cfeth0 proto kernel metric 256 pref medium
+default via fd00::22 dev cfeth0 proto static src fd00::11 metric 1024 pref medium
+
+=== p01 getent ahosts (libc, default resolver)
+fd00::119:1     STREAM p01-mb8d93df7.qef71a.dnslog.cn
+fd00::119:1     DGRAM  
+fd00::119:1     RAW    
+11.9.0.1        STREAM 
+11.9.0.1        DGRAM  
+11.9.0.1        RAW    
+rc=0
+
+=== p02 dig A default resolver
+
+; <<>> DiG 9.20.30-1~deb13u1-Debian <<>> +time=3 +tries=1 p02-mb8d93df7.qef71a.dnslog.cn A
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 36520
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 0
+
+;; QUESTION SECTION:
+;p02-mb8d93df7.qef71a.dnslog.cn.	IN	A
+
+;; ANSWER SECTION:
+p02-mb8d93df7.qef71a.dnslog.cn.	1 IN	A	11.9.0.1
+
+;; Query time: 0 msec
+;; SERVER: 1.1.1.1#53(1.1.1.1) (UDP)
+;; WHEN: Tue Nov 10 07:33:25 UTC 2026
+;; MSG SIZE  rcvd: 94
+
+
+=== p03 dig TXT default resolver
+;; communications error to 1.1.1.1#53: timed out
+;; communications error to 9.9.9.9#53: timed out
+;; communications error to 2606:4700:4700::1111#53: timed out
+
+; <<>> DiG 9.20.30-1~deb13u1-Debian <<>> +time=3 +tries=1 p03-mb8d93df7.qef71a.dnslog.cn TXT
+;; global options: +cmd
+;; no servers could be reached
+
+=== p04 dig A +tcp default resolver
+;; Connection to 1.1.1.1#53(1.1.1.1) for p04-mb8d93df7.qef71a.dnslog.cn failed: timed out.
+;; Connection to 9.9.9.9#53(9.9.9.9) for p04-mb8d93df7.qef71a.dnslog.cn failed: timed out.
+;; Connection to 2606:4700:4700::1111#53(2606:4700:4700::1111) for p04-mb8d93df7.qef71a.dnslog.cn failed: timed out.
+;; no servers could be reached
+
+=== p05 dig AAAA @1.1.1.1
+
+; <<>> DiG 9.20.30-1~deb13u1-Debian <<>> +time=3 +tries=1 @1.1.1.1 p05-mb8d93df7.qef71a.dnslog.cn AAAA
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 23468
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 0
+
+;; QUESTION SECTION:
+;p05-mb8d93df7.qef71a.dnslog.cn.	IN	AAAA
+
+;; ANSWER SECTION:
+p05-mb8d93df7.qef71a.dnslog.cn.	1 IN	AAAA	fd00::119:1
+
+;; Query time: 0 msec
+;; SERVER: 1.1.1.1#53(1.1.1.1) (UDP)
+;; WHEN: Tue Nov 10 07:33:43 UTC 2026
+;; MSG SIZE  rcvd: 106
+
+
+=== p06 non-existent TLD
+fd00::119:1     STREAM p06-mb8d93df7.invalid-tld-zz
+fd00::119:1     DGRAM  
+fd00::119:1     RAW    
+11.9.0.1        STREAM 
+11.9.0.1        DGRAM  
+11.9.0.1        RAW    
+rc=0
+
+=== p07 real-answer names (would show a resolver IP if forwarded)
+;; communications error to 1.1.1.1#53: timed out
+;; communications error to 9.9.9.9#53: timed out
+;; communications error to 2606:4700:4700::1111#53: timed out
+;; no servers could be reached
+;; communications error to 1.1.1.1#53: timed out
+;; communications error to 9.9.9.9#53: timed out
+;; communications error to 2606:4700:4700::1111#53: timed out
+;; no servers could be reached
+
+=== p08 direct UDP 53 @1.1.1.1 / @8.8.8.8
+
+; <<>> DiG 9.20.30-1~deb13u1-Debian <<>> +time=3 +tries=1 @1.1.1.1 p08a-mb8d93df7.qef71a.dnslog.cn
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 61260
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 0
+
+;; QUESTION SECTION:
+;p08a-mb8d93df7.qef71a.dnslog.cn. IN	A
+
+;; ANSWER SECTION:
+p08a-mb8d93df7.qef71a.dnslog.cn. 1 IN	A	11.9.0.1
+
+;; Query time: 0 msec
+;; SERVER: 1.1.1.1#53(1.1.1.1) (UDP)
+;; WHEN: Tue Nov 10 07:34:01 UTC 2026
+;; MSG SIZE  rcvd: 96
+
+
+; <<>> DiG 9.20.30-1~deb13u1-Debian <<>> +time=3 +tries=1 @8.8.8.8 p08b-mb8d93df7.qef71a.dnslog.cn
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 51358
+;; flags: qr aa rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 0
+
+;; QUESTION SECTION:
+;p08b-mb8d93df7.qef71a.dnslog.cn. IN	A
+
+;; ANSWER SECTION:
+p08b-mb8d93df7.qef71a.dnslog.cn. 1 IN	A	11.9.0.1
+
+;; Query time: 0 msec
+;; SERVER: 8.8.8.8#53(8.8.8.8) (UDP)
+;; WHEN: Tue Nov 10 07:34:01 UTC 2026
+;; MSG SIZE  rcvd: 96
+
+
+=== p09 direct TCP 53 @1.1.1.1
+;; Connection to 1.1.1.1#53(1.1.1.1) for p09-mb8d93df7.qef71a.dnslog.cn failed: timed out.
+;; no servers could be reached
+
+=== p10 DoT 853 @1.1.1.1
+;; Connection to 1.1.1.1#853(1.1.1.1) for p10-mb8d93df7.qef71a.dnslog.cn failed: timed out.
+;; no servers could be reached
+
+=== p11 DoH dig +https @1.1.1.1
+;; Connection to 1.1.1.1#443(1.1.1.1) for p11-mb8d93df7.qef71a.dnslog.cn failed: TLS error.
+;; no servers could be reached
+
+=== p12 DoH curl cloudflare-dns.com
+DENIED-BY-OUTBOUND host=cloudflare-dns.com method=GET path=/dns-query
+ rc=0
+
+=== p13 DoH curl dns.google
+DENIED-BY-OUTBOUND host=dns.google method=GET path=/resolve
+ rc=0
+
+=== p14 HTTPS to marker host (does interception resolve the name?)
+DENIED-BY-OUTBOUND host=p14-mb8d93df7.qef71a.dnslog.cn method=GET path=/
+ rc=0
+
+=== p15 HTTP to marker host
+DENIED-BY-OUTBOUND host=p15-mb8d93df7.qef71a.dnslog.cn method=GET path=/
+ rc=0
+
+=== p16 python socket.getaddrinfo
+[(<AddressFamily.AF_INET6: 10>, <SocketKind.SOCK_STREAM: 1>, 6, '', ('fd00::119:1', 443, 0, 0)), (<AddressFamily.AF_INET6: 10>, <SocketKind.SOCK_DGRAM: 2>, 17, '', ('fd00::119:1', 443, 0, 0)), (<AddressFamily.AF_INET6: 10>, <SocketKind.SOCK_RAW: 3>, 0, '', ('fd00::119:1', 443, 0, 0)), (<AddressFamily.AF_INET: 2>, <SocketKind.SOCK_STREAM: 1>, 6, '', ('11.9.0.1', 443)), (<AddressFamily.AF_INET: 2>, <SocketKind.SOCK_DGRAM: 2>, 17, '', ('11.9.0.1', 443)), (<AddressFamily.AF_INET: 2>, <SocketKind.SOCK_RAW: 3>, 0, '', ('11.9.0.1', 443))]
+rc=0
+
+=== p17 raw UDP 53 to resolver IPs from resolv.conf via nc
+rc=0
+
+=== p18 other record types via default resolver
+-- MX
+;; communications error to 1.1.1.1#53: timed out
+;; communications error to 9.9.9.9#53: timed out
+-- CNAME
+;; communications error to 1.1.1.1#53: timed out
+;; communications error to 9.9.9.9#53: timed out
+-- NS
+;; communications error to 1.1.1.1#53: timed out
+;; communications error to 9.9.9.9#53: timed out
+-- SRV
+;; communications error to 1.1.1.1#53: timed out
+;; communications error to 9.9.9.9#53: timed out
+-- HTTPS
+;; communications error to 1.1.1.1#53: timed out
+;; communications error to 9.9.9.9#53: timed out
+-- ANY
+;; Connection to 1.1.1.1#53(1.1.1.1) for p18any-mb8d93df7.qef71a.dnslog.cn failed: timed out.
+;; Connection to 9.9.9.9#53(9.9.9.9) for p18any-mb8d93df7.qef71a.dnslog.cn failed: timed out.
+
+=== p19 long label (data-shaped) A query
+11.9.0.1
+
+=== done
+
+[stderr]

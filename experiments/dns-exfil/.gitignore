@@ -1,0 +1,5 @@
+node_modules/
+.wrangler/
+.token
+out/
+.secrets.env
