@@ -48,6 +48,7 @@ import {
   type StageCell,
   type StageStatus,
 } from "./flow";
+import { budgetPanel } from "./budget-panel";
 import { createReplay } from "./replay";
 
 /** A rendered screen. `cleanup` stops anything that keeps running after the user leaves. */
@@ -93,7 +94,20 @@ function section(title: string, ...children: Child[]) {
 }
 
 export async function homeView(ctx: ViewContext): Promise<View> {
-  const projects = await projectList(ctx);
+  const [projects, budget] = await Promise.all([
+    projectList(ctx),
+    budgetPanel({
+      api: ctx.api,
+      me: ctx.me,
+      done: () => {
+        ctx.notify(
+          "status",
+          "예산 한도를 저장했습니다. 다음 모델 호출부터 새 한도가 적용됩니다.",
+        );
+        ctx.reload();
+      },
+    }),
+  ]);
   const steps: [string, string][] = [
     [
       "이슈 접수",
@@ -124,6 +138,7 @@ export async function homeView(ctx: ViewContext): Promise<View> {
         "이슈 하나가 AI 에이전트의 구현과 리뷰를 거쳐 병합되기까지의 과정을 그대로 관찰하는 포털입니다. 각 단계는 고정된 사유 코드와 함께 기록되고, 이 화면은 그 기록을 한국어로 풀어 보여 줍니다.",
       ),
       section("프로젝트", projects),
+      section("예산", budget),
       section(
         "이슈 하나는 이렇게 흐릅니다",
         h(
@@ -152,7 +167,7 @@ export async function homeView(ctx: ViewContext): Promise<View> {
           h(
             "li",
             null,
-            "운영자: 위에 더해 진행 중인 실행을 중지할 수 있습니다.",
+            "운영자: 위에 더해 진행 중인 실행을 중지하고, 예산 한도를 바꿀 수 있습니다.",
           ),
         ),
         h(

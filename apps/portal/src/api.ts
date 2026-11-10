@@ -79,6 +79,15 @@ export interface BudgetInfo {
     "anthropic" | "openai",
     { limitUsd: number; spentUsd: number | null; exhausted: boolean }
   >;
+  /** Where the limits come from: an operator's change in D1, or the deployed defaults. */
+  limits?: { source: "operator" | "default"; updatedAt: number | null };
+}
+
+/** The limits an operator sets, in USD (POST /api/budget/limits). */
+export interface BudgetLimits {
+  anthropicUsd: number;
+  openaiUsd: number;
+  runCapUsd: number;
 }
 
 /** A failed API call: the HTTP status and the fixed error code the server sent. */
@@ -102,6 +111,7 @@ export interface Api {
   review(id: string, action: ReviewAction, headSha: string): Promise<string>;
   logout(): Promise<void>;
   budget(): Promise<BudgetInfo>;
+  setBudgetLimits(limits: BudgetLimits): Promise<void>;
 }
 
 export function createApi(
@@ -162,6 +172,13 @@ export function createApi(
       await call("/api/auth/logout", { method: "POST" });
     },
     budget: () => call("/api/budget"),
+    setBudgetLimits: async (limits) => {
+      await call("/api/budget/limits", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(limits),
+      });
+    },
   };
 }
 
