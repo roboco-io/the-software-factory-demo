@@ -32,7 +32,7 @@
 ## 최초 설정 순서
 
 1. D1 데이터베이스 `software-factory`는 2026-11-06에 만들었고 ID는 `wrangler.jsonc`에 있다. 새 환경을 만들 때만 `pnpm exec wrangler d1 create`를 다시 실행한다. 마이그레이션은 배포 워크플로가 적용한다.
-2. 시험용 공개 저장소에 GitHub App을 설치한다. 저장소 권한은 Contents, Pull requests, Issues의 쓰기와 3단계를 위한 Checks의 읽기이고, 이벤트는 Issues를 구독한다. 3단계는 새 웹훅 이벤트를 요구하지 않는다. check-runs API가 403을 돌려주면 리뷰가 끝난 실행은 `checks_permission_missing` 코드로 `needs_human`이 된다. 공개 저장소인 시험 저장소에서는 2026-11-06 실제 시험 때 Checks 권한 없이도 체크를 읽고 병합까지 진행했다. 공개 저장소라서 읽힌 것으로 추정하지만 원인은 확인하지 않았다. 비공개 저장소에서 403으로 멈추는지도 아직 시험하지 않았으므로, 비공개 저장소를 관리하기 전에 이 권한을 추가하고 확인한다. 권한을 올리면 설치한 계정이 새 권한을 수락해야 적용된다. 웹훅 주소는 `https://<워커 주소>/api/github/webhook`, 콘텐츠 유형은 `application/json`이다.
+2. 시험용 공개 저장소에 GitHub App을 설치한다. 저장소 권한은 Contents, Pull requests, Issues의 쓰기와 3단계를 위한 Checks의 읽기이고, 이벤트는 Issues를 구독한다. 3단계는 새 웹훅 이벤트를 요구하지 않는다. check-runs API가 403을 돌려주면 리뷰가 끝난 실행은 `checks_permission_missing` 코드로 `needs_human`이 된다. 공개 저장소인 시험 저장소에서는 2026-11-06 실제 시험 때 Checks 권한 없이도 체크를 읽고 병합까지 진행했다. 공개 저장소라서 읽힌 것으로 추정한다. 비공개 저장소를 관리하기 전에는 이 권한을 추가한다(남은 확인은 `docs/status.md`에 있다). 권한을 올리면 설치한 계정이 새 권한을 수락해야 적용된다. 웹훅 주소는 `https://<워커 주소>/api/github/webhook`, 콘텐츠 유형은 `application/json`이다.
 3. 위 비밀 값 네 개를 설정하고, 변수 `GITHUB_APP_ID`, `OPERATOR_IDS`, `PROJECTS`를 채우고 `RUNS_ENABLED`를 `true`로 바꿔 커밋한다.
 4. main에 병합하면 deploy 워크플로가 D1 마이그레이션을 먼저 적용한 뒤 Worker와 컨테이너 이미지를 배포한다.
 5. 허용한 운영자가 시험 저장소의 열린 이슈에 `factory:go` 라벨을 붙인다. 성공하면 `factory/issue-<번호>-<실행 ID>` 브랜치와 `Closes #<번호>`를 본문에 담은 PR이 열리고(병합되면 GitHub가 이슈를 닫는다), 이슈에 PR 링크 코멘트가 달린다.
@@ -170,7 +170,7 @@ control Worker(`software-factory-control`)는 `/api/*` 요청을 직접 처리�
 
 API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requested"}`이다. 이 응답은 실행이 멈췄다는 뜻이 아니다. 포털은 "중지 요청됨"이라고 표시하고 실행을 다시 읽으며, 실행의 상태가 끝난 상태로 바뀐 것을 확인한 뒤에야 중지된 것으로 보여 준다. 이미 끝난 실행은 409 `not_active`, 병합 요청을 GitHub에 이미 보냈으면 409 `merge_attempted`, 객체가 모르는 실행이면 404다. 운영자가 아니면 Durable Object를 호출하기 전에 401 또는 403으로 거부한다.
 
-되돌릴 수 없는 일은 되돌리지 않는다. 요청이 오기 전에 시작된 PR 게시는 끝까지 진행되어 PR이 남고, 실행은 그 PR 번호를 기록한 채 `needs_human`으로 끝난다. 이미 열린 PR은 닫지 않는다. 병합은 요청을 GitHub에 보내기 직전에 상태 기계가 "병합을 시도했다"는 표시를 저장하는데, 알람은 그 표시를 쓰기 직전에 `stop_requested` 키를 다시 읽는다. 요청이 먼저 있었다면 병합하지 않고 `needs_human`으로 끝낸다. 표시가 먼저 저장되었다면 요청은 409 `merge_attempted`로 거부되고 실행은 병합된 상태로 끝난다. 두 쪽이 거의 동시에 일어나는 경우의 순서는 Durable Object가 저장소 작업 중에 새 이벤트를 받지 않는 성질에 기대며, 이 성질은 실제 Workers 런타임에서 확인하지 못했다.
+되돌릴 수 없는 일은 되돌리지 않는다. 요청이 오기 전에 시작된 PR 게시는 끝까지 진행되어 PR이 남고, 실행은 그 PR 번호를 기록한 채 `needs_human`으로 끝난다. 이미 열린 PR은 닫지 않는다. 병합은 요청을 GitHub에 보내기 직전에 상태 기계가 "병합을 시도했다"는 표시를 저장하는데, 알람은 그 표시를 쓰기 직전에 `stop_requested` 키를 다시 읽는다. 요청이 먼저 있었다면 병합하지 않고 `needs_human`으로 끝낸다. 표시가 먼저 저장되었다면 요청은 409 `merge_attempted`로 거부되고 실행은 병합된 상태로 끝난다. 두 쪽이 거의 동시에 일어나는 경우의 순서는 Durable Object가 저장소 작업 중에 새 이벤트를 받지 않는 성질에 기대며, 동시 경합 자체는 가짜 저장소 시험으로만 다룬다.
 
 ### 마이그레이션 0005
 
@@ -180,29 +180,20 @@ API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requ
 
 `apps/portal/public/_headers`가 정적 파일 응답에 `Content-Security-Policy`(`default-src 'self'`, 인라인 스크립트와 스타일 없음, `frame-ancestors 'none'` 등), `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`를 붙인다. Vite가 이 파일을 `dist`로 복사하고, Workers 정적 자산 계층이 `dist/_headers`를 읽어 적용한다. 포털 코드는 서버 데이터를 `textContent`로만 화면에 넣고 HTML 문자열을 쓰지 않으며(시험이 소스에서 금지 패턴을 검사한다), 인라인 스타일과 이벤트 속성도 쓰지 않는다. Vite 설정(`assetsInlineLimit: 0`)은 자산이 `data:` 주소로 스크립트에 들어가지 않게 한다. API 응답은 Worker가 만들므로 `_headers`가 적용되지 않으며 `X-Content-Type-Options: nosniff`만 직접 붙인다.
 
-`_headers`가 배포된 Worker에서 실제로 적용되는지는 이 작업에서 확인하지 못했다. 배포 직후 `curl -sI https://<Worker 주소>/`와 `curl -sI https://<Worker 주소>/runs/x`를 실행해 두 응답에 `content-security-policy` 헤더가 있는지 사람이 확인해야 한다. 없으면 포털은 CSP 없이 서비스되는 것이다.
+배포된 Worker가 `_headers`를 적용하는지는 `curl -sI https://<Worker 주소>/`와 `curl -sI https://<Worker 주소>/runs/x`로 확인한다. 두 응답에 `content-security-policy` 헤더가 있어야 한다. 없으면 포털은 CSP 없이 서비스되는 것이다.
 
-### 이 단계에서 확인한 것과 확인하지 못한 것
+### 자동 시험이 다루는 범위
 
-2026-11-06에 확인한 것은 다음과 같다.
+아래는 2026-11-06에 가짜 서비스와 로컬 실행으로 확인한 범위다. 실서비스에서 확인한 것과 남은 확인은 `docs/status.md`에 있다.
 
 - 가짜 GitHub와 메모리 D1(실제 SQL과 마이그레이션 사용)로 시험했다. 시험은 경로 표를 순회하며 모든 쓰기 경로가 익명(401), 옵저버(403)를 거부하고 부작용이 없음, 잘못된 메서드(405), 위조, 변조, 만료, 다른 키로 서명한 쿠키는 익명으로 처리됨, 옵저버가 서명된 쿠키 안에 역할 필드를 넣어도 권한이 오르지 않음, 다른 출처는 운영자도 거부됨, 운영자는 중지할 수 있음, 운영자 목록에서 빼면 같은 쿠키가 즉시 거부됨을 확인한다. 쓰기 경로 중 운영자 전용이 아닌 것이 새로 생기면 실패하는 시험도 있다. 토큰과 클라이언트 시크릿이 로그와 응답에 나타나지 않는지, 응답에 허용 목록에 없는 필드가 없는지도 시험한다.
 - 상태 기계의 중지는 가짜 저장소와 가짜 GitHub로 시험했다. PR 게시 중의 요청, 체크 조회 중의 요청, 병합 요청이 이미 간 뒤의 요청, 느린 D1 전환 중의 요청, 샌드박스 시작 중의 요청, 오류 뒤 재시도 중의 요청, PR이 생기기 전에 중지한 뒤의 새 실행, 중복 요청의 일관된 응답이다.
 - `wrangler dev --local`로 같은 정적 자산 설정을 실행해 `_headers`의 CSP가 `/`와 SPA 대체 경로 응답에 붙는 것을 확인했다. 가짜 API를 붙인 포털을 앱 안 브라우저에서 열어 CSP 위반 없이 그려지고, 375픽셀 너비에서 가로 스크롤이 없고, 재생 버튼이 동작하는 것을 확인했다.
 - `pnpm check`와 `wrangler deploy --dry-run`이 통과했다.
 
-확인하지 못한 것은 다음과 같다.
-
-- **실제 GitHub OAuth 왕복.** 로그인과 콜백은 가짜 `fetch`로만 시험했다. GitHub의 실제 응답 모양, OAuth App이 `code_verifier`를 받아 PKCE를 검증하는지(받지 않아도 흐름은 동작하지만 PKCE 보호는 없다), 콜백 주소 설정은 OAuth App을 만든 뒤 사람이 한 번 로그인해 확인해야 한다.
-- 실제 Durable Object를 거치는 중지. `IssueRun.stop`은 `blockConcurrencyWhile`로 상태 기계를 부르는 얇은 래퍼이며 Workers 런타임에서는 실행해 보지 못했다. 상태 기계는 가짜 저장소로 시험했다.
-- 프로덕션 D1에 0005를 적용한 결과. 시험은 메모리 SQLite에서 했다.
-- 배포된 Worker가 `_headers`를 적용하는 것. 같은 설정의 로컬 실행으로만 확인했다.
-- 실제 `workers.dev` 주소에서 `__Host-` 쿠키가 저장되고 로그인 뒤 역할이 바뀌는 것, Safari와 모바일 브라우저의 동작.
-- 실행 목록 조회는 `runs` 테이블에 `(repo, created_at)` 인덱스가 없어 저장소의 행을 훑는다. 현재 규모에서는 문제가 없다고 보지만 실측하지 않았다.
-
 ## 콘솔: 승인, 비용 (4단계 이후)
 
-이 절은 2026-11-07 기준 코드가 하는 일을 적는다. 모두 가짜 GitHub와 메모리 D1로 시험했고 실제 서비스에서는 해 보지 않았다.
+이 절은 코드가 하는 일을 적는다. 자동 시험은 가짜 GitHub와 메모리 D1을 쓴다.
 
 ### 승인과 수정 요청
 
@@ -220,18 +211,11 @@ API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requ
 
 ### 마이그레이션 0006
 
-`apps/control/migrations/0006_console.sql`은 `runs` 표에 `title`, `tier`, `head_sha` 열을 더하고 `run_usage` 표와 `run_id` 인덱스를 만든다. 기존 행의 새 열은 `NULL`이다. 사람이 할 일은 배포 전에 이 파일이 배포 워크플로의 D1 마이그레이션 적용에 포함되는지 확인하고, 배포 뒤 프로덕션 D1에 적용됐는지 확인하는 것이다. 적용 결과는 아직 확인하지 않았다.
-
-### 확인하지 못한 것
-
-- 실제 저장소의 PR에 실제 운영자 계정으로 승인 또는 수정 요청을 남기는 것.
-- 조직이 OAuth App의 접근을 제한하는 경우(조직의 OAuth App 접근 제한)에 승인이 어떻게 실패하는지.
-- workerd에서 실제 모델 스트림을 읽어 토큰 수를 기록하는 것. 시험은 가짜 스트림으로 했다.
-- 프로덕션 D1에 0006을 적용한 결과.
+`apps/control/migrations/0006_console.sql`은 `runs` 표에 `title`, `tier`, `head_sha` 열을 더하고 `run_usage` 표와 `run_id` 인덱스를 만든다. 기존 행의 새 열은 `NULL`이다. 배포 워크플로가 Worker 배포 전에 프로덕션 D1에 적용한다.
 
 ## 예산과 엔진 전환 (5단계)
 
-이 절은 2026-11-08 기준 코드가 하는 일을 적는다. 모두 가짜 사용량, 가짜 GitHub, 메모리 D1로 시험했고 실제 서비스에서는 해 보지 않았다. 설계상의 이유는 `docs/design.md`의 "5단계 구현 상태"에 있다.
+이 절은 코드가 하는 일을 적는다. 자동 시험은 가짜 사용량, 가짜 GitHub, 메모리 D1을 쓴다. 설계상의 이유는 `docs/design.md`의 "5단계 구현 상태"에 있다.
 
 ### 변수
 
@@ -267,7 +251,7 @@ API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requ
 
 ### 사람이 할 일
 
-예산 소진 이슈를 등록하려면 GitHub App(`roboco-software-factory-control`)이 `FACTORY_REPO` 저장소에 설치되어 있고 Issues 쓰기 권한이 있어야 한다. 2026-11-08 기준으로 이 권한과 설치 여부는 확인하지 않았다. 권한이 없으면 이슈 등록이 실패하고 실패 종류만 로그(`budget_alert_failed`)에 남으며, 다음 확인 때 다시 시도한다. 2026-11-09 구현 엔진을 Codex에서 pi로 바꾸면서 컨테이너 이미지에서 Codex CLI를 뺐다. 배포 때 이미지가 다시 빌드된다.
+예산 소진 이슈를 등록하려면 GitHub App(`roboco-software-factory-control`)이 `FACTORY_REPO` 저장소에 설치되어 있고 Issues 쓰기 권한이 있어야 한다. 2026-11-10에 App을 이 저장소에 설치했다. 권한이 없으면 이슈 등록이 실패하고 실패 종류만 로그(`budget_alert_failed`)에 남으며, 다음 확인 때 다시 시도한다. 2026-11-09 구현 엔진을 Codex에서 pi로 바꾸면서 컨테이너 이미지에서 Codex CLI를 뺐다. 배포 때 이미지가 다시 빌드된다.
 
 ### 에이전트 실패 진단
 
@@ -277,27 +261,21 @@ API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requ
 
 `apps/control/migrations/0007_budget.sql`은 `runs`와 `events`에 새 상태와 사유 코드를 허용하도록 두 표를 다시 만들고, `runs`를 참조하는 `run_usage`도 함께 다시 만든다. 행과 ID는 그대로 옮긴다. `runs`에 `implement_model`, `review_model`, `single_engine` 열을, `run_usage`에 `ts` 인덱스를, 새 표 `run_inflight`와 `budget_alerts`를 더한다. 0007 전에 시작한 실행은 `implement_model`과 `review_model`이 비어 있어 예약에 세지 않는다. 배포 전에 프로덕션 `run_usage`의 모델이 모두 단가표에 있는지 확인해야 한다(`SELECT DISTINCT model FROM run_usage`). 배포 전에 이 파일이 D1 마이그레이션 적용에 포함되는지, 배포 뒤 프로덕션 D1에 적용됐는지 사람이 확인해야 한다.
 
-### 확인하지 못한 것
+### 엔진의 요청 형식
 
-- pi 구현 엔진이 컨테이너에서 출구 핸들러를 거쳐 실제로 동작하는지. 2026-11-09 로컬에서 pi 1.5.0을 이 코드가 만드는 명령 그대로 실행하고 요청을 로컬 서버로 받아 확인했다. 요청은 `store: false`, `max_output_tokens: 16000`, 사고 수준 `medium`이었고, 도구는 `input`의 `additional_tools` 항목에 함수 도구 4개(read, bash, edit, write)로 들어 있어 출구 본문 검사를 통과한다. 실제 OpenAI 응답과 컨테이너 안의 동작은 확인하지 않았다.
-- 출구 본문 검사는 이전에 `tools` 필드만 보았다. pi 1.5.0과 Codex 0.166.0은 도구를 `input`의 `additional_tools` 항목에 넣으므로, 그 항목과 그 안의 `namespace`도 같은 규칙(함수 도구만)으로 검사하도록 고쳤다.
-- pi 1.5.0이 `--provider anthropic`으로 Anthropic에 리뷰 요청을 보내는 동작.
-- 실제 청구액과 추정 지출의 차이. 그리고 0단계부터 남은 질문인, API 호출이 구독 크레딧에서 차감되는지(설계 문서 8절).
-- 두 실행이 동시에 시작할 때 예약 확인이 서로를 보지 못하는 경우. 이때 초과분은 출구 핸들러의 상한 확인으로 제한된다.
-- GitHub App으로 예산 소진 이슈를 실제로 등록하는 것.
+출구 핸들러의 본문 검사는 에이전트가 실제로 보내는 요청 형식에 맞춰져 있다. 엔진의 판을 올리면 아래 내용을 다시 확인해야 한다. 방법은 로컬에서 그 엔진을 가짜 서버에 연결해 요청을 기록하는 것이다.
 
-## 실서비스에서 아직 확인하지 않은 것
+- pi 1.5.0이 OpenAI에 보내는 구현 요청은 `store: false`, `max_output_tokens: 16000`, 사고 수준 `medium`이다(2026-11-09 로컬 기록). 도구는 `input`의 `additional_tools` 항목에 함수 도구 4개(read, bash, edit, write)로 들어 있다. Codex 0.166.0도 같은 위치에 도구를 넣는다. 그래서 본문 검사는 `tools` 필드와 `additional_tools` 항목, 그 안의 `namespace`를 같은 규칙(함수 도구만)으로 본다.
+- pi 1.5.0이 Anthropic에 보내는 리뷰 요청은 기본 설정에서 beta 플래그 3개(`mid-conversation-output-config-2026-07-01`, `thinking-binding-controls-2026-08-01`, `inline-tools-2026-09-15`)와 그 플래그가 필요한 본문 필드(`thinking.block_binding`, 지연 로딩 도구)를 함께 보낸다(2026-11-11 로컬 기록). 출구는 허용 목록 밖의 플래그를 지우므로 API가 그 본문을 거절한다. 그래서 샌드박스의 pi 모델 설정이 `claude-haiku-5-5`의 `supportsMidConvoEffort`, `supportsMidConvoSystemMessages`, `supportsMidConvoToolChanges`를 끈다. 끄면 beta 헤더가 없고 본문은 일반 Messages 형식이다.
+- pi는 API 오류로 끝나도 종료 코드가 0이다. 이때 리뷰는 `review_invalid`가 되고, 로그의 `review_no_text` 줄에 pi의 종료 사유와 HTTP 상태 코드만 남는다.
 
-2026-11-06 기준으로 아래 항목은 실제 Cloudflare, GitHub, Anthropic 서비스에서 실행해 보지 못했다. 단위 시험은 가짜 구현으로 통과했다.
+## 알려진 제약
 
-- `ctx.exports.Outbound({ props })`로 실행별 저장소를 출구 핸들러에 넘기는 동작
-- 컨테이너 안에서 `git clone`, Claude Code 실행, 변경 목록 수집 스크립트의 동작 (변경 목록 수집 스크립트는 로컬 git 저장소로 시험했다)
-- GitHub App 설치 토큰 발급과 Git Data API 호출
-- 핀 고정한 Claude Code 2.1.318이 실제로 보내는 `anthropic-beta` 값과 `max_tokens`(바이너리 문자열 검사로 환경변수 이름만 확인함). 허용 목록에 없는 값은 제거되므로, 기능이 빠지면 목록을 조정한다.
-- 비루트 실행, DNS 이름 조회를 통한 외부 유출, 크레딧 차감은 0단계 결과의 미해결 항목 그대로다.
-- 3단계는 2026-11-06에 공개 시험 저장소 `roboco-io/factory-test-app`에서 실제로 실행했다. 확인한 경로는 T0 자동 병합, 승인 대기, 리뷰어의 `changes_requested`로 인한 병합 차단, 운영자 승인 후 병합, 사람의 직접 병합 뒤 실행 종료다. T3, 승인 후 헤드 변경, 체크 실패, 비공개 저장소의 경로는 실제로 시험하지 않았다.
-- pi 1.5.0은 위 시험에서 컨테이너 안에서 동작했고 출구 핸들러에 거부되지 않았다. 다만 실제 요청 본문은 기록하지 않으므로 `maxTokens` 조정이 적용됐는지는 직접 확인하지 못했다. 패키지 소스에 따르면 pi 1.5.0은 `max_output_tokens`를 모델의 기본 최대 출력(gpt-5.4-nano는 128000, 문맥 크기에 따라 더 작을 수 있음)으로 보내는 것으로 패키지 소스에서 읽었다. 출구 핸들러는 16000을 넘는 값을 거부하므로, 리뷰 샌드박스는 `PI_CODING_AGENT_DIR`의 `models.json`에 `modelOverrides`로 `maxTokens: 16000`을 써서 낮춘다. 이 값을 넘는 요청은 403으로 거부되어 리뷰가 `review_failed`로 끝나며, 병합은 일어나지 않는다.
-- pi가 실제로 보내는 요청 본문은 패키지 소스에서 읽었다(`store: false`, 함수 도구만, `previous_response_id`, `background` 없음, `stream: true`, `reasoning`, `include`, `prompt_cache_key` 등). 실제 네트워크 요청으로는 확인하지 못했다. 출구 핸들러는 위에 적은 필드만 거부하고 다른 필드는 막지 않는다.
-- 실제 GitHub의 check-runs, 리뷰, 병합 API의 성공 응답은 위 시험에서 확인했다. 403 구분(권한 부족과 요율 제한)은 문서와 가짜 응답으로만 확인했다. 요율 제한 403은 `x-ratelimit-remaining: 0` 또는 `retry-after` 헤더로 구분한다.
+실서비스에서 확인한 것과 남은 확인 항목은 `docs/status.md`에 있다. 이 절은 확인 여부와 관계없이 코드가 가진 제약을 적는다.
+
+- 출구 핸들러는 `anthropic-beta` 값 가운데 허용 목록에 없는 것을 제거한다. 핀 고정한 Claude Code 2.1.318이 보내는 값은 바이너리 문자열 검사로 읽었으며 요청 본문은 기록하지 않는다. 에이전트의 판을 올린 뒤 기능이 빠지면 목록을 조정한다.
+- pi 1.5.0은 `max_output_tokens`를 모델의 기본 최대 출력(`gpt-5.4-nano`는 128000)으로 보낸다. 출구 핸들러는 16000을 넘는 값을 거부하므로, 샌드박스는 `PI_CODING_AGENT_DIR`의 `models.json`에 `modelOverrides`로 `maxTokens: 16000`을 써서 낮춘다. 이 값을 넘는 요청은 403으로 거부되어 리뷰가 `review_failed`로 끝나며, 병합은 일어나지 않는다.
+- 출구 핸들러는 OpenAI 요청에서 `store`, `background`, `previous_response_id`, `conversation`, `prompt`, 함수가 아닌 도구만 거부하고 다른 필드는 막지 않는다.
+- GitHub의 403은 `x-ratelimit-remaining: 0` 또는 `retry-after` 헤더가 있으면 요율 제한으로, 없으면 권한 부족으로 구분한다.
 - 필수 체크 이름은 체크 실행의 이름만 비교한다. 같은 이름의 체크 실행을 다른 앱이 만들 수 있는지는 저장소의 Checks 쓰기 권한 설정에 달려 있으며 여기서 막지 않는다.
-- Claude Code 2.1.318이 보내는 `tools` 배열의 형식은 확인하지 못했다. 그래서 `type`이 `custom`이 아닌 도구를 모두 거부하는 규칙은 넣지 않고, `web_search`로 시작하는 `type`만 거부한다. 다른 서버 측 도구(`web_fetch` 등)는 막지 않는다.
+- Anthropic 요청의 도구는 `web_search`로 시작하는 `type`만 거부한다. Claude Code가 보내는 `tools` 배열의 형식을 기록한 적이 없어 `custom`이 아닌 도구를 모두 거부하는 규칙은 넣지 않았다. 그래서 다른 서버 측 도구(`web_fetch` 등)는 막지 않는다.

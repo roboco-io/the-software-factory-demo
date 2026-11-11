@@ -13,6 +13,7 @@
 - 설치: `pnpm install`
 - 전체 검사: `pnpm check`
 - 포맷: `pnpm format`
+- 상태 문서 생성: `pnpm docs:status`
 - 로컬 실행: `pnpm --filter @factory/portal build`, `pnpm --filter @factory/control dev`
 
 ## 규칙
@@ -24,3 +25,4 @@
 - 옵저버 권한으로 쓰기 작업을 허용하는 변경은 API 시험으로 거부를 증명한다.
 - 프로덕션 변경, 저장소 공개 설정, 샌드박스 공개는 사람의 승인을 받는다.
 - 문서는 이 프로젝트의 내부 이력을 모르는 독자가 이해할 수 있게 쓴다. 마크다운의 범위 표기는 `-`를 쓴다.
+- 진행 상태와 실서비스 확인 여부는 `docs/status.json`에만 적는다. 단계의 상태가 바뀌거나, 실서비스에서 무엇을 확인했거나, 새로 남은 확인 항목이 생기면 같은 PR에서 이 파일을 고치고 `pnpm docs:status`로 `docs/status.md`와 README의 표를 다시 만든다. 다른 문서에는 동작과 설계 이유만 적는다. `pnpm check`가 생성물의 불일치와 다른 문서의 상태 서술을 거부한다.
