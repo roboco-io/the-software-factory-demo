@@ -49,6 +49,7 @@ import {
   type StageStatus,
 } from "./flow";
 import { budgetPanel } from "./budget-panel";
+import { factoryControl } from "./factory-control";
 import { createReplay } from "./replay";
 
 /** A rendered screen. `cleanup` stops anything that keeps running after the user leaves. */
@@ -94,8 +95,16 @@ function section(title: string, ...children: Child[]) {
 }
 
 export async function homeView(ctx: ViewContext): Promise<View> {
-  const [projects, budget] = await Promise.all([
+  const [projects, control, budget] = await Promise.all([
     projectList(ctx),
+    factoryControl({
+      api: ctx.api,
+      me: ctx.me,
+      done: (text) => {
+        ctx.notify("status", text);
+        ctx.reload();
+      },
+    }),
     budgetPanel({
       api: ctx.api,
       me: ctx.me,
@@ -138,6 +147,7 @@ export async function homeView(ctx: ViewContext): Promise<View> {
         "이슈 하나가 AI 에이전트의 구현과 리뷰를 거쳐 병합되기까지의 과정을 그대로 관찰하는 포털입니다. 각 단계는 고정된 사유 코드와 함께 기록되고, 이 화면은 그 기록을 한국어로 풀어 보여 줍니다.",
       ),
       section("프로젝트", projects),
+      control === null ? null : section("팩토리 운영", control),
       section("예산", budget),
       section(
         "이슈 하나는 이렇게 흐릅니다",
@@ -167,7 +177,7 @@ export async function homeView(ctx: ViewContext): Promise<View> {
           h(
             "li",
             null,
-            "운영자: 위에 더해 진행 중인 실행을 중지하고, 예산 한도를 바꿀 수 있습니다.",
+            "운영자: 위에 더해 진행 중인 실행을 중지하고, 예산 한도를 바꾸고, 팩토리 전체를 멈추거나 다시 시작할 수 있습니다.",
           ),
         ),
         h(

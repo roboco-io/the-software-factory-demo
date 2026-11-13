@@ -64,6 +64,8 @@ describe("control API", () => {
         let id = "";
         const stmt = {
           bind: (...v: unknown[]) => ((id = String(v[0])), stmt),
+          // The factory switch has no row: the factory runs.
+          first: async () => null,
           run: async () => {
             if (sql.startsWith("INSERT OR IGNORE")) {
               const fresh = !claimed.has(id);

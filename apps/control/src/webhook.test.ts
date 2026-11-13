@@ -37,6 +37,7 @@ function makeDeps(over: Partial<WebhookDeps> = {}) {
   const deps: WebhookDeps = {
     secret,
     runsEnabled: true,
+    paused: async () => false,
     operatorIds: ["101"],
     projects: ["acme/demo"],
     deliveries: { claim, release },
@@ -191,6 +192,25 @@ describe("webhook", () => {
     expect(await res.json()).toMatchObject({ code: "runs_disabled" });
     expect(start).not.toHaveBeenCalled();
     expect(claim).not.toHaveBeenCalled();
+  });
+
+  it("starts nothing while an operator has stopped the factory", async () => {
+    const { deps, start, claim } = makeDeps({ paused: async () => true });
+    const res = await post(deps, payload());
+    expect(res.status).toBe(202);
+    expect(await res.json()).toMatchObject({ code: "factory_paused" });
+    expect(start).not.toHaveBeenCalled();
+    expect(claim).not.toHaveBeenCalled();
+  });
+
+  it("does not read the switch for a request that would not start a run", async () => {
+    const paused = vi.fn(async () => true);
+    const { deps } = makeDeps({ paused });
+    await post(
+      deps,
+      payload({ sender: { id: 999, login: "x", type: "User" } }),
+    );
+    expect(paused).not.toHaveBeenCalled();
   });
 
   it("answers 202 with a fixed code when the global run cap is full", async () => {

@@ -269,6 +269,18 @@ API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requ
 - pi 1.5.0이 Anthropic에 보내는 리뷰 요청은 기본 설정에서 beta 플래그 3개(`mid-conversation-output-config-2026-07-01`, `thinking-binding-controls-2026-08-01`, `inline-tools-2026-09-15`)와 그 플래그가 필요한 본문 필드(`thinking.block_binding`, 지연 로딩 도구)를 함께 보낸다(2026-11-11 로컬 기록). 출구는 허용 목록 밖의 플래그를 지우므로 API가 그 본문을 거절한다. 그래서 샌드박스의 pi 모델 설정이 `claude-haiku-5-5`의 `supportsMidConvoEffort`, `supportsMidConvoSystemMessages`, `supportsMidConvoToolChanges`를 끈다. 끄면 beta 헤더가 없고 본문은 일반 Messages 형식이다.
 - pi는 API 오류로 끝나도 종료 코드가 0이다. 이때 리뷰는 `review_invalid`가 되고, 로그의 `review_no_text` 줄에 pi의 종료 사유와 HTTP 상태 코드만 남는다.
 
+## 전체 중지 (7단계)
+
+운영자는 포털 홈의 "팩토리 운영" 카드에서 팩토리 전체를 멈추거나 다시 시작한다. 배포는 필요 없다. 포털은 `POST /api/factory/switch`에 `{"enabled": false}` 또는 `{"enabled": true}`를 보낸다. 운영자가 아닌 호출은 401(익명) 또는 403(옵저버)으로 거부한다.
+
+중지는 두 가지 일을 순서대로 한다. 먼저 D1 `factory_switch` 표(마이그레이션 0009)에 새 행을 추가한다. 이때부터 웹훅은 실행을 시작할 요청에 202 `factory_paused`로 답하고 실행을 만들지 않는다. 그다음 최종 상태가 아닌 모든 실행에 실행별 중지(위 "실행 중지" 절)와 같은 요청을 보낸다. 각 실행은 다음 알람 확인 때 멈춘다. 이미 GitHub에 보낸 병합과 이미 열린 PR은 되돌리지 않는다. `PROJECTS`에서 빠진 저장소의 실행도 대상이다. 어떤 실행에 요청을 보내지 못해도 중지 자체는 유지되며, 응답의 `stopFailed`와 로그의 `stop_failed`에 건수가 남는다. 그 실행은 실행 화면에서 따로 중지한다.
+
+다시 시작은 행을 하나 더 추가할 뿐이다. 멈춘 동안 거부된 요청은 자동으로 다시 실행되지 않으므로, 대상 이슈에 `factory:go` 라벨을 다시 붙여야 한다.
+
+`factory_switch`의 행에는 시각과 운영자의 GitHub 사용자 ID가 들어가고, 트리거가 수정과 삭제를 막는다. `GET /api/factory`는 공개 엔드포인트이며 `enabled`와 멈춘 시각만 알려 준다. 포털은 멈춰 있는 동안 모든 화면 위에 안내를 보여 준다.
+
+`RUNS_ENABLED` 변수는 이 스위치보다 위에 있다. 변수가 `true`가 아니면 스위치와 관계없이 실행이 시작되지 않고, `GET /api/factory`도 `enabled: false`로 답한다. 변수는 배포로만 바뀌므로 평소의 중지에는 스위치를 쓰고, 변수는 최초 설정과 스위치를 쓸 수 없는 경우(D1 장애 등)에 쓴다.
+
 ## 알려진 제약
 
 실서비스에서 확인한 것과 남은 확인 항목은 `docs/status.md`에 있다. 이 절은 확인 여부와 관계없이 코드가 가진 제약을 적는다.
