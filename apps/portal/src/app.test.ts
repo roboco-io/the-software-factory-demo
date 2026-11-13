@@ -86,6 +86,11 @@ function fakeApi(
       return "https://github.com/login/oauth/authorize?state=s";
     },
     logout: async () => void calls.push("logout"),
+    factory: async () => ({ enabled: true, stoppedAt: null }),
+    setFactoryEnabled: async (enabled) => {
+      calls.push(`factory:${enabled}`);
+      return { enabled, stopRequested: enabled ? 0 : 2, stopFailed: 0 };
+    },
     setBudgetLimits: async (l) =>
       void calls.push(`limits:${l.anthropicUsd}:${l.openaiUsd}:${l.runCapUsd}`),
     budget: async () => ({
@@ -1264,5 +1269,83 @@ describe("budget limits on the home screen (stage 5)", () => {
     expect(
       root().querySelector('.budget-limits [role="alert"]')?.textContent,
     ).toContain("저장하지 못했습니다");
+  });
+});
+
+describe("factory-wide stop (stage 7)", () => {
+  const BOSS: Me = { role: "operator", login: "boss" };
+  const stopped = { enabled: false, stoppedAt: 1_794_000_000_000 };
+
+  it("shows everyone a notice on every screen while the factory is stopped", async () => {
+    await open("/runs/aaaaaaaaaaa1", fakeApi({ factory: async () => stopped }));
+    const notice = root().querySelector(".factory-notice");
+    expect(notice?.getAttribute("role")).toBe("alert");
+    expect(notice?.textContent).toContain("새 실행을 받지 않습니다");
+  });
+
+  it("shows no notice while the factory runs or when the state cannot be read", async () => {
+    await open("/", fakeApi());
+    expect(root().querySelector(".factory-notice")).toBeNull();
+    await open(
+      "/",
+      fakeApi({
+        factory: async () => {
+          throw new ApiError(503, "unavailable");
+        },
+      }),
+    );
+    expect(root().querySelector(".factory-notice")).toBeNull();
+  });
+
+  it("gives only an operator the stop control", async () => {
+    await open("/", fakeApi());
+    expect(root().querySelector(".factory-control")).toBeNull();
+    await open("/", fakeApi({ user: { role: "observer", login: "v" } }));
+    expect(root().querySelector(".factory-control")).toBeNull();
+    await open("/", fakeApi({ user: BOSS }));
+    expect(root().querySelector(".factory-control")).not.toBeNull();
+  });
+
+  it("stops the factory only after a second, confirming click", async () => {
+    const api = fakeApi({ user: BOSS });
+    await open("/", api);
+    button("전체 중지")!.click();
+    await flush();
+    expect(api.calls).not.toContain("factory:false");
+    button("취소")!.click();
+    await flush();
+    expect(api.calls).not.toContain("factory:false");
+    button("전체 중지")!.click();
+    button("중지 확정")!.click();
+    await flush();
+    expect(api.calls).toContain("factory:false");
+    expect(root().querySelector('[role="status"]')?.textContent).toContain(
+      "실행 2건에 중지를 요청했습니다",
+    );
+  });
+
+  it("lets an operator resume a stopped factory", async () => {
+    const api = fakeApi({ user: BOSS, factory: async () => stopped });
+    await open("/", api);
+    expect(button("전체 중지")).toBeUndefined();
+    button("다시 시작")!.click();
+    await flush();
+    expect(api.calls).toContain("factory:true");
+  });
+
+  it("shows the server's refusal", async () => {
+    const api = fakeApi({
+      user: BOSS,
+      setFactoryEnabled: async () => {
+        throw new ApiError(403, "forbidden");
+      },
+    });
+    await open("/", api);
+    button("전체 중지")!.click();
+    button("중지 확정")!.click();
+    await flush();
+    expect(
+      root().querySelector('.factory-control [role="alert"]')?.textContent,
+    ).toContain("바꾸지 못했습니다");
   });
 });

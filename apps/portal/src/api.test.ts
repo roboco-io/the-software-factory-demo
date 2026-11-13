@@ -35,6 +35,28 @@ describe("createApi", () => {
     );
   });
 
+  it("reads the factory state and sends the switch as JSON in a POST", async () => {
+    const fetchFn = vi.fn(async () =>
+      Response.json({ enabled: false, stopRequested: 1, stopFailed: 0 }),
+    );
+    const api = createApi(fetchFn as unknown as typeof fetch);
+    await api.factory();
+    expect(fetchFn).toHaveBeenCalledWith("/api/factory", expect.anything());
+    expect(await api.setFactoryEnabled(false)).toEqual({
+      enabled: false,
+      stopRequested: 1,
+      stopFailed: 0,
+    });
+    expect(fetchFn).toHaveBeenCalledWith(
+      "/api/factory/switch",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled: false }),
+      }),
+    );
+  });
+
   it("turns an error answer into an ApiError with the status and fixed code", async () => {
     const api = createApi(reply(409, { error: "merge_attempted" }));
     await expect(api.stop("abc")).rejects.toMatchObject({

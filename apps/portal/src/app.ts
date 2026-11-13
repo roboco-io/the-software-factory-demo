@@ -1,5 +1,6 @@
 import { ApiError, type Api, type Me } from "./api";
 import { budgetNotice } from "./budget-notice";
+import { factoryNotice } from "./factory-control";
 import { h, link } from "./dom";
 import { matchRoute } from "./router";
 import {
@@ -59,6 +60,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
   const roleArea = h("div", { class: "who" });
   const bannerSlot = h("div");
   const budgetSlot = h("div");
+  const factorySlot = h("div");
   const main = h("main", { id: "main" });
   const header = h(
     "header",
@@ -66,7 +68,7 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
     link("/", "Software Factory"),
     roleArea,
   );
-  root.replaceChildren(header, budgetSlot, bannerSlot, main);
+  root.replaceChildren(header, factorySlot, budgetSlot, bannerSlot, main);
 
   /** Stage 5: a notice while the budget limits the factory. Nothing when it cannot be read. */
   async function paintBudget() {
@@ -88,6 +90,28 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
                 role: notice.kind,
               },
               notice.text,
+            ),
+          ]),
+    );
+  }
+
+  /** Stage 7: a notice while the factory is stopped. Nothing when the state cannot be read. */
+  async function paintFactory() {
+    let text: string | null = null;
+    try {
+      text = factoryNotice(await api.factory());
+    } catch {
+      text = null;
+    }
+    if (!alive) return;
+    factorySlot.replaceChildren(
+      ...(text === null
+        ? []
+        : [
+            h(
+              "div",
+              { class: "message alert factory-notice", role: "alert" },
+              text,
             ),
           ]),
     );
@@ -170,6 +194,8 @@ export function mountApp(root: HTMLElement, options: AppOptions): () => void {
 
   async function render() {
     const mine = ++generation;
+    // Read again on every screen: an operator may have stopped or resumed the factory.
+    void paintFactory();
     cleanup?.();
     cleanup = undefined;
     main.setAttribute("aria-busy", "true");

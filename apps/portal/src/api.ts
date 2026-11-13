@@ -83,6 +83,18 @@ export interface BudgetInfo {
   limits?: { source: "operator" | "default"; updatedAt: number | null };
 }
 
+/** Stage 7. GET /api/factory: whether the factory accepts new runs. */
+export interface FactoryState {
+  enabled: boolean;
+  stoppedAt: number | null;
+}
+/** What a factory-wide stop or resume did (POST /api/factory/switch). */
+export interface FactorySwitchResult {
+  enabled: boolean;
+  stopRequested: number;
+  stopFailed: number;
+}
+
 /** The limits an operator sets, in USD (POST /api/budget/limits). */
 export interface BudgetLimits {
   anthropicUsd: number;
@@ -112,6 +124,8 @@ export interface Api {
   logout(): Promise<void>;
   budget(): Promise<BudgetInfo>;
   setBudgetLimits(limits: BudgetLimits): Promise<void>;
+  factory(): Promise<FactoryState>;
+  setFactoryEnabled(enabled: boolean): Promise<FactorySwitchResult>;
 }
 
 export function createApi(
@@ -172,6 +186,13 @@ export function createApi(
       await call("/api/auth/logout", { method: "POST" });
     },
     budget: () => call("/api/budget"),
+    factory: () => call("/api/factory"),
+    setFactoryEnabled: (enabled) =>
+      call("/api/factory/switch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      }),
     setBudgetLimits: async (limits) => {
       await call("/api/budget/limits", {
         method: "POST",
