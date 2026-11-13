@@ -2,6 +2,11 @@ import { handleCallback, handleLogin, handleLogout } from "./auth";
 import { parseList } from "./config";
 import { D1RunRepo } from "./d1-repo";
 import type { ControlEnv } from "./env";
+import {
+  D1SwitchRepo,
+  handleFactory,
+  handleFactorySwitch,
+} from "./factory-switch";
 import { json, type Handler, type RouteContext } from "./http";
 import {
   handleMe,
@@ -53,6 +58,8 @@ function webhookDeps(env: Partial<ControlEnv>): WebhookDeps {
   return {
     secret: env.GITHUB_WEBHOOK_SECRET,
     runsEnabled: env.RUNS_ENABLED === "true",
+    paused: async () =>
+      env.DB === undefined ? false : new D1SwitchRepo(env.DB).paused(),
     operatorIds: parseList(env.OPERATOR_IDS),
     projects: parseList(env.PROJECTS),
     deliveries: {
@@ -136,6 +143,18 @@ export const ROUTES: readonly Route[] = [
     methods: ["POST"],
     minRole: "operator",
     handler: handleBudgetLimits,
+  },
+  {
+    path: "/api/factory",
+    methods: ["GET"],
+    minRole: "anonymous",
+    handler: handleFactory,
+  },
+  {
+    path: "/api/factory/switch",
+    methods: ["POST"],
+    minRole: "operator",
+    handler: handleFactorySwitch,
   },
   {
     path: "/api/projects/:owner/:repo/runs",

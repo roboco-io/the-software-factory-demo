@@ -62,6 +62,7 @@ describe("route table", () => {
         .map((x) => x.route.path),
     ).toEqual([
       "/api/budget/limits",
+      "/api/factory/switch",
       "/api/runs/:id/stop",
       "/api/runs/:id/review",
     ]);
@@ -158,16 +159,19 @@ describe("every non-GET route (proof for AGENTS.md: observers cannot write)", ()
       const reviewBody = JSON.stringify({ action: "approve", headSha: "abc" });
       const res = await handleRequest(
         route.path === "/api/runs/:id/review" ||
-          route.path === "/api/budget/limits"
+          route.path === "/api/budget/limits" ||
+          route.path === "/api/factory/switch"
           ? new Request(base, {
               body:
-                route.path === "/api/budget/limits"
-                  ? JSON.stringify({
-                      anthropicUsd: 50,
-                      openaiUsd: 50,
-                      runCapUsd: 5,
-                    })
-                  : reviewBody,
+                route.path === "/api/factory/switch"
+                  ? JSON.stringify({ enabled: true })
+                  : route.path === "/api/budget/limits"
+                    ? JSON.stringify({
+                        anthropicUsd: 50,
+                        openaiUsd: 50,
+                        runCapUsd: 5,
+                      })
+                    : reviewBody,
               headers: new Headers([
                 ...base.headers,
                 ["content-type", "application/json"],
@@ -178,6 +182,14 @@ describe("every non-GET route (proof for AGENTS.md: observers cannot write)", ()
       );
       if (route.path === "/api/runs/:id/review") {
         expect(res.status).toBe(200);
+        expect(w.stopCalls).toEqual([]);
+        return;
+      }
+      if (route.path === "/api/factory/switch") {
+        expect(res.status).toBe(200);
+        expect(w.query("SELECT enabled FROM factory_switch")).toEqual([
+          { enabled: 1 },
+        ]);
         expect(w.stopCalls).toEqual([]);
         return;
       }

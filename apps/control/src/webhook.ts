@@ -12,6 +12,8 @@ export interface WebhookDeps {
   secret: string | undefined;
   /** Global kill switch. Only an explicit "true" in RUNS_ENABLED turns this on. */
   runsEnabled: boolean;
+  /** True while an operator has stopped the factory (stage 7). Read only for a request that would start a run. */
+  paused(): Promise<boolean>;
   /** Exact numeric GitHub user ids that may start a run. Empty means nobody. Logins can be renamed and reused; ids cannot. */
   operatorIds: string[];
   /** Exact `owner/name` values that may be run. Empty means nothing. */
@@ -143,6 +145,8 @@ export async function handleWebhook(
   if (qualified === null) return ignored();
   if (!deps.runsEnabled)
     return json({ status: "ignored", code: "runs_disabled" }, 202);
+  if (await deps.paused())
+    return json({ status: "ignored", code: "factory_paused" }, 202);
 
   const deliveryId = request.headers.get("x-github-delivery");
   if (deliveryId === null || !/^[A-Za-z0-9-]{1,64}$/.test(deliveryId)) {
