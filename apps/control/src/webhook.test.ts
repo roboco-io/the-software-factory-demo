@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { MAX_BODY_BYTES, handleWebhook, type WebhookDeps } from "./webhook";
+import {
+  MAX_BODY_BYTES,
+  handleWebhook,
+  type GuestDeps,
+  type WebhookDeps,
+} from "./webhook";
+import type { GuestIssue } from "./triage-service";
 import type { RunInput } from "./run-types";
 import { sign } from "./testing/sign";
 
@@ -366,5 +372,181 @@ describe("webhook", () => {
     expect(logged).toContain("TypeError");
     expect(logged).not.toContain(secretText);
     log.mockRestore();
+  });
+});
+
+describe("webhook: guest requests (stage 7)", () => {
+  function guestPayload(over: Record<string, unknown> = {}) {
+    return {
+      action: "opened",
+      sender: { id: 555, login: "guest", type: "User" },
+      repository: { full_name: "acme/demo" },
+      issue: {
+        number: 9,
+        state: "open",
+        title: "[데모] 문구",
+        body: "### 요청 종류",
+        labels: [{ name: "demo:guest" }],
+        user: { id: 555, login: "guest", type: "User" },
+      },
+      ...over,
+    };
+  }
+  function guestWorld(over: Partial<WebhookDeps> = {}) {
+    const pending: Promise<void>[] = [];
+    const triage = vi.fn<(issue: GuestIssue) => Promise<unknown>>(
+      async () => ({}),
+    );
+    const adminClosed = vi.fn<(r: string, n: number) => Promise<boolean>>(
+      async () => true,
+    );
+    const guest: GuestDeps = {
+      projects: ["acme/demo"],
+      triage,
+      adminClosed,
+      defer: (work) => void pending.push(work),
+    };
+    const made = makeDeps({ guest, ...over });
+    return { ...made, triage, adminClosed, settle: () => Promise.all(pending) };
+  }
+  const issueWith = (over: Record<string, unknown>) =>
+    guestPayload({ issue: { ...guestPayload().issue, ...over } });
+
+  it("answers first and triages a guest's template issue after the response", async () => {
+    const w = guestWorld();
+    const res = await post(w.deps, guestPayload());
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ status: "triage" });
+    await w.settle();
+    expect(w.triage).toHaveBeenCalledTimes(1);
+    expect(w.triage.mock.calls[0]![0]).toEqual({
+      repo: "acme/demo",
+      issueNumber: 9,
+      title: "[데모] 문구",
+      body: "### 요청 종류",
+      labels: ["demo:guest"],
+      author: { id: 555, login: "guest", type: "User" },
+      deliveryId: "d-1",
+    });
+    // The webhook itself never starts a run for a guest.
+    expect(w.start).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["no guest label", issueWith({ labels: [{ name: "bug" }] })],
+    ["a pull request", issueWith({ pull_request: {} })],
+    [
+      "a bot author",
+      issueWith({ user: { id: 555, login: "x[bot]", type: "Bot" } }),
+    ],
+    [
+      "an operator",
+      guestPayload({
+        sender: { id: 101, login: "alice", type: "User" },
+        issue: {
+          ...guestPayload().issue,
+          user: { id: 101, login: "alice", type: "User" },
+        },
+      }),
+    ],
+    [
+      "someone else opening it for the author",
+      guestPayload({ sender: { id: 777, login: "other", type: "User" } }),
+    ],
+    [
+      "a repository that is not a guest repository",
+      guestPayload({ repository: { full_name: "acme/other" } }),
+    ],
+    ["an edit", guestPayload({ action: "edited" })],
+    ["a label added later", guestPayload({ action: "labeled" })],
+  ])("ignores %s", async (_name, body) => {
+    const w = guestWorld({ projects: ["acme/demo", "acme/other"] });
+    const res = await post(w.deps, body);
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ status: "ignored" });
+    await w.settle();
+    expect(w.triage).not.toHaveBeenCalled();
+    expect(w.claim).not.toHaveBeenCalled();
+  });
+
+  it("ignores guest issues when triage is not configured", async () => {
+    const { deps, claim } = makeDeps();
+    const res = await post(deps, guestPayload());
+    expect(await res.json()).toEqual({ status: "ignored" });
+    expect(claim).not.toHaveBeenCalled();
+  });
+
+  it("ignores a guest repository that is not a managed project", async () => {
+    const w = guestWorld({ projects: [] });
+    expect(await (await post(w.deps, guestPayload())).json()).toEqual({
+      status: "ignored",
+    });
+    expect(w.triage).not.toHaveBeenCalled();
+  });
+
+  it("does not triage while runs are disabled or the factory is stopped", async () => {
+    const off = guestWorld({ runsEnabled: false });
+    expect(await (await post(off.deps, guestPayload())).json()).toEqual({
+      status: "ignored",
+      code: "runs_disabled",
+    });
+    const paused = guestWorld({ paused: async () => true });
+    expect(await (await post(paused.deps, guestPayload())).json()).toEqual({
+      status: "ignored",
+      code: "factory_paused",
+    });
+    for (const w of [off, paused]) {
+      await w.settle();
+      expect(w.triage).not.toHaveBeenCalled();
+    }
+  });
+
+  it("triages a delivery once, and releases it when triage throws", async () => {
+    const w = guestWorld();
+    await post(w.deps, guestPayload());
+    const again = await post(w.deps, guestPayload());
+    expect(await again.json()).toEqual({ status: "duplicate" });
+    await w.settle();
+    expect(w.triage).toHaveBeenCalledTimes(1);
+
+    const failing = guestWorld();
+    failing.triage.mockRejectedValue(new Error("boom"));
+    const res = await post(failing.deps, guestPayload());
+    expect(res.status).toBe(202);
+    await failing.settle();
+    expect(failing.release).toHaveBeenCalledWith("d-1");
+  });
+
+  it("requires the signature for guest events too", async () => {
+    const w = guestWorld();
+    const res = await post(w.deps, guestPayload(), { signWith: "attacker" });
+    expect(res.status).toBe(401);
+    expect(w.triage).not.toHaveBeenCalled();
+  });
+
+  it("records an operator's close, and nobody else's", async () => {
+    const closed = (sender: Record<string, unknown>) =>
+      guestPayload({
+        action: "closed",
+        sender,
+        issue: { ...guestPayload().issue, state: "closed" },
+      });
+    const w = guestWorld();
+    const res = await post(
+      w.deps,
+      closed({ id: 101, login: "alice", type: "User" }),
+    );
+    expect(await res.json()).toEqual({ status: "recorded" });
+    expect(w.adminClosed).toHaveBeenCalledWith("acme/demo", 9);
+
+    const other = guestWorld();
+    for (const sender of [
+      { id: 555, login: "guest", type: "User" },
+      { id: 101, login: "factory[bot]", type: "Bot" },
+    ]) {
+      const r = await post(other.deps, closed(sender));
+      expect(await r.json()).toEqual({ status: "ignored" });
+    }
+    expect(other.adminClosed).not.toHaveBeenCalled();
   });
 });

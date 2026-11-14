@@ -13,6 +13,7 @@
     "wrangler": "^4.158.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "yaml": "^2.9.1"
   }
 }

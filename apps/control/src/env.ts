@@ -26,6 +26,10 @@ export interface ControlEnv {
   RUN_BUDGET_USD?: string;
   /** Stage 5. Repository of the once-per-period budget issue. Not a managed project. */
   FACTORY_REPO?: string;
+  /** Stage 7. Repositories where guests may ask (docs/guest-demo.md). Empty or unset: nowhere. */
+  GUEST_PROJECTS?: string;
+  /** Stage 7. The model that triages guest requests. Unset: no triage. */
+  TRIAGE_MODEL?: string;
   GITHUB_WEBHOOK_SECRET?: string;
   GITHUB_APP_PRIVATE_KEY?: string;
   GITHUB_OAUTH_CLIENT_SECRET?: string;

@@ -95,6 +95,8 @@ flowchart TD
 
 `decision`과 `category`의 조합도 검사한다. `accept`는 허용 작업 네 가지 중 하나와만, `reject`는 `forbidden`과만, `escalate`는 `out_of_scope`와만 짝지을 수 있다. 맞지 않으면 `triage_invalid`로 관리자에게 넘긴다.
 
+구현에서 관리자 판단의 사유 코드 두 개를 더했다. `triage_unavailable`은 모델을 부르지 못했거나(계정의 이달 예산 소진) 호출이 실패한 경우이고, `start_deferred`는 인용했지만 정원이나 예산 때문에 실행을 시작하지 못한 경우다. 구현된 동작의 자세한 내용은 `docs/operations.md`의 "게스트 심사" 절에 있다.
+
 ### 4.3 판정 뒤 처리
 
 **인용.** 제어 평면이 실행을 직접 만든다. 봇이 붙인 라벨은 웹훅 규칙상 무시되므로 라벨로 시작할 수 없기 때문이다. 이슈에는 `demo:accepted` 라벨과 요약, 완료 조건, 포털 실행 주소를 댓글로 남긴다. 실행은 심사 시점의 이슈 제목과 본문의 스냅샷(그리고 그 해시)을 저장하고, 구현 에이전트에게는 이 스냅샷과 `acceptance`만 넘긴다. 인용 뒤에 게스트가 본문을 고쳐 금지 영역 요청을 끼워 넣는 것을 막기 위해서다.
@@ -289,7 +291,7 @@ conveyor에는 GitHub Actions로 만든 이전 팩토리가 남아 있다. 2026-
 
 ## 7. 제어 평면과 포털 변경
 
-**제어 평면.** `issues.opened` 웹훅 처리, 사전 검사, Haiku 호출과 응답 검사, 판정별 GitHub 작업(라벨, 댓글, 닫기), 심사 기록 저장이 새로 생긴다. 심사 기록은 D1의 새 표 `triage`에 둔다. 열은 `repo`, `issue_number`, `author_id`, `decision`, `category`, `reason_code`, `model`, `body_sha256`, `run_id`, `created_at`이다. 이슈 본문과 모델의 `summary`는 저장하지 않는다. 지금 D1에 이슈 본문을 저장하지 않는다는 원칙(`docs/operations.md` 읽기 API 절)을 지키기 위해서다. 심사의 토큰 사용량은 기존 `run_usage`에 `phase = 'triage'`로 기록해 하루 예산 계산에 넣는다. Anthropic API 키는 Worker 비밀로만 두며 컨테이너에는 넣지 않는다.
+**제어 평면.** `issues.opened` 웹훅 처리, 사전 검사, Haiku 호출과 응답 검사, 판정별 GitHub 작업(라벨, 댓글, 닫기), 심사 기록 저장이 새로 생긴다. 심사 기록은 D1의 새 표 `triage`에 둔다. 열은 `repo`, `issue_number`, `author_id`, `decision`, `category`, `reason_code`, `model`, `body_sha256`, `run_id`, `created_at`이다. 이슈 본문과 모델의 `summary`는 저장하지 않는다. 지금 D1에 이슈 본문을 저장하지 않는다는 원칙(`docs/operations.md` 읽기 API 절)을 지키기 위해서다. 심사의 토큰 사용량은 새 표 `triage_usage`에 기록해 이달 예산과 하루 예산 계산에 넣는다. 처음에는 기존 `run_usage`에 넣으려 했으나, 각하된 요청에는 실행이 없고 `run_usage`의 행은 실행에 속해야 해서 표를 나눴다. Anthropic API 키는 Worker 비밀로만 두며 컨테이너에는 넣지 않는다.
 
 `issues.closed` 웹훅도 받아, 관리자 판단 상태의 이슈를 관리자가 닫으면 심사 기록을 `admin_rejected`로 바꾼다. 인용된 실행은 기존처럼 이슈 번호로 묶이며, 실행 생성 경로에 "심사에서 인용됨"이라는 시작 원인이 하나 더 생긴다.
 

@@ -7,6 +7,8 @@ export interface AppDeps {
   fetch?: typeof fetch;
   /** Milliseconds since the epoch. */
   now?: () => number;
+  /** Keeps the Worker alive for work after the response. Without it the work just runs. */
+  waitUntil?: (work: Promise<unknown>) => void;
 }
 
 export interface RouteContext {
@@ -17,6 +19,7 @@ export interface RouteContext {
   env: Partial<ControlEnv>;
   fetch: typeof fetch;
   now(): number;
+  waitUntil(work: Promise<unknown>): void;
   role: Role;
   session: Session | null;
 }
