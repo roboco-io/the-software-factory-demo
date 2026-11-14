@@ -359,6 +359,53 @@ describe("D1TriageRepo (migration 0010)", () => {
     expect(await repo.dailySpendUsd("acme/demo", NOW)).toBeNull();
   });
 
+  it("knows whether an issue was triaged", async () => {
+    const { repo } = setup();
+    expect(await repo.exists("acme/demo", 7)).toBe(false);
+    await repo.record(record());
+    expect(await repo.exists("acme/demo", 7)).toBe(true);
+    expect(await repo.exists("acme/demo", 8)).toBe(false);
+  });
+
+  it("adds the triage calls to the repository's daily spend (migration 0011)", async () => {
+    const { repo } = setup();
+    const usage = {
+      inputTokens: 1000000,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    };
+    const call = (over: Record<string, unknown> = {}) =>
+      repo.recordUsage({
+        repo: "acme/demo",
+        issueNumber: 7,
+        model: "claude-haiku-5-5",
+        usage,
+        ts: NOW,
+        ...over,
+      });
+    await call();
+    await call({ ts: NOW - 2 * DAY });
+    await call({ repo: "acme/other" });
+    // Haiku input is $0.5 per million tokens: one call of this repository on this day.
+    expect(await repo.dailySpendUsd("acme/demo", NOW)).toBe(0.5);
+  });
+
+  it("turns a request that waited for the administrator into a rejection when they close it", async () => {
+    const { repo, query } = setup();
+    await repo.record(record({ decision: "needs_admin" }));
+    await repo.record(record({ issueNumber: 8, decision: "accepted" }));
+    expect(await repo.markAdminRejected("acme/demo", 7)).toBe(true);
+    expect(await repo.markAdminRejected("acme/demo", 7)).toBe(false);
+    expect(await repo.markAdminRejected("acme/demo", 8)).toBe(false);
+    expect(
+      query("SELECT issue_number, decision FROM triage ORDER BY issue_number"),
+    ).toEqual([
+      { issue_number: 7, decision: "admin_rejected" },
+      { issue_number: 8, decision: "accepted" },
+    ]);
+  });
+
   it("keeps only fixed values: a decision outside the list is refused", () => {
     const { exec } = setup();
     expect(() =>

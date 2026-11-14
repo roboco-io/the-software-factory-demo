@@ -12,5 +12,6 @@ export function handleRequest(
   return dispatch(request, env, {
     fetch: deps.fetch ?? ((...args) => fetch(...args)),
     now: deps.now ?? Date.now,
+    waitUntil: deps.waitUntil ?? ((work) => void work.catch(() => {})),
   });
 }

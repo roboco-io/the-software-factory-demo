@@ -6,5 +6,6 @@ export { IssueRun } from "./issue-run";
 export { Outbound } from "./outbound";
 
 export default {
-  fetch: (request: Request, env: ControlEnv) => handleRequest(request, env),
+  fetch: (request: Request, env: ControlEnv, ctx: ExecutionContext) =>
+    handleRequest(request, env, { waitUntil: (work) => ctx.waitUntil(work) }),
 };

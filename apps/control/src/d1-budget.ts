@@ -90,13 +90,19 @@ export class D1BudgetRepo {
       .run();
   }
 
-  /** Usage per model with `start <= ts < end`. */
+  /** Usage per model with `start <= ts < end`: the runs' calls and the guest triage calls. */
   async periodUsage(start: number, end: number): Promise<ModelUsage[]> {
     const { results } = await this.db
       .prepare(
-        `SELECT model, ${SUMS} FROM run_usage WHERE ts >= ? AND ts < ? GROUP BY model ORDER BY model`,
+        `SELECT model, ${SUMS} FROM (
+           SELECT model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+           FROM run_usage WHERE ts >= ? AND ts < ?
+           UNION ALL
+           SELECT model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+           FROM triage_usage WHERE ts >= ? AND ts < ?
+         ) GROUP BY model ORDER BY model`,
       )
-      .bind(start, end)
+      .bind(start, end, start, end)
       .all<SumRow>();
     return results.map(toModelUsage);
   }

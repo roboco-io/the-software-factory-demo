@@ -1,13 +1,20 @@
 import { handleCallback, handleLogin, handleLogout } from "./auth";
-import { parseList } from "./config";
+import { billingPeriod, loadBudgetConfig, spendByProvider } from "./budget";
+import { MODEL_PATTERN, parseList } from "./config";
+import { D1BudgetRepo } from "./d1-budget";
 import { D1RunRepo } from "./d1-repo";
+import { D1TriageRepo } from "./d1-triage";
 import type { ControlEnv } from "./env";
 import {
   D1SwitchRepo,
   handleFactory,
   handleFactorySwitch,
 } from "./factory-switch";
+import { createTriageGitHub } from "./github-triage";
 import { json, type Handler, type RouteContext } from "./http";
+import { providerOf } from "./pricing";
+import { createTriageClassifier } from "./triage-model";
+import { runTriage } from "./triage-service";
 import {
   handleMe,
   handleBudget,
@@ -20,7 +27,7 @@ import {
 import { handleReviewStart } from "./review";
 import { hasRole, roleOf, type Role } from "./roles";
 import { SESSION_COOKIE, readCookie, verifySession } from "./session";
-import { handleWebhook, type WebhookDeps } from "./webhook";
+import { handleWebhook, type GuestDeps, type WebhookDeps } from "./webhook";
 
 export type Method = "GET" | "POST";
 
@@ -53,8 +60,80 @@ const PARAM_RULES: Readonly<Record<string, RegExp>> = {
   id: RUN_ID,
 };
 
-function webhookDeps(env: Partial<ControlEnv>): WebhookDeps {
+type Starter = WebhookDeps["starter"];
+
+/**
+ * Guest triage (stage 7). Undefined, so guest issues are ignored, unless GUEST_PROJECTS
+ * names a repository and the model, the database and both keys are there. Opening a
+ * repository to guests is therefore one reviewed change of GUEST_PROJECTS.
+ */
+function guestDeps(ctx: RouteContext, starter: Starter): GuestDeps | undefined {
+  const { env } = ctx;
+  const projects = parseList(env.GUEST_PROJECTS);
+  const model = env.TRIAGE_MODEL?.trim() ?? "";
+  const db = env.DB;
+  const apiKey = env.ANTHROPIC_API_KEY;
+  const appId = env.GITHUB_APP_ID;
+  const privateKeyPem = env.GITHUB_APP_PRIVATE_KEY;
+  if (
+    projects.length === 0 ||
+    !MODEL_PATTERN.test(model) ||
+    db === undefined ||
+    !apiKey ||
+    !appId ||
+    !privateKeyPem
+  )
+    return undefined;
+  const triage = new D1TriageRepo(db);
+  const budget = new D1BudgetRepo(db);
+  return {
+    projects,
+    triage: (issue) =>
+      runTriage(issue, {
+        now: ctx.now,
+        model,
+        portalOrigin: ctx.url.origin,
+        triage,
+        github: createTriageGitHub({ appId, privateKeyPem, fetch: ctx.fetch }),
+        classifier: createTriageClassifier({ apiKey, model, fetch: ctx.fetch }),
+        modelBudgetOk: async () => {
+          const provider = providerOf(model);
+          if (provider === null) return false;
+          const period = billingPeriod(ctx.now());
+          const [rows, config] = await Promise.all([
+            budget.periodUsage(period.start, period.end),
+            loadBudgetConfig(env, budget),
+          ]);
+          const spent = spendByProvider(rows)[provider];
+          return spent !== null && spent < config.monthlyUsd[provider];
+        },
+        starter,
+      }),
+    adminClosed: (repo, issueNumber) =>
+      triage.markAdminRejected(repo, issueNumber),
+    defer: (work) => ctx.waitUntil(work),
+  };
+}
+
+function webhookDeps(ctx: RouteContext): WebhookDeps {
+  const { env } = ctx;
   const repo = env.DB === undefined ? undefined : new D1RunRepo(env.DB);
+  const starter: Starter = {
+    async start(input) {
+      if (
+        env.ISSUE_RUN === undefined ||
+        !env.ANTHROPIC_API_KEY ||
+        !env.GITHUB_APP_ID ||
+        !env.GITHUB_APP_PRIVATE_KEY
+      ) {
+        throw new Error("not configured");
+      }
+      return env.ISSUE_RUN.getByName(
+        `${input.repo}#${input.issueNumber}`,
+      ).start(input);
+    },
+  };
+  const guest = guestDeps(ctx, starter);
   return {
     secret: env.GITHUB_WEBHOOK_SECRET,
     runsEnabled: env.RUNS_ENABLED === "true",
@@ -66,21 +145,8 @@ function webhookDeps(env: Partial<ControlEnv>): WebhookDeps {
       claim: async (id) => (repo ? repo.claimDelivery(id, Date.now()) : false),
       release: async (id) => void (await repo?.releaseDelivery(id)),
     },
-    starter: {
-      async start(input) {
-        if (
-          env.ISSUE_RUN === undefined ||
-          !env.ANTHROPIC_API_KEY ||
-          !env.GITHUB_APP_ID ||
-          !env.GITHUB_APP_PRIVATE_KEY
-        ) {
-          throw new Error("not configured");
-        }
-        return env.ISSUE_RUN.getByName(
-          `${input.repo}#${input.issueNumber}`,
-        ).start(input);
-      },
-    },
+    starter,
+    ...(guest === undefined ? {} : { guest }),
   };
 }
 
@@ -97,7 +163,7 @@ export const ROUTES: readonly Route[] = [
     methods: ["POST"],
     minRole: "anonymous",
     exemption: "signed-webhook",
-    handler: (ctx) => handleWebhook(ctx.request, webhookDeps(ctx.env)),
+    handler: (ctx) => handleWebhook(ctx.request, webhookDeps(ctx)),
   },
   {
     path: "/api/auth/login",
@@ -207,7 +273,11 @@ const isRead = (method: string) => method === "GET" || method === "HEAD";
 export async function dispatch(
   request: Request,
   env: Partial<ControlEnv>,
-  deps: { fetch: typeof fetch; now: () => number },
+  deps: {
+    fetch: typeof fetch;
+    now: () => number;
+    waitUntil: (work: Promise<unknown>) => void;
+  },
 ): Promise<Response> {
   const url = new URL(request.url);
   let route: Route | undefined;
@@ -258,6 +328,7 @@ export async function dispatch(
     env,
     fetch: deps.fetch,
     now: deps.now,
+    waitUntil: deps.waitUntil,
     role,
     session,
   } satisfies RouteContext);
