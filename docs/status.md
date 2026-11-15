@@ -1,6 +1,6 @@
 # 현재 상태
 
-2026-11-14 기준이다. 이 문서는 `docs/status.json`에서 `pnpm docs:status`로 생성하므로 직접 고치지 않는다. 상태를 바꾸려면 `docs/status.json`을 고친다.
+2026-11-15 기준이다. 이 문서는 `docs/status.json`에서 `pnpm docs:status`로 생성하므로 직접 고치지 않는다. 상태를 바꾸려면 `docs/status.json`을 고친다.
 
 이 문서가 이 저장소의 진행 상태, 실서비스에서 확인한 것, 아직 확인하지 않은 것의 유일한 원본이다. 다른 문서는 동작과 설계 이유만 설명한다.
 
@@ -83,6 +83,11 @@
 - (사람) 포털의 한도 변경 폼. 운영자로 로그인해 저장하는 동작은 시험으로만 확인했다.
 - (에이전트) 두 실행이 동시에 시작할 때 예약 확인이 서로를 보지 못하는 경우. 초과분은 출구 핸들러의 상한 확인이 제한한다.
 - (에이전트) 핀 고정한 Claude Code 2.1.318이 실제로 보내는 `anthropic-beta` 값과 `tools` 배열의 형식. 요청 본문을 기록하지 않으므로 허용 목록이 실제 요청과 맞는지는 실행이 성공한다는 사실로만 안다.
+
+### 6. conveyor 이전
+
+- (사람) Dependabot 보안 업데이트의 자동 병합을 켜는 일. 매일 점검하는 코드는 배포되어 있지만 `DEPENDABOT_PROJECTS`가 비어 있어 동작하지 않는다. 켜려면 GitHub App에 "Dependabot alerts: read" 권한을 더하고, conveyor의 정책 문서에 이 예외를 적은 뒤, `DEPENDABOT_PROJECTS`에 저장소를 더한다(`docs/operations.md`).
+- (에이전트) Dependabot이 PR을 열지 못한 보안 경고(간접 의존성)의 처리. 2026-11-15 기준 conveyor에 3건이 있다(`@vitest/mocker` 2건, `minimatch` 1건).
 
 ### 7. 샌드박스 공개
 

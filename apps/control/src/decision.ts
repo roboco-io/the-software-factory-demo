@@ -45,7 +45,7 @@ export type Decision =
 /** Tiers that must never merge without a person, whatever the policy file says. */
 const NEVER_AUTOMATIC: readonly Tier[] = ["T3"];
 
-type CheckState = "success" | "failed" | "pending";
+export type CheckState = "success" | "failed" | "pending";
 
 function checkState(
   required: RequiredCheck,
@@ -62,6 +62,16 @@ function checkState(
     else if (run.conclusion !== "success") return "failed";
   }
   return pending ? "pending" : "success";
+}
+
+/** All required checks together: one failure fails, otherwise one pending check waits. */
+export function requiredChecksState(
+  required: readonly RequiredCheck[],
+  checks: readonly CheckRun[],
+): CheckState {
+  const states = required.map((r) => checkState(r, checks));
+  if (states.includes("failed")) return "failed";
+  return states.includes("pending") ? "pending" : "success";
 }
 
 /**

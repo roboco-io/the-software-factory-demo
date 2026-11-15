@@ -30,6 +30,13 @@ export interface ControlEnv {
   GUEST_PROJECTS?: string;
   /** Stage 7. The model that triages guest requests. Unset: no triage. */
   TRIAGE_MODEL?: string;
+  /**
+   * Repositories whose Dependabot security pull requests the daily pass may merge
+   * (docs/operations.md). Empty or unset: nowhere.
+   */
+  DEPENDABOT_PROJECTS?: string;
+  /** Days since the newest commit before such a pull request merges. Default 3. */
+  DEPENDABOT_MIN_AGE_DAYS?: string;
   GITHUB_WEBHOOK_SECRET?: string;
   GITHUB_APP_PRIVATE_KEY?: string;
   GITHUB_OAUTH_CLIENT_SECRET?: string;
