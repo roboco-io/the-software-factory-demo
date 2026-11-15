@@ -44,8 +44,10 @@ export async function runScheduled(
   )
     return skip("not_configured");
   try {
-    if (env.DB !== undefined && (await new D1SwitchRepo(env.DB).paused()))
-      return skip("factory_paused");
+    // Without the database the stop switch cannot be read: then do nothing.
+    if (env.DB === undefined) return skip("not_configured");
+    const switches = new D1SwitchRepo(env.DB);
+    if (await switches.paused()) return skip("factory_paused");
     const now = options.now ?? Date.now;
     const config = {
       appId: env.GITHUB_APP_ID,
@@ -59,6 +61,7 @@ export async function runScheduled(
       projects,
       github: createDependabotGitHub(config),
       pulls: createPullClient(config),
+      paused: () => switches.paused(),
       log: logDiagnostic,
     });
   } catch (error) {

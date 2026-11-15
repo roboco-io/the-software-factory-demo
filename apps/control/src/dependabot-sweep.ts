@@ -5,7 +5,9 @@ import {
   type DependabotPr,
   type HumanCode,
   type OpenAlert,
+  parseBump,
   type PrCommit,
+  type PrFile,
 } from "./dependabot";
 import { errorKind } from "./diagnostics";
 import { parsePolicy } from "./policy";
@@ -16,6 +18,16 @@ export const LABEL_NEEDS_HUMAN = "factory:needs-human";
 export interface DependabotGitHub {
   /** Open pull requests of the repository, whoever wrote them. */
   listOpenPrs(repo: string): Promise<DependabotPr[]>;
+  /** The pull request as it is now. `open` is false once it is closed or merged. */
+  getPr(
+    repo: string,
+    prNumber: number,
+  ): Promise<DependabotPr & { open: boolean }>;
+  /** Changed files with their diffs. `truncated` is true when the list may be incomplete. */
+  listFiles(
+    repo: string,
+    prNumber: number,
+  ): Promise<{ files: PrFile[]; truncated: boolean }>;
   listCommits(repo: string, prNumber: number): Promise<PrCommit[]>;
   /** Open Dependabot alerts. Null when the App may not read them. */
   listOpenAlerts(repo: string): Promise<OpenAlert[] | null>;
@@ -29,10 +41,9 @@ export interface SweepDeps {
   minAgeMs: number;
   projects: readonly string[];
   github: DependabotGitHub;
-  pulls: Pick<
-    PullRequestPort,
-    "getPullRequest" | "listFiles" | "readPolicy" | "listChecks" | "merge"
-  >;
+  pulls: Pick<PullRequestPort, "readPolicy" | "listChecks" | "merge">;
+  /** The factory-wide stop, read again right before a merge. */
+  paused(): Promise<boolean>;
   log(event: string, fields?: Record<string, string | number>): void;
 }
 
@@ -46,7 +57,7 @@ const REASONS: Record<HumanCode, string> = {
   not_single_update:
     "제목에서 패키지 하나의 버전 올림을 읽지 못했습니다. 여러 패키지를 묶은 업데이트는 자동으로 병합하지 않습니다.",
   foreign_commit:
-    "Dependabot이 아닌 계정의 커밋이 있거나 커밋 목록을 읽지 못했습니다.",
+    "Dependabot이 작성하고 GitHub이 서명한 커밋이 아닌 커밋이 있거나, 커밋 목록을 읽지 못했습니다.",
   version_unreadable:
     "버전이 `major.minor.patch` 형식이 아니거나 올림이 아닙니다.",
   major_update:
@@ -54,7 +65,7 @@ const REASONS: Record<HumanCode, string> = {
   not_security_update:
     "이 버전 올림으로 해결되는 열린 Dependabot 보안 경고를 찾지 못했습니다.",
   unexpected_files:
-    "`package.json`과 `pnpm-lock.yaml` 밖의 파일이 바뀌었거나 파일 목록을 끝까지 읽지 못했습니다.",
+    "`package.json`에서 해당 패키지의 버전 외의 내용이 바뀌었거나, `pnpm-lock.yaml`에 레지스트리가 아닌 출처가 더해졌거나, 그 밖의 파일이 바뀌었습니다. 파일 목록이나 diff를 끝까지 읽지 못한 경우도 여기에 해당합니다.",
   check_failed: "필수 체크가 실패했습니다.",
 };
 
@@ -70,42 +81,35 @@ const mergedComment = (days: number) =>
   [
     "팩토리가 이 Dependabot PR을 자동으로 병합했습니다. 확인한 조건은 다음과 같습니다.",
     "",
-    "- 작성자와 모든 커밋의 작성자가 Dependabot입니다.",
+    "- 작성자가 Dependabot이고, 모든 커밋이 Dependabot 작성, GitHub 서명(검증됨)입니다.",
     "- 패키지 하나의 패치 또는 마이너 버전 올림이며, 열린 Dependabot 보안 경고를 해결합니다.",
-    "- 바뀐 파일은 `package.json`과 `pnpm-lock.yaml`뿐입니다.",
+    "- `package.json`에서는 그 패키지의 버전만 바뀌었고, `pnpm-lock.yaml`에 레지스트리가 아닌 출처가 더해지지 않았습니다.",
     "- 기본 브랜치의 `.factory/policy.yml`이 정한 필수 체크가 모두 통과했습니다.",
     `- 마지막 커밋 뒤 ${days}일 이상 지났습니다.`,
   ].join("\n");
 
 async function sweepPr(
   repo: string,
-  pr: DependabotPr,
+  prNumber: number,
   alerts: readonly OpenAlert[],
   required: Parameters<typeof requiredChecksState>[0],
   deps: SweepDeps,
 ): Promise<SweepResult> {
-  const base = { repo, pr: pr.number };
+  const base = { repo, pr: prNumber };
+  // Judge what the pull request is now, not what the list said: the title, the base
+  // branch and the labels can all change. The merge is pinned to the head read here.
+  const pr = await deps.github.getPr(repo, prNumber);
+  if (!pr.open) return { ...base, action: "skipped", code: "closed" };
   const held = pr.labels.includes(LABEL_NEEDS_HUMAN);
 
-  // Read the pull request again: the list may be seconds old, and the file count is not in it.
-  const live = await deps.pulls.getPullRequest(repo, pr.number);
-  if (live.state !== "open" || live.merged)
-    return { ...base, action: "skipped", code: "closed" };
-  if (live.headSha !== pr.headSha)
-    return { ...base, action: "skipped", code: "head_moved" };
-
-  const commits = await deps.github.listCommits(repo, pr.number);
-  const listed = await deps.pulls.listFiles(repo, pr.number, live.changedFiles);
+  const commits = await deps.github.listCommits(repo, prNumber);
+  const listed = await deps.github.listFiles(repo, prNumber);
   const checks = await deps.pulls.listChecks(repo, pr.headSha);
 
   const judgement = judgeDependabotPr({
     pr,
     commits,
-    files: listed.files.flatMap((f) =>
-      f.previousFilename === undefined
-        ? [f.filename]
-        : [f.filename, f.previousFilename],
-    ),
+    files: listed.files,
     filesTruncated: listed.truncated,
     alerts,
     checks: requiredChecksState(required, checks),
@@ -117,8 +121,9 @@ async function sweepPr(
     return { ...base, action: "skipped", code: "not_dependabot" };
   if (judgement.action === "needs_human") {
     if (!held) {
-      await deps.github.addLabel(repo, pr.number, LABEL_NEEDS_HUMAN);
-      await deps.github.comment(repo, pr.number, humanComment(judgement.code));
+      // The comment first: a label without a reason would hold the pull request silently.
+      await deps.github.comment(repo, prNumber, humanComment(judgement.code));
+      await deps.github.addLabel(repo, prNumber, LABEL_NEEDS_HUMAN);
     }
     return { ...base, action: "needs_human", code: judgement.code };
   }
@@ -127,8 +132,13 @@ async function sweepPr(
   if (judgement.action === "wait")
     return { ...base, action: "wait", code: judgement.code };
 
-  const merged = await deps.pulls.merge(repo, pr.number, pr.headSha, {
-    title: `${pr.title} (#${pr.number})`,
+  const bump = parseBump(pr.title);
+  if (bump === null) return { ...base, action: "skipped", code: "failed" };
+  if (await deps.paused())
+    return { ...base, action: "skipped", code: "factory_paused" };
+  const merged = await deps.pulls.merge(repo, prNumber, pr.headSha, {
+    // Built from the parsed parts, not copied from the title.
+    title: `chore(deps): bump ${bump.package} from ${bump.from} to ${bump.to} (#${prNumber})`,
     body: "Dependabot 보안 업데이트. 팩토리가 조건을 확인하고 자동으로 병합했다.",
   });
   if (merged !== "merged")
@@ -136,7 +146,7 @@ async function sweepPr(
   try {
     await deps.github.comment(
       repo,
-      pr.number,
+      prNumber,
       mergedComment(Math.floor(deps.minAgeMs / 86_400_000)),
     );
   } catch (error) {
@@ -183,7 +193,13 @@ export async function runDependabotSweep(
       for (const pr of prs) {
         try {
           results.push(
-            await sweepPr(repo, pr, alerts, parsed.policy.requiredChecks, deps),
+            await sweepPr(
+              repo,
+              pr.number,
+              alerts,
+              parsed.policy.requiredChecks,
+              deps,
+            ),
           );
         } catch (error) {
           deps.log("dependabot_pr_failed", {

@@ -71,6 +71,7 @@ describe("runScheduled", () => {
     ["runs are disabled", { RUNS_ENABLED: "false" }],
     ["the App id is missing", { GITHUB_APP_ID: "" }],
     ["the App key is missing", { GITHUB_APP_PRIVATE_KEY: undefined }],
+    ["the database is missing", { DB: undefined }],
   ])("does nothing when %s", async (_name, over) => {
     const s = setup(over);
     expect(await s.run()).toBeNull();

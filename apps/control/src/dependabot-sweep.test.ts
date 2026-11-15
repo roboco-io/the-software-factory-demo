@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DEPENDABOT_LOGIN,
   DEPENDABOT_USER_ID,
+  GITHUB_WEB_FLOW_ID,
   type DependabotPr,
   type OpenAlert,
   type PrCommit,
+  type PrFile,
 } from "./dependabot";
 import {
   LABEL_NEEDS_HUMAN,
@@ -36,57 +38,69 @@ const passed: CheckRun[] = [
   { name: "unit", status: "completed", conclusion: "success", appId: 15368 },
 ];
 
+const lockFile: PrFile = {
+  path: "pnpm-lock.yaml",
+  status: "modified",
+  patch: "@@ -1 +1 @@\n-  hono@4.13.13:\n+  hono@4.13.16:",
+};
+
 function world(
   over: {
     prs?: DependabotPr[];
+    /** The pull request as `getPr` returns it, when it differs from the list. */
+    live?: Partial<DependabotPr & { open: boolean }>;
     alerts?: OpenAlert[] | null;
     commits?: PrCommit[];
-    files?: string[];
+    files?: PrFile[];
     checks?: CheckRun[];
     policy?: string | null;
-    liveHead?: string;
-    liveState?: "open" | "closed";
     merge?: MergeResult;
+    paused?: boolean;
     projects?: string[];
   } = {},
 ) {
   const logs: { event: string; fields: Record<string, unknown> }[] = [];
+  const order: string[] = [];
+  const prs = over.prs ?? [pr()];
   const github = {
-    listOpenPrs: vi.fn(async () => over.prs ?? [pr()]),
+    listOpenPrs: vi.fn(async () => prs),
+    getPr: vi.fn(async (_repo: string, number: number) => ({
+      ...(prs.find((p) => p.number === number) ?? pr({ number })),
+      open: true,
+      ...over.live,
+    })),
+    listFiles: vi.fn(async () => ({
+      files: over.files ?? [lockFile],
+      truncated: false,
+    })),
     listCommits: vi.fn(
       async () =>
         over.commits ?? [
-          { authorId: DEPENDABOT_USER_ID, committedAt: NOW - 4 * DAY },
+          {
+            authorId: DEPENDABOT_USER_ID,
+            committerId: GITHUB_WEB_FLOW_ID,
+            verified: true,
+            committedAt: NOW - 4 * DAY,
+          },
         ],
     ),
     listOpenAlerts: vi.fn(async () =>
       over.alerts === undefined
-        ? [{ package: "hono", patched: "4.13.16" }]
+        ? [{ package: "hono", ecosystem: "npm", patched: "4.13.16" }]
         : over.alerts,
     ),
     addLabel: vi.fn<(r: string, n: number, l: string) => Promise<void>>(
-      async () => {},
+      async () => {
+        order.push("label");
+      },
     ),
     comment: vi.fn<(r: string, n: number, b: string) => Promise<void>>(
-      async () => {},
+      async () => {
+        order.push("comment");
+      },
     ),
   };
   const pulls = {
-    getPullRequest: vi.fn(async () => ({
-      state: over.liveState ?? ("open" as const),
-      merged: false,
-      headSha: over.liveHead ?? SHA,
-      baseRef: "main",
-      defaultBranch: "main",
-      authorId: String(DEPENDABOT_USER_ID),
-      changedFiles: 2,
-    })),
-    listFiles: vi.fn(async () => ({
-      files: (over.files ?? ["package.json", "pnpm-lock.yaml"]).map(
-        (filename) => ({ filename }),
-      ),
-      truncated: false,
-    })),
     readPolicy: vi.fn(async () =>
       over.policy === null
         ? ({ kind: "missing" } as const)
@@ -108,9 +122,10 @@ function world(
     projects: over.projects ?? ["acme/demo"],
     github,
     pulls,
+    paused: async () => over.paused ?? false,
     log: (event, fields = {}) => logs.push({ event, fields }),
   };
-  return { deps, github, pulls, logs };
+  return { deps, github, pulls, logs, order };
 }
 
 describe("runDependabotSweep", () => {
@@ -146,6 +161,7 @@ describe("runDependabotSweep", () => {
       LABEL_NEEDS_HUMAN,
     );
     expect(w.github.comment.mock.calls[0]![2]).toContain("not_security_update");
+    expect(w.order).toEqual(["comment", "label"]);
   });
 
   it("does not repeat the label and comment on the next day", async () => {
@@ -192,7 +208,7 @@ describe("runDependabotSweep", () => {
     });
     expect(await runDependabotSweep(w.deps)).toEqual([]);
     expect(w.github.listOpenAlerts).not.toHaveBeenCalled();
-    expect(w.pulls.getPullRequest).not.toHaveBeenCalled();
+    expect(w.github.getPr).not.toHaveBeenCalled();
   });
 
   it("skips the repository when the alerts cannot be read", async () => {
@@ -214,12 +230,80 @@ describe("runDependabotSweep", () => {
     expect(w.pulls.merge).not.toHaveBeenCalled();
   });
 
-  it("skips a pull request whose head moved since it was listed", async () => {
-    const w = world({ liveHead: "b".repeat(40) });
+  it("merges the head it judged, not the head the list gave", async () => {
+    const w = world({ live: { headSha: "b".repeat(40) } });
+    await runDependabotSweep(w.deps);
+    expect(w.pulls.listChecks).toHaveBeenCalledWith(
+      "acme/demo",
+      "b".repeat(40),
+    );
+    expect(w.pulls.merge.mock.calls[0]![2]).toBe("b".repeat(40));
+  });
+
+  it("judges the title as it is now, not as the list gave it", async () => {
+    const w = world({ live: { title: "bump the npm group with 3 updates" } });
+    expect((await runDependabotSweep(w.deps))[0]).toMatchObject({
+      action: "needs_human",
+      code: "not_single_update",
+    });
+    expect(w.pulls.merge).not.toHaveBeenCalled();
+  });
+
+  it("does not merge after the base branch was changed", async () => {
+    const w = world({ live: { baseRef: "release" } });
+    expect((await runDependabotSweep(w.deps))[0]!.action).toBe("skipped");
+    expect(w.pulls.merge).not.toHaveBeenCalled();
+  });
+
+  it("respects a hold label added after the list was read", async () => {
+    const w = world({ live: { labels: [LABEL_NEEDS_HUMAN] } });
+    expect((await runDependabotSweep(w.deps))[0]).toMatchObject({
+      action: "skipped",
+      code: "held",
+    });
+    expect(w.pulls.merge).not.toHaveBeenCalled();
+  });
+
+  it("skips a pull request that was closed in the meantime", async () => {
+    const w = world({ live: { open: false } });
     expect(await runDependabotSweep(w.deps)).toEqual([
-      { repo: "acme/demo", pr: 143, action: "skipped", code: "head_moved" },
+      { repo: "acme/demo", pr: 143, action: "skipped", code: "closed" },
     ]);
     expect(w.pulls.merge).not.toHaveBeenCalled();
+  });
+
+  it("does not merge when the factory was stopped during the pass", async () => {
+    const w = world({ paused: true });
+    expect(await runDependabotSweep(w.deps)).toEqual([
+      { repo: "acme/demo", pr: 143, action: "skipped", code: "factory_paused" },
+    ]);
+    expect(w.pulls.merge).not.toHaveBeenCalled();
+  });
+
+  it("does not merge a commit that GitHub did not sign", async () => {
+    const w = world({
+      commits: [
+        {
+          authorId: DEPENDABOT_USER_ID,
+          committerId: 3435720,
+          verified: false,
+          committedAt: NOW - 4 * DAY,
+        },
+      ],
+    });
+    expect((await runDependabotSweep(w.deps))[0]).toMatchObject({
+      action: "needs_human",
+      code: "foreign_commit",
+    });
+    expect(w.pulls.merge).not.toHaveBeenCalled();
+  });
+
+  it("builds the commit title from the parsed update", async () => {
+    const w = world({ live: { title: "Bump hono from 4.13.13 to 4.13.16" } });
+    await runDependabotSweep(w.deps);
+    expect(w.pulls.merge.mock.calls[0]![3].title).toBe(
+      "chore(deps): bump hono from 4.13.13 to 4.13.16 (#143)",
+    );
   });
 
   it("reports a refused merge and leaves no comment", async () => {

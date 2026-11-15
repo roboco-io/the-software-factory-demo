@@ -114,7 +114,19 @@ describe("Dependabot GitHub port", () => {
         Response.json([
           {
             author: { id: 49699333 },
-            commit: { committer: { date: "2026-11-13T00:00:00Z" } },
+            committer: { id: 19864447 },
+            commit: {
+              committer: { date: "2026-11-13T00:00:00Z" },
+              verification: { verified: true, reason: "valid" },
+            },
+          },
+          {
+            author: { id: 49699333 },
+            committer: { id: 19864447 },
+            commit: {
+              committer: {},
+              verification: { verified: true, reason: "unknown_key" },
+            },
           },
           { author: null, commit: { committer: {} } },
         ]),
@@ -122,10 +134,17 @@ describe("Dependabot GitHub port", () => {
     const commits = await github.listCommits("acme/demo", 143);
     expect(commits[0]).toEqual({
       authorId: 49699333,
+      committerId: 19864447,
+      verified: true,
       committedAt: Date.parse("2026-11-13T00:00:00Z"),
     });
-    expect(commits[1]!.authorId).toBeNull();
-    expect(commits[1]!.committedAt).toBeNaN();
+    expect(commits[1]!.verified).toBe(false);
+    expect(commits[2]).toMatchObject({
+      authorId: null,
+      committerId: null,
+      verified: false,
+    });
+    expect(commits[2]!.committedAt).toBeNaN();
   });
 
   it("adds an unknown author when the commit page is full", async () => {
@@ -144,23 +163,24 @@ describe("Dependabot GitHub port", () => {
 
   it("reads open alerts", async () => {
     const { github } = world({
-      [`GET ${R}/dependabot/alerts?state=open&per_page=100`]: () =>
-        Response.json([
-          {
-            dependency: { package: { name: "hono" } },
-            security_vulnerability: {
-              first_patched_version: { identifier: "4.13.16" },
+      [`GET ${R}/dependabot/alerts?state=open&ecosystem=npm&per_page=100`]:
+        () =>
+          Response.json([
+            {
+              dependency: { package: { name: "hono", ecosystem: "npm" } },
+              security_vulnerability: {
+                first_patched_version: { identifier: "4.13.16" },
+              },
             },
-          },
-          {
-            dependency: { package: { name: "left" } },
-            security_vulnerability: { first_patched_version: null },
-          },
-        ]),
+            {
+              dependency: { package: { name: "left", ecosystem: "npm" } },
+              security_vulnerability: { first_patched_version: null },
+            },
+          ]),
     });
     expect(await github.listOpenAlerts("acme/demo")).toEqual([
-      { package: "hono", patched: "4.13.16" },
-      { package: "left", patched: null },
+      { package: "hono", ecosystem: "npm", patched: "4.13.16" },
+      { package: "left", ecosystem: "npm", patched: null },
     ]);
   });
 
@@ -182,10 +202,65 @@ describe("Dependabot GitHub port", () => {
 
   it.each([403, 404])("answers null when alerts respond %i", async (status) => {
     const { github } = world({
-      [`GET ${R}/dependabot/alerts?state=open&per_page=100`]: () =>
-        Response.json({}, { status }),
+      [`GET ${R}/dependabot/alerts?state=open&ecosystem=npm&per_page=100`]:
+        () => Response.json({}, { status }),
     });
     expect(await github.listOpenAlerts("acme/demo")).toBeNull();
+  });
+
+  it("reads the pull request as it is now", async () => {
+    const { github } = world({
+      [`GET ${R}/pulls/143`]: () =>
+        Response.json({ ...listed, state: "open", merged: false }),
+    });
+    expect(await github.getPr("acme/demo", 143)).toMatchObject({
+      number: 143,
+      title: listed.title,
+      baseRef: "main",
+      labels: ["dependencies"],
+      open: true,
+    });
+  });
+
+  it.each([
+    { state: "closed", merged: false },
+    { state: "open", merged: true },
+  ])("reports %j as not open", async (state) => {
+    const { github } = world({
+      [`GET ${R}/pulls/143`]: () => Response.json({ ...listed, ...state }),
+    });
+    expect((await github.getPr("acme/demo", 143)).open).toBe(false);
+  });
+
+  it("reads changed files with status and diff", async () => {
+    const { github } = world({
+      [`GET ${R}/pulls/143/files?per_page=100`]: () =>
+        Response.json([
+          { filename: "pnpm-lock.yaml", status: "modified", patch: "@@" },
+          { filename: "big.json", status: "added" },
+        ]),
+    });
+    expect(await github.listFiles("acme/demo", 143)).toEqual({
+      files: [
+        { path: "pnpm-lock.yaml", status: "modified", patch: "@@" },
+        { path: "big.json", status: "added", patch: null },
+      ],
+      truncated: false,
+    });
+  });
+
+  it("marks a full page of files as cut off", async () => {
+    const { github } = world({
+      [`GET ${R}/pulls/143/files?per_page=100`]: () =>
+        Response.json(
+          Array.from({ length: 100 }, () => ({
+            filename: "pnpm-lock.yaml",
+            status: "modified",
+            patch: "@@",
+          })),
+        ),
+    });
+    expect((await github.listFiles("acme/demo", 143)).truncated).toBe(true);
   });
 
   it("adds a label and a comment", async () => {
