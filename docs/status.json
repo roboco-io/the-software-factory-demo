@@ -1,5 +1,5 @@
 {
-  "asOf": "2026-11-14",
+  "asOf": "2026-11-15",
   "stages": [
     {
       "id": "0",
@@ -252,6 +252,16 @@
       "stage": "7",
       "owner": "에이전트",
       "text": "게스트 심사의 남은 구현. 포털의 심사 단계와 각하 카드, 그리고 한 계정이 이슈를 동시에 여러 개 열 때 계정당 한도를 넘겨 통과하는 경합의 차단."
+    },
+    {
+      "stage": "6",
+      "owner": "사람",
+      "text": "Dependabot 보안 업데이트의 자동 병합을 켜는 일. 매일 점검하는 코드는 배포되어 있지만 `DEPENDABOT_PROJECTS`가 비어 있어 동작하지 않는다. 켜려면 GitHub App에 \"Dependabot alerts: read\" 권한을 더하고, conveyor의 정책 문서에 이 예외를 적은 뒤, `DEPENDABOT_PROJECTS`에 저장소를 더한다(`docs/operations.md`)."
+    },
+    {
+      "stage": "6",
+      "owner": "에이전트",
+      "text": "Dependabot이 PR을 열지 못한 보안 경고(간접 의존성)의 처리. 2026-11-15 기준 conveyor에 3건이 있다(`@vitest/mocker` 2건, `minimatch` 1건)."
     }
   ],
   "next": [
