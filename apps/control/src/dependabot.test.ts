@@ -30,6 +30,7 @@ const commit = (over: Partial<PrCommit> = {}): PrCommit => ({
   authorId: DEPENDABOT_USER_ID,
   committerId: GITHUB_WEB_FLOW_ID,
   verified: true,
+  message: "chore(deps): bump hono from 4.13.13 to 4.13.16\n\nBumps hono.",
   committedAt: NOW - 4 * DAY,
   ...over,
 });
@@ -75,9 +76,11 @@ const manifestWith = (...lines: string[]) =>
 const lockWith = (...lines: string[]) =>
   lock({ patch: [LOCK_PATCH, ...lines].join("\n") });
 
+// Unless a test says otherwise, the commit message starts with the pull request title,
+// as Dependabot writes it.
 const input = (over: Partial<JudgeInput> = {}): JudgeInput => ({
   pr: pr(),
-  commits: [commit()],
+  commits: [commit({ message: `${(over.pr ?? pr()).title}\n\nBumps it.` })],
   files: [manifest(), lock()],
   filesTruncated: false,
   alerts: [{ package: "hono", ecosystem: "npm", patched: "4.13.16" }],
@@ -117,6 +120,21 @@ describe("judgeDependabotPr", () => {
     expect(judgeDependabotPr(input())).toEqual({ action: "merge" });
   });
 
+  it("merges when the new version was already in the lockfile", () => {
+    expect(
+      judgeDependabotPr(
+        input({
+          files: [
+            lock({
+              patch:
+                "@@ -1 +1 @@\n-        version: 4.13.13\n+        version: 4.13.16",
+            }),
+          ],
+        }),
+      ),
+    ).toEqual({ action: "merge" });
+  });
+
   it("merges a lockfile-only update", () => {
     expect(judgeDependabotPr(input({ files: [lock()] }))).toEqual({
       action: "merge",
@@ -130,7 +148,7 @@ describe("judgeDependabotPr", () => {
           pr: pr({ title: "bump hono from 4.13.13 to 4.14.0" }),
           files: [
             manifestWith('-  "hono": "^4.13.13",', '+  "hono": "^4.14.0",'),
-            lock(),
+            lockWith("+  hono@4.14.0:"),
           ],
         }),
       ),
@@ -177,6 +195,21 @@ describe("judgeDependabotPr", () => {
       "foreign_commit",
     ],
     ["no commits", { commits: [] }, "foreign_commit"],
+    [
+      "a second commit, even one by Dependabot",
+      { commits: [commit(), commit()] },
+      "foreign_commit",
+    ],
+    [
+      "a title that names another update than the signed commit",
+      { commits: [commit({ message: "bump zod from 1.0.0 to 9.0.0" })] },
+      "not_single_update",
+    ],
+    [
+      "a commit message that is not one update",
+      { commits: [commit({ message: "anything else" })] },
+      "not_single_update",
+    ],
     [
       "a major update",
       {
@@ -347,6 +380,19 @@ describe("judgeDependabotPr", () => {
       { files: [lockWith("+        version: link:../evil")] },
       "unexpected_files",
     ],
+    ["no lockfile change", { files: [manifest()] }, "unexpected_files"],
+    [
+      "a lockfile that does not move the package to the new version",
+      {
+        files: [
+          lock({
+            patch:
+              "@@ -1 +1 @@\n-  zod@1.0.0:\n+  zod@9.0.0:\n+  hono@4.13.160:",
+          }),
+        ],
+      },
+      "unexpected_files",
+    ],
     ["no files", { files: [] }, "unexpected_files"],
     ["a cut-off file list", { filesTruncated: true }, "unexpected_files"],
     ["a failed check", { checks: "failed" }, "check_failed"],
@@ -364,14 +410,11 @@ describe("judgeDependabotPr", () => {
     });
   });
 
-  it("waits until the newest commit is older than the waiting period", () => {
+  it("waits until the commit is older than the waiting period", () => {
     expect(
       judgeDependabotPr(
         input({
-          commits: [
-            commit({ committedAt: NOW - 9 * DAY }),
-            commit({ committedAt: NOW - 2 * DAY }),
-          ],
+          commits: [commit({ committedAt: NOW - 2 * DAY })],
         }),
       ),
     ).toEqual({ action: "wait", code: "too_new" });

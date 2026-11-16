@@ -116,6 +116,7 @@ describe("Dependabot GitHub port", () => {
             author: { id: 49699333 },
             committer: { id: 19864447 },
             commit: {
+              message: "bump hono from 4.13.13 to 4.13.16",
               committer: { date: "2026-11-13T00:00:00Z" },
               verification: { verified: true, reason: "valid" },
             },
@@ -136,6 +137,7 @@ describe("Dependabot GitHub port", () => {
       authorId: 49699333,
       committerId: 19864447,
       verified: true,
+      message: "bump hono from 4.13.13 to 4.13.16",
       committedAt: Date.parse("2026-11-13T00:00:00Z"),
     });
     expect(commits[1]!.verified).toBe(false);

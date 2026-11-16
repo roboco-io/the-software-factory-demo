@@ -49,6 +49,8 @@ function world(
     prs?: DependabotPr[];
     /** The pull request as `getPr` returns it, when it differs from the list. */
     live?: Partial<DependabotPr & { open: boolean }>;
+    /** What the second read, right before the merge, adds on top. */
+    liveAtMerge?: Partial<DependabotPr & { open: boolean }>;
     alerts?: OpenAlert[] | null;
     commits?: PrCommit[];
     files?: PrFile[];
@@ -62,12 +64,15 @@ function world(
   const logs: { event: string; fields: Record<string, unknown> }[] = [];
   const order: string[] = [];
   const prs = over.prs ?? [pr()];
+  const reads = new Map<number, number>();
   const github = {
     listOpenPrs: vi.fn(async () => prs),
     getPr: vi.fn(async (_repo: string, number: number) => ({
       ...(prs.find((p) => p.number === number) ?? pr({ number })),
       open: true,
       ...over.live,
+      ...((reads.get(number) ?? 0) > 0 ? over.liveAtMerge : {}),
+      ...(reads.set(number, (reads.get(number) ?? 0) + 1) && {}),
     })),
     listFiles: vi.fn(async () => ({
       files: over.files ?? [lockFile],
@@ -80,6 +85,7 @@ function world(
             authorId: DEPENDABOT_USER_ID,
             committerId: GITHUB_WEB_FLOW_ID,
             verified: true,
+            message: "chore(deps): bump hono from 4.13.13 to 4.13.16",
             committedAt: NOW - 4 * DAY,
           },
         ],
@@ -287,6 +293,7 @@ describe("runDependabotSweep", () => {
           authorId: DEPENDABOT_USER_ID,
           committerId: 3435720,
           verified: false,
+          message: "chore(deps): bump hono from 4.13.13 to 4.13.16",
           committedAt: NOW - 4 * DAY,
         },
       ],
@@ -295,6 +302,22 @@ describe("runDependabotSweep", () => {
       action: "needs_human",
       code: "foreign_commit",
     });
+    expect(w.pulls.merge).not.toHaveBeenCalled();
+  });
+
+  it("respects a hold label added right before the merge", async () => {
+    const w = world({ liveAtMerge: { labels: [LABEL_NEEDS_HUMAN] } });
+    expect(await runDependabotSweep(w.deps)).toEqual([
+      { repo: "acme/demo", pr: 143, action: "skipped", code: "held" },
+    ]);
+    expect(w.pulls.merge).not.toHaveBeenCalled();
+  });
+
+  it("does not merge when the head moved right before the merge", async () => {
+    const w = world({ liveAtMerge: { headSha: "c".repeat(40) } });
+    expect(await runDependabotSweep(w.deps)).toEqual([
+      { repo: "acme/demo", pr: 143, action: "skipped", code: "head_moved" },
+    ]);
     expect(w.pulls.merge).not.toHaveBeenCalled();
   });
 
@@ -336,6 +359,20 @@ describe("runDependabotSweep", () => {
     const w = world();
     w.github.comment.mockRejectedValueOnce(new Error("boom"));
     expect((await runDependabotSweep(w.deps))[0]!.action).toBe("merged");
+  });
+
+  it("logs one line for each judged pull request", async () => {
+    const w = world({ merge: "refused" });
+    await runDependabotSweep(w.deps);
+    expect(w.logs.find((l) => l.event === "dependabot_pr")).toEqual({
+      event: "dependabot_pr",
+      fields: {
+        repo: "acme/demo",
+        pr: 143,
+        action: "skipped",
+        code: "merge_refused",
+      },
+    });
   });
 
   it("logs one summary line", async () => {

@@ -55,9 +55,9 @@ export type SweepResult =
 
 const REASONS: Record<HumanCode, string> = {
   not_single_update:
-    "제목에서 패키지 하나의 버전 올림을 읽지 못했습니다. 여러 패키지를 묶은 업데이트는 자동으로 병합하지 않습니다.",
+    "커밋 메시지에서 패키지 하나의 버전 올림을 읽지 못했거나, PR 제목이 커밋 메시지와 다릅니다. 여러 패키지를 묶은 업데이트는 자동으로 병합하지 않습니다.",
   foreign_commit:
-    "Dependabot이 작성하고 GitHub이 서명한 커밋이 아닌 커밋이 있거나, 커밋 목록을 읽지 못했습니다.",
+    "커밋이 Dependabot이 작성하고 GitHub이 서명한 커밋 하나가 아닙니다. 커밋이 여러 개이거나 커밋 목록을 읽지 못한 경우도 여기에 해당합니다.",
   version_unreadable:
     "버전이 `major.minor.patch` 형식이 아니거나 올림이 아닙니다.",
   major_update:
@@ -65,7 +65,7 @@ const REASONS: Record<HumanCode, string> = {
   not_security_update:
     "이 버전 올림으로 해결되는 열린 Dependabot 보안 경고를 찾지 못했습니다.",
   unexpected_files:
-    "`package.json`에서 해당 패키지의 버전 외의 내용이 바뀌었거나, `pnpm-lock.yaml`에 레지스트리가 아닌 출처가 더해졌거나, 그 밖의 파일이 바뀌었습니다. 파일 목록이나 diff를 끝까지 읽지 못한 경우도 여기에 해당합니다.",
+    "`package.json`에서 해당 패키지의 버전 외의 내용이 바뀌었거나, `pnpm-lock.yaml`에 그 패키지의 새 버전이 없거나 레지스트리가 아닌 출처가 더해졌거나, 그 밖의 파일이 바뀌었습니다. 파일 목록이나 diff를 끝까지 읽지 못한 경우도 여기에 해당합니다.",
   check_failed: "필수 체크가 실패했습니다.",
 };
 
@@ -81,8 +81,8 @@ const mergedComment = (days: number) =>
   [
     "팩토리가 이 Dependabot PR을 자동으로 병합했습니다. 확인한 조건은 다음과 같습니다.",
     "",
-    "- 작성자가 Dependabot이고, 모든 커밋이 Dependabot 작성, GitHub 서명(검증됨)입니다.",
-    "- 패키지 하나의 패치 또는 마이너 버전 올림이며, 열린 Dependabot 보안 경고를 해결합니다.",
+    "- 작성자가 Dependabot이고, 커밋은 Dependabot 작성, GitHub 서명(검증됨)인 커밋 하나입니다.",
+    "- 서명된 커밋 메시지가 말하는 패키지 하나의 패치 또는 마이너 버전 올림이며, 열린 Dependabot 보안 경고를 해결합니다.",
     "- `package.json`에서는 그 패키지의 버전만 바뀌었고, `pnpm-lock.yaml`에 레지스트리가 아닌 출처가 더해지지 않았습니다.",
     "- 기본 브랜치의 `.factory/policy.yml`이 정한 필수 체크가 모두 통과했습니다.",
     `- 마지막 커밋 뒤 ${days}일 이상 지났습니다.`,
@@ -136,6 +136,12 @@ async function sweepPr(
   if (bump === null) return { ...base, action: "skipped", code: "failed" };
   if (await deps.paused())
     return { ...base, action: "skipped", code: "factory_paused" };
+  // Last look before the merge: a person may have put a hold on it meanwhile.
+  const last = await deps.github.getPr(repo, prNumber);
+  if (!last.open || last.headSha !== pr.headSha)
+    return { ...base, action: "skipped", code: "head_moved" };
+  if (last.labels.includes(LABEL_NEEDS_HUMAN))
+    return { ...base, action: "skipped", code: "held" };
   const merged = await deps.pulls.merge(repo, prNumber, pr.headSha, {
     // Built from the parsed parts, not copied from the title.
     title: `chore(deps): bump ${bump.package} from ${bump.from} to ${bump.to} (#${prNumber})`,
@@ -219,6 +225,14 @@ export async function runDependabotSweep(
       deps.log("dependabot_repo_failed", { repo, error: errorKind(error) });
     }
   }
+  // One line for each pull request that was judged, so a refused merge or a hold shows.
+  for (const r of results)
+    deps.log("dependabot_pr", {
+      repo: r.repo,
+      pr: r.pr,
+      action: r.action,
+      ...("code" in r ? { code: r.code } : {}),
+    });
   const count = (action: SweepResult["action"]) =>
     results.filter((r) => r.action === action).length;
   deps.log("dependabot_sweep", {

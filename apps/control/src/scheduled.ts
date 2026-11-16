@@ -10,12 +10,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_MIN_AGE_DAYS = 3;
 const MAX_MIN_AGE_DAYS = 30;
 
-/** Whole days from DEPENDABOT_MIN_AGE_DAYS. Anything else is the default, never zero. */
+/** Whole days from DEPENDABOT_MIN_AGE_DAYS, 1 to 30. Anything else is the default. */
 export function minAgeDays(value: string | undefined): number {
   if (value === undefined || !/^\d{1,2}$/.test(value.trim()))
     return DEFAULT_MIN_AGE_DAYS;
   const days = Number(value.trim());
-  return days <= MAX_MIN_AGE_DAYS ? days : DEFAULT_MIN_AGE_DAYS;
+  return days >= 1 && days <= MAX_MIN_AGE_DAYS ? days : DEFAULT_MIN_AGE_DAYS;
 }
 
 /**

@@ -88,6 +88,7 @@
 
 - (사람) Dependabot 보안 업데이트의 자동 병합을 켜는 일. 매일 점검하는 코드는 배포되어 있지만 `DEPENDABOT_PROJECTS`가 비어 있어 동작하지 않는다. 켜려면 GitHub App에 "Dependabot alerts: read" 권한을 더하고, conveyor의 정책 문서에 이 예외를 적은 뒤, `DEPENDABOT_PROJECTS`에 저장소를 더한다(`docs/operations.md`).
 - (에이전트) Dependabot이 PR을 열지 못한 보안 경고(간접 의존성)의 처리. 2026-11-15 기준 conveyor에 3건이 있다(`@vitest/mocker` 2건, `minimatch` 1건).
+- (에이전트) Dependabot 자동 병합의 커밋 서명 조건이 위조될 수 있는지 확인하는 일. 조건은 "Dependabot 작성, GitHub 커밋, 검증된 서명"이다. 쓰기 권한이 있는 사람이 작성자를 Dependabot으로 적은 커밋을 GitHub API로 만들었을 때 GitHub이 그 커밋에 서명하는지를 2026-11-16의 독립 리뷰가 확인하지 못했다. 서명한다면 그 사람은 리뷰 없이 lockfile을 바꿀 수 있다. 시험 저장소의 임시 브랜치에서 실제로 만들어 보면 확인할 수 있다.
 
 ### 7. 샌드박스 공개
 
