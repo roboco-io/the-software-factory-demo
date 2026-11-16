@@ -50,9 +50,11 @@
     "TRIAGE_MODEL": "claude-haiku-5-5",
     "FACTORY_REPO": "roboco-io/the-software-factory-demo",
     // The daily pass merges qualifying Dependabot security pull requests only in the
-    // repositories of DEPENDABOT_PROJECTS, which is not set: adding a repository lets the
-    // factory merge dependency changes there without a person and needs the operator's
-    // approval. The App also needs "Dependabot alerts: read". See docs/operations.md.
+    // repositories of DEPENDABOT_PROJECTS. Adding a repository lets the factory merge
+    // dependency changes there without a person and needs the operator's approval. The
+    // App also needs "Dependabot alerts: read", and the repository's branch rules must let
+    // the App merge. See docs/operations.md. conveyor was added on 2026-11-16.
+    "DEPENDABOT_PROJECTS": "roboco-io/conveyor",
     "DEPENDABOT_MIN_AGE_DAYS": "3",
   },
   // 21:00 UTC is 06:00 in Korea. The handler is `scheduled` in src/index.ts.

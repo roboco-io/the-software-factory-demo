@@ -1,6 +1,6 @@
 # 현재 상태
 
-2026-11-15 기준이다. 이 문서는 `docs/status.json`에서 `pnpm docs:status`로 생성하므로 직접 고치지 않는다. 상태를 바꾸려면 `docs/status.json`을 고친다.
+2026-11-16 기준이다. 이 문서는 `docs/status.json`에서 `pnpm docs:status`로 생성하므로 직접 고치지 않는다. 상태를 바꾸려면 `docs/status.json`을 고친다.
 
 이 문서가 이 저장소의 진행 상태, 실서비스에서 확인한 것, 아직 확인하지 않은 것의 유일한 원본이다. 다른 문서는 동작과 설계 이유만 설명한다.
 
@@ -86,7 +86,7 @@
 
 ### 6. conveyor 이전
 
-- (사람) Dependabot 보안 업데이트의 자동 병합을 켜는 일. 매일 점검하는 코드는 배포되어 있지만 `DEPENDABOT_PROJECTS`가 비어 있어 동작하지 않는다. 켜려면 GitHub App에 "Dependabot alerts: read" 권한을 더하고, conveyor의 정책 문서에 이 예외를 적은 뒤, `DEPENDABOT_PROJECTS`에 저장소를 더한다(`docs/operations.md`).
+- (사람) Dependabot 보안 업데이트의 자동 병합이 실제로 동작하게 하는 일. 2026-11-16에 `DEPENDABOT_PROJECTS`에 conveyor를 더했고 conveyor의 규칙에도 예외를 적었다(conveyor PR #145). 남은 것은 두 가지다. 첫째, GitHub App에 "Dependabot alerts: read" 권한을 더한다. 둘째, conveyor의 브랜치 보호 규칙이 App의 병합을 허용하게 한다. 2026-11-16에 읽은 `main-protection` 규칙 집합은 코드 소유자 리뷰를 요구하고 우회 주체가 없으며, 의존성 파일은 CODEOWNERS에 있다. 이 설정에서 병합이 실제로 거부되는지는 확인하지 않았다. 방법은 `docs/operations.md`에 있다.
 - (에이전트) Dependabot이 PR을 열지 못한 보안 경고(간접 의존성)의 처리. 2026-11-15 기준 conveyor에 3건이 있다(`@vitest/mocker` 2건, `minimatch` 1건).
 - (에이전트) Dependabot 자동 병합의 커밋 서명 조건이 위조될 수 있는지 확인하는 일. 조건은 "Dependabot 작성, GitHub 커밋, 검증된 서명"이다. 쓰기 권한이 있는 사람이 작성자를 Dependabot으로 적은 커밋을 GitHub API로 만들었을 때 GitHub이 그 커밋에 서명하는지를 2026-11-16의 독립 리뷰가 확인하지 못했다. 서명한다면 그 사람은 리뷰 없이 lockfile을 바꿀 수 있다. 시험 저장소의 임시 브랜치에서 실제로 만들어 보면 확인할 수 있다.
 
