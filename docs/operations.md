@@ -333,9 +333,11 @@ API 응답은 다음과 같다. 요청을 받았으면 202 `{"status":"stop_requ
 
 ### 켜는 조건
 
-이 기능은 환경변수 `DEPENDABOT_PROJECTS`에 적힌 저장소에서만 동작한다. 이 변수는 `wrangler.jsonc`에 없으므로 지금은 어느 저장소에서도 동작하지 않는다. 저장소를 더하면 팩토리가 그 저장소의 의존성 변경을 사람 없이 병합하게 되므로, 그 변경은 운영자의 승인을 받는다. 그 저장소는 `PROJECTS`에도 있어야 한다. `RUNS_ENABLED`가 `true`가 아니거나 전체 중지 중이면 점검하지 않는다.
+이 기능은 환경변수 `DEPENDABOT_PROJECTS`에 적힌 저장소에서만 동작한다. 지금 값은 `roboco-io/conveyor` 하나이며, 2026-11-16에 운영자의 승인을 받아 더했다. conveyor의 규칙에는 이 예외가 적혀 있다(conveyor PR #145). 끄려면 이 값에서 저장소를 빼고 배포한다. 저장소를 더하면 팩토리가 그 저장소의 의존성 변경을 사람 없이 병합하게 되므로, 그 변경은 운영자의 승인을 받는다. 그 저장소는 `PROJECTS`에도 있어야 한다. `RUNS_ENABLED`가 `true`가 아니거나 전체 중지 중이면 점검하지 않는다.
 
 GitHub App에는 "Dependabot alerts: read" 권한이 있어야 한다. 이 권한은 조직 소유자가 GitHub의 App 설정에서 더하고 설치를 다시 승인해야 한다. 권한이 없으면 그 저장소의 점검을 건너뛰고 로그에 `dependabot_alerts_unavailable`을 남긴다. 병합하지 않으므로 권한이 없는 상태는 안전하다.
+
+저장소의 브랜치 보호 규칙도 App의 병합을 허용해야 한다. 규칙 집합이 코드 소유자 리뷰를 요구하고 `package.json`이나 `pnpm-lock.yaml`이 CODEOWNERS에 있으면, App이 우회 주체가 아닌 한 GitHub이 병합을 거부할 수 있다. 거부되면 제어 평면은 그 PR에 아무것도 남기지 않고 로그에 `dependabot_pr` 이벤트를 `merge_refused` 코드로 남기며 다음 날 다시 시도한다. 동작하게 하는 방법은 두 가지다. 규칙 집합에 팩토리 App을 우회 주체로 더하면 App이 그 브랜치의 보호 규칙 전체를 우회하게 된다. CODEOWNERS에서 두 파일을 빼면 사람이 올리는 의존성 변경도 GitHub 수준의 코드 소유자 리뷰를 받지 않게 된다. 어느 쪽이든 저장소의 보안 설정이므로 운영자가 정한다.
 
 ### 병합 조건
 
@@ -361,7 +363,7 @@ GitHub App에는 "Dependabot alerts: read" 권한이 있어야 한다. 이 권�
 - 대기 기간은 PR의 마지막 커밋 시각으로 잰다. Dependabot이 PR을 리베이스하면 대기가 다시 시작된다.
 - Dependabot이 PR을 열지 못한 경고(간접 의존성 등)는 다루지 않는다.
 - 열린 경고는 한 번에 100건까지만 읽는다. 그보다 많으면 일부 PR이 `not_security_update`로 사람에게 넘어갈 수 있다.
-- 점검 결과는 Worker 로그(`dependabot_sweep` 한 줄과 실패 이벤트)와 PR 댓글에만 남는다. 포털에는 표시되지 않는다.
+- 점검 결과는 Worker 로그와 PR 댓글에만 남는다. 로그에는 판정한 PR마다 `dependabot_pr` 한 줄(저장소, PR 번호, 결과, 코드)과 점검 전체의 `dependabot_sweep` 한 줄이 남는다. 포털에는 표시되지 않는다.
 - 실제 GitHub와 실제 Cron Trigger로는 아직 실행한 적이 없다(2026-11-15 기준). 시험은 가짜 GitHub로 했다. 판정 규칙만은 conveyor PR #143의 실제 응답(PR, 커밋, 파일, 경고)으로 실행해, 대기 기간 전에는 `too_new`, 지난 뒤에는 병합으로 판정하는 것을 확인했다.
 
 ## 알려진 제약
