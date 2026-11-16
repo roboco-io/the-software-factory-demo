@@ -143,6 +143,7 @@ export function createDependabotGitHub(
           verified:
             field(item, "commit", "verification", "verified") === true &&
             field(item, "commit", "verification", "reason") === "valid",
+          message: text(field(item, "commit", "message")),
           committedAt: Date.parse(
             text(field(item, "commit", "committer", "date")),
           ),
@@ -154,6 +155,7 @@ export function createDependabotGitHub(
           authorId: null,
           committerId: null,
           verified: false,
+          message: "",
           committedAt: NaN,
         });
       return commits;

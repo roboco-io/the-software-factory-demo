@@ -43,7 +43,9 @@ describe("minAgeDays", () => {
     ["-1", DEFAULT_MIN_AGE_DAYS],
     ["1.5", DEFAULT_MIN_AGE_DAYS],
     ["31", DEFAULT_MIN_AGE_DAYS],
-    ["0", 0],
+    ["0", DEFAULT_MIN_AGE_DAYS],
+    ["00", DEFAULT_MIN_AGE_DAYS],
+    ["1", 1],
     ["7", 7],
     [" 5 ", 5],
   ])("reads %j as %i", (value, days) => {

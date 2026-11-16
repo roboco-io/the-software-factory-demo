@@ -28,6 +28,8 @@ export interface PrCommit {
   committerId: number | null;
   /** GitHub verified the signature and reports it as valid. */
   verified: boolean;
+  /** The commit message. It is part of what the signature covers. */
+  message: string;
   /** Committer time in ms. NaN when GitHub gave none. */
   committedAt: number;
 }
@@ -151,9 +153,24 @@ const LOCK_RESOLUTION =
  * A lockfile update pulls in whatever the new version depends on, so its lines cannot be
  * matched one by one. Added lines must at least keep every entry on the registry.
  */
-function lockfileOk(patch: string): boolean {
-  return changedLines(patch).added.every((l) =>
-    /^\s*resolution:/.test(l) ? LOCK_RESOLUTION.test(l) : !LOCK_SOURCE.test(l),
+function lockfileOk(
+  patch: string,
+  bump: { package: string; to: string },
+): boolean {
+  const { added } = changedLines(patch);
+  const name = escapeRegExp(bump.package);
+  const to = escapeRegExp(bump.to);
+  // The update itself must be there: the package's entry at the new version, or, when
+  // that version was already in the lockfile, an importer moving to it.
+  const entry = new RegExp(`^\\s*'?${name}@${to}['(:]`);
+  const moved = new RegExp(`^\\s*version: ${to}(\\(|$)`);
+  return (
+    added.some((l) => entry.test(l) || moved.test(l)) &&
+    added.every((l) =>
+      /^\s*resolution:/.test(l)
+        ? LOCK_RESOLUTION.test(l)
+        : !LOCK_SOURCE.test(l),
+    )
   );
 }
 
@@ -161,10 +178,11 @@ function filesOk(
   files: readonly PrFile[],
   bump: { package: string; from: string; to: string },
 ): boolean {
-  if (files.length === 0) return false;
+  // An update always changes the lockfile.
+  if (!files.some((file) => file.path === LOCKFILE)) return false;
   return files.every((file) => {
     if (file.status !== "modified" || file.patch === null) return false;
-    if (file.path === LOCKFILE) return lockfileOk(file.patch);
+    if (file.path === LOCKFILE) return lockfileOk(file.patch, bump);
     return isPackageJson(file.path) && manifestOk(file.patch, bump);
   });
 }
@@ -187,21 +205,32 @@ export function judgeDependabotPr(input: JudgeInput): Judgement {
     code,
   });
 
-  const bump = parseBump(pr.title);
-  if (bump === null) return human("not_single_update");
   // Anyone with write access can push to the branch, and can write any author into a
   // commit. What they cannot do is have GitHub sign it as its own commit: Dependabot's
-  // commits are committed and signed by GitHub.
+  // commit is committed and signed by GitHub. Dependabot keeps one commit per pull
+  // request, so a second commit is someone else's.
+  const [commit] = input.commits;
   if (
-    input.commits.length === 0 ||
-    input.commits.some(
-      (c) =>
-        c.authorId !== DEPENDABOT_USER_ID ||
-        c.committerId !== GITHUB_WEB_FLOW_ID ||
-        !c.verified,
-    )
+    commit === undefined ||
+    input.commits.length !== 1 ||
+    commit.authorId !== DEPENDABOT_USER_ID ||
+    commit.committerId !== GITHUB_WEB_FLOW_ID ||
+    !commit.verified
   )
     return human("foreign_commit");
+
+  // What is updated comes from the signed commit message. The title can be edited by
+  // anyone who may triage; it only has to agree.
+  const bump = parseBump(commit.message.split("\n", 1)[0] as string);
+  const titled = parseBump(pr.title);
+  if (
+    bump === null ||
+    titled === null ||
+    titled.package !== bump.package ||
+    titled.from !== bump.from ||
+    titled.to !== bump.to
+  )
+    return human("not_single_update");
 
   const from = parseVersion(bump.from);
   const to = parseVersion(bump.to);
