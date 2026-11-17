@@ -45,8 +45,10 @@
     "ANTHROPIC_REVIEW_MODEL": "claude-haiku-5-5",
     // Stage 7. Guest triage runs only in the repositories of GUEST_PROJECTS. Adding a
     // repository there opens it to guests and needs the operator's approval; it must also be
-    // in PROJECTS and hold .factory/guest-policy.yml. conveyor was opened on 2026-11-15.
-    "GUEST_PROJECTS": "roboco-io/conveyor",
+    // in PROJECTS and hold .factory/guest-policy.yml. conveyor was opened on 2026-11-15 and
+    // closed again on 2026-11-17: triage had run only against a fake GitHub and a fake model.
+    // Add "roboco-io/conveyor" back to check real guest requests. Empty means no guest triage.
+    "GUEST_PROJECTS": "",
     "TRIAGE_MODEL": "claude-haiku-5-5",
     "FACTORY_REPO": "roboco-io/the-software-factory-demo",
     // The daily pass merges qualifying Dependabot security pull requests only in the
