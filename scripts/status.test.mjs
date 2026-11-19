@@ -41,22 +41,26 @@ test("validate accepts a complete status and names what is wrong otherwise", () 
   assert.match(errors, /date/);
 });
 
-test("the README block shows every stage with its state in words", () => {
+test("the README block shows every stage with only its state in words", () => {
   const block = renderReadmeBlock(status);
   assert.ok(block.startsWith(BLOCK_BEGIN));
   assert.ok(block.endsWith(BLOCK_END));
   assert.match(block, /\| 1\. 기반 \| CI와 배포 \| 완료 \|/);
-  assert.match(
-    block,
-    /\| 2\. 공개 \| 공개 조건 시험 \| 진행 중\. DNS 실험만 끝남 \|/,
-  );
+  assert.match(block, /\| 2\. 공개 \| 공개 조건 시험 \| 진행 중 \|/);
   assert.match(block, /\| 3\. 책 \| 책 개정 \| 미착수 \|/);
   assert.match(block, /2026-11-11/);
+  // Notes are long and change often: the README leaves them to docs/status.md.
+  assert.ok(!block.includes("DNS 실험만 끝남"));
+  assert.match(block, /docs\/status\.md/);
 });
 
 test("the status document lists stages, verified facts, open items and next work", () => {
   const doc = renderStatusDoc(status);
   assert.match(doc, /직접 고치지 않는다/);
+  assert.match(
+    doc,
+    /\| 2\. 공개 \| 공개 조건 시험 \| 진행 중\. DNS 실험만 끝남 \|/,
+  );
   assert.match(doc, /2026-11-10.*배포가 성공했다\./);
   assert.match(doc, /크레딧 차감 확인/);
   assert.match(doc, /1\. 인젝션 시험/);

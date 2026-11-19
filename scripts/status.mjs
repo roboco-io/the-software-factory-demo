@@ -59,25 +59,29 @@ export function validate(status) {
 const stageState = (s) =>
   s.note === "" ? STATES[s.state] : `${STATES[s.state]}. ${s.note}`;
 
-function stageTable(status) {
+/** `state` renders the last column of a stage. */
+function stageTable(status, state) {
   return [
     "| 단계 | 내용 | 상태 |",
     "| --- | --- | --- |",
     ...status.stages.map(
-      (s) => `| ${s.id}. ${s.title} | ${s.scope} | ${stageState(s)} |`,
+      (s) => `| ${s.id}. ${s.title} | ${s.scope} | ${state(s)} |`,
     ),
   ].join("\n");
 }
 
-/** The block for README.md, markers included. Prettier leaves it as written. */
+/**
+ * The block for README.md, markers included. Prettier leaves it as written.
+ * It shows the state word only: the notes are long and belong to docs/status.md.
+ */
 export function renderReadmeBlock(status) {
   return [
     BLOCK_BEGIN,
     "<!-- prettier-ignore-start -->",
     "",
-    `${status.asOf} 기준이다. 이 표는 \`docs/status.json\`에서 생성한다.`,
+    `${status.asOf} 기준이다. 이 표는 \`docs/status.json\`에서 생성한다. 단계마다 끝난 일과 남은 일은 [현재 상태 문서](docs/status.md)에 있다.`,
     "",
-    stageTable(status),
+    stageTable(status, (s) => STATES[s.state]),
     "",
     "<!-- prettier-ignore-end -->",
     BLOCK_END,
@@ -105,7 +109,7 @@ export function renderStatusDoc(status) {
     "",
     "## 단계",
     "",
-    stageTable(status),
+    stageTable(status, stageState),
     "",
     "## 실서비스에서 확인한 것",
     "",
